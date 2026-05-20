@@ -1,0 +1,1523 @@
+//@version=6
+indicator('MA-trix Laboratory [DAFE]', shorttitle = 'MA Lab', overlay = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 100, max_bars_back = 1000)
+// ╔═════════════════════════════════════════════════════════════════════╗
+// ║                                                                     ║
+// ║     ███╗   ███╗ █████╗              ██╗      █████╗ ██████╗         ║
+// ║     ████╗ ████║██╔══██╗             ██║     ██╔══██╗██╔══██╗        ║
+// ║     ██╔████╔██║███████║             ██║     ███████║██████╔╝        ║
+// ║     ██║╚██╔╝██║██╔══██║             ██║     ██╔══██║██╔══██╗        ║
+// ║     ██║ ╚═╝ ██║██║  ██║             ███████╗██║  ██║██████╔╝        ║
+// ║     ╚═╝     ╚═╝╚═╝  ╚═╝             ╚══════╝╚═╝  ╚═╝╚═════╝         ║
+// ║                                                                     ║
+// ║              ⚡ Dskyz (DAFE) Trading Systems ⚡                    ║
+// ║                                                                     ║
+// ║          MOVING AVERAGE LABORATORY: 55+ ALGORITHMS                  ║
+// ║         Dual MA Engine • Smart Filtering • Quantum Smoothing        ║
+// ║                                                                     ║
+// ║The Definitive Trend Following System: Classical, Adaptive & Quantum ║
+// ║                                                                     ║
+// ╚═════════════════════════════════════════════════════════════════════╝
+// GROUPS
+// ═══════════════════════════════════════════════════════════════════════
+var g_mode = '══════════════ 🎯 OPERATION MODE ══════════════'
+var g_ma_core = '══════════════ 📊 MOVING AVERAGES ══════════════'
+var g_ma_advanced = '═══════════ ⚙️ MA ADVANCED PARAMETERS ═════════'
+var g_smoothing = '═════════════ 🎛️ POST-SMOOTHING ══════════════'
+var g_signals = '══════════════ ⚡ SIGNALS & RIBBONS ══════════════'
+var g_filters = '══════════════ 🔬 SIGNAL FILTERS ══════════════'
+var g_visual = '══════════════ 🎨 VISUALIZATION ══════════════'
+var g_perf = '══════════════ 📊 PERFORMANCE TRACKING ═══════════'
+var g_dash = '══════════════ 📋 DASHBOARD ══════════════'
+var g_alerts = '══════════════ 🔔 ALERTS ══════════════'
+// ═══════════════════════════════════════════════════════════════════════════════
+// TOOLTIPS
+// ═══════════════════════════════════════════════════════════════════════════════
+string TT_MODE = 'OPERATION MODE:\n\n• SINGLE MA: Only MA1 displayed\n• DUAL MA: MA1 + MA2 crossovers\n• TRIPLE MA: All 3 MAs for alignment strategies\n• RIBBON: Fills between MAs\n\n💡 Classic setups:\n  - Dual: 20/50 EMA\n  - Triple: 10/20/50 or 20/50/200'
+string TT_MA_TYPE = 'Select MA algorithm. 55+ options from basic (SMA/EMA) to advanced (KAMA/FRAMA) to DAFE proprietary.\n\n💡 Best all-rounders: EMA, Hull MA, KAMA'
+string TT_MA_LEN = 'Lookback period.\n\n• Fast: 5-20\n• Medium: 20-50\n• Slow: 50-200+\n\n💡 Common: 20, 50, 100, 200'
+string TT_MA_SRC = 'Price source for calculation.\n\n• close: Standard\n• hl2: Median\n• hlc3: Typical\n• ohlc4: Average'
+string TT_SMOOTHER = 'Post-process filter to reduce noise.\n\n• None: Raw MA\n• SuperSmoother: Ehlers DSP filter\n• Kalman: Optimal estimation\n• Phase-Zero: DAFE lag cancellation\n\n⚠️ Adds smoothing but slight lag'
+string TT_SIGNAL_MODE = 'How signals are generated:\n\n• PRICE CROSS MA1: Price crosses MA1\n• DUAL MA CROSS: MA1 crosses MA2\n• TRIPLE ALIGNED: All 3 MAs in order\n• TRIPLE MA CROSS: MA1 crosses MA2 with MA3 confirmation\n• FAST CROSS SLOW: MA1 crosses MA3 directly\n• SLOPE CHANGE: MA direction reversal'
+string TT_RIBBON_MODE = 'Ribbon visualization:\n\n• NONE: No fills\n• MA1-MA2: Fill between fast/medium\n• ALL RIBBONS: Fill all gaps\n• GRADIENT: Layered transparency'
+string TT_FILTERS = 'Combined signal filters:\n\n📦 VOLUME: Require above-average volume\n🌊 VOLATILITY: Filter by ATR/BB conditions\n💪 TREND: ADX strength requirement\n🚀 MOMENTUM: RSI/MACD confirmation\n⏰ TIME: Min bars between signals'
+string TT_FILTER_VOLUME = 'Require volume confirmation:\n\n• OFF: No volume filter\n• ABOVE AVG: Volume > SMA(20)\n• THRESHOLD: Volume > X% above avg\n• CLIMAX: Extremely high vol'
+string TT_FILTER_VOL_MULT = 'Volume must be this multiple above average.\n\n• 1.2 = 20% above avg\n• 1.5 = 50% above avg\n• 2.0 = 2x average'
+string TT_FILTER_VOLATILITY = 'Filter by volatility conditions:\n\n• ATR THRESHOLD: Require high/low ATR\n• BB SQUEEZE: Low volatility (breakout setup)\n• BB EXPANSION: High volatility (trending)'
+string TT_FILTER_TREND = 'Require trend strength (ADX):\n\n• STRONG TREND: ADX > threshold\n• WEAK TREND: ADX < threshold\n• DIRECTIONAL: DI+ vs DI- alignment'
+string TT_FILTER_MOMENTUM = 'Confirm with momentum indicators:\n\n• RSI: Must be in bull/bear zone\n• ROC: Direction confirmation\n• MACD: Line above/below signal\n• STOCHASTIC: Overbought/oversold zones'
+string TT_FILTER_TIME = 'Minimum bars between signals to prevent rapid whipsaws.'
+// ═══════════════════════════════════════════════════════════════════════════════
+// INPUTS
+// ═══════════════════════════════════════════════════════════════════════════════
+i_mode = input.string('Dual MA Cross', '🎯 Operation Mode', options = ['Single MA', 'Dual MA Cross', 'Dual MA Ribbon', 'Triple MA Cross', 'Triple MA Aligned', 'Triple MA Ribbon'], group = g_mode, tooltip = TT_MODE)
+var array<string> MA_TYPES = array.from('SMA', 'EMA', 'WMA', 'VWMA', 'RMA (Wilder)', 'SMMA', 'DEMA', 'TEMA', 'Hull MA', 'ZLEMA', 'ALMA', 'T3 Tillson', 'KAMA', 'VIDYA', 'FRAMA', 'McGinley Dynamic', 'Jurik (JMA)', 'Ahrens MA', 'REMA', 'EVWMA', 'Gaussian MA', 'Sine-Weighted MA', 'Triangular MA', 'Linear Regression', 'Median MA', 'Geometric Mean MA', 'Harmonic Mean MA', 'Quadratic MA', 'Cubic MA', 'Ehlers Filter', 'Butterworth MA', 'Chebyshev MA', 'Bessel MA', 'SuperSmoother MA', 'Laguerre MA', 'Adaptive Laguerre', 'Zero-Lag DEMA', 'Zero-Lag TEMA', 'Variable MA', 'Volatility Adjusted MA', 'Volume Zone MA', 'Karobein MA', 'Rex MA', 'DAFE Flux Reactor', 'DAFE Tensor Flow', 'DAFE Quantum Step', 'DAFE Spectral Filter', 'DAFE Gravity Well', 'DAFE Hybrid Adaptive', 'Parabolic SAR MA')
+i_ma1_type = input.string('EMA', '📊 MA1 (Primary/Fast) Type', options = ['SMA', 'EMA', 'WMA', 'VWMA', 'RMA (Wilder)', 'SMMA', 'DEMA', 'TEMA', 'Hull MA', 'ZLEMA', 'ALMA', 'T3 Tillson', 'KAMA', 'VIDYA', 'FRAMA', 'McGinley Dynamic', 'Jurik (JMA)', 'Ahrens MA', 'REMA', 'EVWMA', 'Gaussian MA', 'Sine-Weighted MA', 'Triangular MA', 'Linear Regression', 'Median MA', 'Geometric Mean MA', 'Harmonic Mean MA', 'Quadratic MA', 'Cubic MA', 'Ehlers Filter', 'Butterworth MA', 'Chebyshev MA', 'Bessel MA', 'SuperSmoother MA', 'Laguerre MA', 'Adaptive Laguerre', 'Zero-Lag DEMA', 'Zero-Lag TEMA', 'Variable MA', 'Volatility Adjusted MA', 'Volume Zone MA', 'Karobein MA', 'Rex MA', 'DAFE Flux Reactor', 'DAFE Tensor Flow', 'DAFE Quantum Step', 'DAFE Spectral Filter', 'DAFE Gravity Well', 'DAFE Hybrid Adaptive', 'Parabolic SAR MA'], group = g_ma_core, inline = 'ma1', tooltip = TT_MA_TYPE)
+i_ma1_len = input.int(20, 'Length', minval = 1, maxval = 500, group = g_ma_core, inline = 'ma1', tooltip = TT_MA_LEN)
+i_ma1_src = input.source(close, 'Source', group = g_ma_core, inline = 'ma1', tooltip = TT_MA_SRC)
+i_ma1_offset = input.int(0, 'Offset', minval = -50, maxval = 50, group = g_ma_core, inline = 'ma1')
+i_ma2_enable = input.bool(true, '📈 MA2 (Secondary/Medium)', group = g_ma_core, inline = 'ma2_en')
+i_ma2_type = input.string('SMA', 'Type', options = ['SMA', 'EMA', 'WMA', 'VWMA', 'RMA (Wilder)', 'SMMA', 'DEMA', 'TEMA', 'Hull MA', 'ZLEMA', 'ALMA', 'T3 Tillson', 'KAMA', 'VIDYA', 'FRAMA', 'McGinley Dynamic', 'Jurik (JMA)', 'Ahrens MA', 'REMA', 'EVWMA', 'Gaussian MA', 'Sine-Weighted MA', 'Triangular MA', 'Linear Regression', 'Median MA', 'Geometric Mean MA', 'Harmonic Mean MA', 'Quadratic MA', 'Cubic MA', 'Ehlers Filter', 'Butterworth MA', 'Chebyshev MA', 'Bessel MA', 'SuperSmoother MA', 'Laguerre MA', 'Adaptive Laguerre', 'Zero-Lag DEMA', 'Zero-Lag TEMA', 'Variable MA', 'Volatility Adjusted MA', 'Volume Zone MA', 'Karobein MA', 'Rex MA', 'DAFE Flux Reactor', 'DAFE Tensor Flow', 'DAFE Quantum Step', 'DAFE Spectral Filter', 'DAFE Gravity Well', 'DAFE Hybrid Adaptive', 'Parabolic SAR MA'], group = g_ma_core, inline = 'ma2', tooltip = TT_MA_TYPE)
+i_ma2_len = input.int(50, 'Length', minval = 1, maxval = 500, group = g_ma_core, inline = 'ma2', tooltip = TT_MA_LEN)
+i_ma2_src = input.source(close, 'Source', group = g_ma_core, inline = 'ma2', tooltip = TT_MA_SRC)
+i_ma2_offset = input.int(0, 'Offset', minval = -50, maxval = 50, group = g_ma_core, inline = 'ma2')
+i_ma3_enable = input.bool(true, '📉 MA3 (Tertiary/Slow)', group = g_ma_core, inline = 'ma3_en')
+i_ma3_type = input.string('SMA', 'Type', options = ['SMA', 'EMA', 'WMA', 'VWMA', 'RMA (Wilder)', 'SMMA', 'DEMA', 'TEMA', 'Hull MA', 'ZLEMA', 'ALMA', 'T3 Tillson', 'KAMA', 'VIDYA', 'FRAMA', 'McGinley Dynamic', 'Jurik (JMA)', 'Ahrens MA', 'REMA', 'EVWMA', 'Gaussian MA', 'Sine-Weighted MA', 'Triangular MA', 'Linear Regression', 'Median MA', 'Geometric Mean MA', 'Harmonic Mean MA', 'Quadratic MA', 'Cubic MA', 'Ehlers Filter', 'Butterworth MA', 'Chebyshev MA', 'Bessel MA', 'SuperSmoother MA', 'Laguerre MA', 'Adaptive Laguerre', 'Zero-Lag DEMA', 'Zero-Lag TEMA', 'Variable MA', 'Volatility Adjusted MA', 'Volume Zone MA', 'Karobein MA', 'Rex MA', 'DAFE Flux Reactor', 'DAFE Tensor Flow', 'DAFE Quantum Step', 'DAFE Spectral Filter', 'DAFE Gravity Well', 'DAFE Hybrid Adaptive', 'Parabolic SAR MA'], group = g_ma_core, inline = 'ma3', tooltip = TT_MA_TYPE)
+i_ma3_len = input.int(200, 'Length', minval = 1, maxval = 500, group = g_ma_core, inline = 'ma3', tooltip = TT_MA_LEN)
+i_ma3_src = input.source(close, 'Source', group = g_ma_core, inline = 'ma3', tooltip = TT_MA_SRC)
+i_ma3_offset = input.int(0, 'Offset', minval = -50, maxval = 50, group = g_ma_core, inline = 'ma3')
+i_alma_offset = input.float(0.85, 'ALMA Offset (All MAs)', minval = 0.0, maxval = 1.0, step = 0.05, group = g_ma_advanced, tooltip = 'ALMA Gaussian offset. 0.85 = standard. Higher = more responsive.')
+i_alma_sigma = input.float(6.0, 'ALMA Sigma (All MAs)', minval = 1.0, maxval = 20.0, step = 0.5, group = g_ma_advanced, tooltip = 'ALMA Gaussian sigma. 6 = standard. Higher = smoother.')
+i_t3_factor = input.float(0.7, 'T3 Volume Factor (All MAs)', minval = 0.0, maxval = 1.0, step = 0.05, group = g_ma_advanced, tooltip = 'T3 smoothing factor. 0.7 = standard. Higher = more smoothing.')
+i_use_smoothing = input.bool(false, '🎛️ Enable Post-Smoothing', group = g_smoothing)
+i_smooth_type = input.string('SuperSmoother', 'Smoother Type (All MAs)', options = ['None', 'SuperSmoother', 'Ehlers 2-Pole', 'Ehlers 3-Pole', 'Gaussian Filter', 'Butterworth', 'Chebyshev', 'Bessel', 'Kalman Filter', 'Laguerre Filter', 'Adaptive Laguerre', 'Hamming Window', 'Hann Window', 'Blackman Window', 'Linear Regression', 'Median Filter', 'DAFE Phase-Zero', 'DAFE Spectral Smooth', 'DAFE Quantum Smooth'], group = g_smoothing, tooltip = TT_SMOOTHER)
+i_smooth_len = input.int(8, 'Smoother Length', minval = 2, maxval = 50, group = g_smoothing, tooltip = 'Smoothing period. 8-12 recommended.')
+i_signal_mode = input.string('Auto (Mode-Based)', '⚡ Signal Mode', options = ['Auto (Mode-Based)', 'Price Cross MA1', 'Dual MA Cross', 'Triple MA Aligned', 'Triple MA Cross', 'Fast Cross Slow', 'Sequential Cross', 'Slope Change', 'Price + Slope', 'Triple Confirm'], group = g_signals, tooltip = TT_SIGNAL_MODE)
+i_signal_confirm_bars = input.int(1, 'Confirmation Bars', minval = 1, maxval = 10, group = g_signals, tooltip = 'Bars condition must persist. 1-2 recommended.')
+i_triple_alignment_strict = input.bool(true, 'Strict Triple Alignment', group = g_signals, tooltip = 'Require MA1 > MA2 > MA3 exact order (if off, just same direction)')
+i_ribbon_mode = input.string('All Ribbons', '🎀 Ribbon Mode', options = ['None', 'MA1-MA2 Only', 'MA2-MA3 Only', 'MA1-MA3 Span', 'All Ribbons', 'Gradient Stack'], group = g_signals, tooltip = TT_RIBBON_MODE)
+i_ribbon_transparency = input.int(85, 'Ribbon Transparency', minval = 50, maxval = 95, group = g_signals)
+i_enable_filters = input.bool(false, '🔬 Enable Signal Filters', group = g_filters, tooltip = TT_FILTERS)
+i_vol_enable = input.bool(false, '📦 Volume Filter', group = g_filters, inline = 'vol', tooltip = TT_FILTER_VOLUME)
+i_vol_mode = input.string('Above Threshold', '', options = ['Above Average', 'Above Threshold', 'Climax Detection', 'Dry Up Detection'], group = g_filters, inline = 'vol')
+i_vol_mult = input.float(1.2, 'Multiplier', minval = 1.0, maxval = 5.0, step = 0.1, group = g_filters, inline = 'vol2', tooltip = TT_FILTER_VOL_MULT)
+i_vol_len = input.int(20, 'Length', minval = 5, maxval = 100, group = g_filters, inline = 'vol2')
+i_volatility_enable = input.bool(false, '🌊 Volatility Filter', group = g_filters, inline = 'volty', tooltip = TT_FILTER_VOLATILITY)
+i_volatility_mode = input.string('BB Expansion', '', options = ['ATR Above Threshold', 'ATR Below Threshold', 'BB Squeeze', 'BB Expansion', 'Historical Percentile High', 'Historical Percentile Low'], group = g_filters, inline = 'volty')
+i_volatility_atr_len = input.int(14, 'ATR Len', minval = 5, maxval = 50, group = g_filters, inline = 'volty2')
+i_volatility_atr_mult = input.float(1.0, 'Threshold', minval = 0.1, maxval = 3.0, step = 0.1, group = g_filters, inline = 'volty2')
+i_trend_enable = input.bool(false, '💪 Trend Filter (ADX)', group = g_filters, inline = 'trend', tooltip = TT_FILTER_TREND)
+i_trend_mode = input.string('Require Strong Trend', '', options = ['Require Strong Trend', 'Require Weak Trend', 'Directional Alignment'], group = g_filters, inline = 'trend')
+i_trend_adx_len = input.int(14, 'ADX Len', minval = 5, maxval = 50, group = g_filters, inline = 'trend2')
+i_trend_adx_thresh = input.int(25, 'Threshold', minval = 10, maxval = 50, group = g_filters, inline = 'trend2')
+i_mom_enable = input.bool(false, '🚀 Momentum Filter', group = g_filters, inline = 'mom', tooltip = TT_FILTER_MOMENTUM)
+i_mom_mode = input.string('RSI Confirmation', '', options = ['RSI Confirmation', 'ROC Direction', 'MACD Alignment', 'Stochastic Zone'], group = g_filters, inline = 'mom')
+i_mom_rsi_len = input.int(14, 'RSI Len', minval = 5, maxval = 50, group = g_filters, inline = 'mom2')
+i_mom_rsi_bull = input.int(50, 'Bull >', minval = 30, maxval = 70, group = g_filters, inline = 'mom2')
+i_mom_rsi_bear = input.int(50, 'Bear <', minval = 30, maxval = 70, group = g_filters, inline = 'mom2')
+i_mom_roc_len = input.int(10, 'ROC Length', minval = 3, maxval = 50, group = g_filters)
+i_mom_macd_fast = input.int(12, 'MACD Fast', minval = 5, maxval = 50, group = g_filters, inline = 'macd')
+i_mom_macd_slow = input.int(26, 'Slow', minval = 10, maxval = 100, group = g_filters, inline = 'macd')
+i_mom_macd_signal = input.int(9, 'Signal', minval = 3, maxval = 50, group = g_filters, inline = 'macd')
+i_mom_stoch_len = input.int(14, 'Stoch Length', minval = 5, maxval = 50, group = g_filters, inline = 'stoch')
+i_mom_stoch_bull = input.int(20, 'Bull <', minval = 10, maxval = 40, group = g_filters, inline = 'stoch')
+i_mom_stoch_bear = input.int(80, 'Bear >', minval = 60, maxval = 90, group = g_filters, inline = 'stoch')
+i_min_bars = input.int(5, '⏰ Min Bars Between Signals', minval = 0, maxval = 100, group = g_filters, tooltip = TT_FILTER_TIME)
+i_ma1_color_bull = input.color(#00ffcc, 'MA1', group = g_visual, inline = 'c1')
+i_ma1_color_bear = input.color(#ff0055, '', group = g_visual, inline = 'c1')
+i_ma1_width = input.int(2, 'Width', minval = 1, maxval = 5, group = g_visual, inline = 'c1')
+i_ma2_color_bull = input.color(#00aaff, 'MA2', group = g_visual, inline = 'c2')
+i_ma2_color_bear = input.color(#ff9900, '', group = g_visual, inline = 'c2')
+i_ma2_width = input.int(2, 'Width', minval = 1, maxval = 5, group = g_visual, inline = 'c2')
+i_ma3_color_bull = input.color(#aa00ff, 'MA3', group = g_visual, inline = 'c3')
+i_ma3_color_bear = input.color(#ffff00, '', group = g_visual, inline = 'c3')
+i_ma3_width = input.int(2, 'Width', minval = 1, maxval = 5, group = g_visual, inline = 'c3')
+i_use_gradient = input.bool(true, '🎨 Slope Gradient', group = g_visual, inline = 'fx')
+i_glow_effect = input.bool(true, '✨ Glow Effect', group = g_visual, inline = 'fx')
+i_show_signals = input.bool(true, '📍 Show Signal Labels', group = g_visual, inline = 'sig')
+i_signal_size = input.string('Small', '', options = ['Tiny', 'Small', 'Normal'], group = g_visual, inline = 'sig')
+i_perf_enable = input.bool(false, '📊 Enable Performance Tracking', group = g_perf)
+i_perf_capital = input.float(10000, 'Starting Capital', minval = 100, group = g_perf, inline = 'perf1')
+i_perf_pos_size = input.float(10, 'Position %', minval = 1, maxval = 100, group = g_perf, inline = 'perf1')
+i_perf_commission = input.float(0.04, 'Commission %', minval = 0, maxval = 1, step = 0.01, group = g_perf, inline = 'perf2')
+i_dash_enable = input.bool(true, '📋 Show Dashboard', group = g_dash, inline = 'dash')
+i_dash_size = input.string('Small', 'Size', options = ['Small', 'Normal', 'Large'], group = g_dash, inline = 'dash')
+i_dash_pos = input.string('Top Right', 'Position', options = ['Top Right', 'Top Left', 'Bottom Right', 'Bottom Left'], group = g_dash, inline = 'dash2')
+i_alert_buy = input.bool(true, '🔔 Buy Signal', group = g_alerts, inline = 'alert')
+i_alert_sell = input.bool(true, '🔔 Sell Signal', group = g_alerts, inline = 'alert')
+i_alert_cross = input.bool(false, '🔔 Any Cross', group = g_alerts, inline = 'alert')
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════════════════════════════
+var float PI = 3.14159265359
+var float SQRT2 = 1.41421356237
+// ═══════════════════════════════════════════════════════════════════════════════
+// EFFECTIVE MODE LOGIC 
+// ═══════════════════════════════════════════════════════════════════════════════
+bool isTripleMode = i_mode == 'Triple MA Cross' or i_mode == 'Triple MA Aligned' or i_mode == 'Triple MA Ribbon'
+bool isDualMode = i_mode == 'Dual MA Cross' or i_mode == 'Dual MA Ribbon'
+bool isSingleMode = i_mode == 'Single MA'
+bool use_ma2 = isSingleMode ? false : i_ma2_enable
+bool use_ma3 = isTripleMode ? i_ma3_enable : false
+string eff_signal_mode = i_signal_mode
+if i_signal_mode == 'Auto (Mode-Based)'
+    if isSingleMode
+        eff_signal_mode := 'Price Cross MA1'
+        eff_signal_mode
+    else if i_mode == 'Triple MA Cross'
+        eff_signal_mode := 'Triple MA Cross'
+        eff_signal_mode
+    else if i_mode == 'Triple MA Aligned'
+        eff_signal_mode := 'Triple MA Aligned'
+        eff_signal_mode
+    else if i_mode == 'Triple MA Ribbon'
+        eff_signal_mode := 'Triple MA Aligned'
+        eff_signal_mode
+    else
+        eff_signal_mode := 'Dual MA Cross'
+        eff_signal_mode
+if (eff_signal_mode == 'Triple MA Cross' or eff_signal_mode == 'Triple MA Aligned' or eff_signal_mode == 'Fast Cross Slow' or eff_signal_mode == 'Sequential Cross' or eff_signal_mode == 'Triple Confirm') and not use_ma3
+    eff_signal_mode := use_ma2 ? 'Dual MA Cross' : 'Price Cross MA1'
+    eff_signal_mode
+if eff_signal_mode == 'Dual MA Cross' and not use_ma2
+    eff_signal_mode := 'Price Cross MA1'
+    eff_signal_mode
+string eff_ribbon_mode = i_mode == 'Dual MA Ribbon' or i_mode == 'Triple MA Ribbon' ? i_ribbon_mode : 'None'
+// ═══════════════════════════════════════════════════════════════════════════════
+// HELPER FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+f_er(src, len) =>
+    change_sum = math.sum(math.abs(src - src[1]), len)
+    net_change = math.abs(src - src[len])
+    change_sum > 0 ? net_change / change_sum : 0.0
+f_kama(src, len) =>
+    er = f_er(src, len)
+    fast_sc = 2.0 / (2.0 + 1.0)
+    slow_sc = 2.0 / (30.0 + 1.0)
+    sc = math.pow(er * (fast_sc - slow_sc) + slow_sc, 2)
+    var float kama = na
+    kama := na(kama) ? src : kama + sc * (src - kama)
+    kama
+f_t3(src, len, vf) =>
+    e1 = ta.ema(src, len)
+    e2 = ta.ema(e1, len)
+    e3 = ta.ema(e2, len)
+    e4 = ta.ema(e3, len)
+    e5 = ta.ema(e4, len)
+    e6 = ta.ema(e5, len)
+    c1 = -vf * vf * vf
+    c2 = 3 * vf * vf + 3 * vf * vf * vf
+    c3 = -6 * vf * vf - 3 * vf - 3 * vf * vf * vf
+    c4 = 1 + 3 * vf + vf * vf * vf + 3 * vf * vf
+    c1 * e6 + c2 * e5 + c3 * e4 + c4 * e3
+f_vidya(src, len) =>
+    cmo = ta.cmo(src, len)
+    cmo_abs = math.abs(cmo) / 100.0
+    alpha = 2.0 / (len + 1.0)
+    var float vidya = na
+    vidya := na(vidya) ? src : alpha * cmo_abs * src + (1.0 - alpha * cmo_abs) * nz(vidya[1])
+    vidya
+f_frama(src, len) =>
+    half_len = math.max(1, int(len / 2))
+    n3 = (ta.highest(high, len) - ta.lowest(low, len)) / len
+    n1 = (ta.highest(high, half_len) - ta.lowest(low, half_len)) / half_len
+    n2 = (ta.highest(high[half_len], half_len) - ta.lowest(low[half_len], half_len)) / half_len
+    dimen = n3 > 0 and n1 + n2 > 0 ? (math.log(n1 + n2) - math.log(n3)) / math.log(2) : 1.5
+    alpha = math.exp(-4.6 * (dimen - 1.0))
+    alpha := math.max(0.01, math.min(1.0, alpha))
+    var float frama = na
+    frama := na(frama) ? src : alpha * src + (1.0 - alpha) * nz(frama[1])
+    frama
+f_mcginley(src, len) =>
+    var float md = na
+    md := na(md) ? src : md + (src - md) / (len * math.pow(src / md, 4))
+    md
+f_hull(src, len) =>
+    half_len = math.max(1, int(len / 2))
+    sqrt_len = math.max(1, int(math.sqrt(len)))
+    wma1 = ta.wma(src, half_len)
+    wma2 = ta.wma(src, len)
+    ta.wma(2 * wma1 - wma2, sqrt_len)
+f_zlema(src, len) =>
+    lag = int((len - 1) / 2)
+    ta.ema(src + src - nz(src[lag]), len)
+f_dema(src, len) =>
+    e1 = ta.ema(src, len)
+    e2 = ta.ema(e1, len)
+    2 * e1 - e2
+f_tema(src, len) =>
+    e1 = ta.ema(src, len)
+    e2 = ta.ema(e1, len)
+    e3 = ta.ema(e2, len)
+    3 * e1 - 3 * e2 + e3
+f_ahrens(src, len) =>
+    var float ama = na
+    if na(ama) or bar_index < len
+        ama := src
+        ama
+    else
+        ama := nz(ama[1]) + (src - (nz(ama[1]) + nz(ama[len])) / 2.0) / len
+        ama
+    ama
+f_evwma(src, len) =>
+    vol_sum = math.sum(volume, len)
+    var float evwma = na
+    evwma := vol_sum > 0 ? ((vol_sum - volume) * nz(evwma[1]) + volume * src) / vol_sum : src
+    evwma
+f_gaussian(src, len) =>
+    beta = 2.415 * (1.0 - math.cos(2.0 * PI / len)) / (1.0 + math.cos(2.0 * PI / len))
+    alpha = -beta + math.sqrt(beta * beta + 2.0 * beta)
+    var float g = na
+    g := na(g) ? src : alpha * src + (1.0 - alpha) * nz(g[1])
+    g
+f_swma_custom(src, len) =>
+    sum_val = 0.0
+    sum_w = 0.0
+    for i = 0 to len - 1 by 1
+        w = math.sin((i + 1.0) / len * PI)
+        sum_val := sum_val + nz(src[i]) * w
+        sum_w := sum_w + w
+        sum_w
+    sum_w > 0 ? sum_val / sum_w : src
+f_tma(src, len) =>
+    half = int(math.ceil((len + 1.0) / 2.0))
+    ta.sma(ta.sma(src, half), half)
+f_geometric(src, len) =>
+    product = 1.0
+    for i = 0 to len - 1 by 1
+        product := product * math.max(nz(src[i]), 0.0001)
+        product
+    math.pow(product, 1.0 / len)
+f_harmonic(src, len) =>
+    sum_inv = 0.0
+    for i = 0 to len - 1 by 1
+        sum_inv := sum_inv + 1.0 / math.max(nz(src[i]), 0.0001)
+        sum_inv
+    len / sum_inv
+f_supersmoother(src, len) =>
+    a1 = math.exp(-SQRT2 * PI / len)
+    b1 = 2.0 * a1 * math.cos(SQRT2 * PI / len)
+    c2 = b1
+    c3 = -a1 * a1
+    c1 = 1.0 - c2 - c3
+    var float ss = na
+    ss := na(ss[2]) ? src : c1 * (src + nz(src[1])) / 2.0 + c2 * nz(ss[1]) + c3 * nz(ss[2])
+    ss
+f_laguerre(src, gamma) =>
+    var float L0 = na
+    var float L1 = na
+    var float L2 = na
+    var float L3 = na
+    L0 := (1.0 - gamma) * src + gamma * nz(L0[1])
+    L1 := -gamma * L0 + nz(L0[1]) + gamma * nz(L1[1])
+    L2 := -gamma * L1 + nz(L1[1]) + gamma * nz(L2[1])
+    L3 := -gamma * L2 + nz(L2[1]) + gamma * nz(L3[1])
+    (L0 + 2.0 * L1 + 2.0 * L2 + L3) / 6.0
+f_rema(src, len) =>
+    alpha = 2.0 / (len + 1.0)
+    var float rema = na
+    rema := na(rema) ? src : alpha * src + (1.0 - alpha) * nz(rema[1])
+    rema
+f_vma(src, len) =>
+    k = 1.0 / len
+    pdm = math.max(src - src[1], 0)
+    mdm = math.max(src[1] - src, 0)
+    var float pdmS = na
+    var float mdmS = na
+    pdmS := na(pdmS) ? pdm : (1.0 - k) * nz(pdmS[1]) + k * pdm
+    mdmS := na(mdmS) ? mdm : (1.0 - k) * nz(mdmS[1]) + k * mdm
+    sum_dm = pdmS + mdmS
+    vI = sum_dm != 0 ? math.abs(pdmS - mdmS) / sum_dm : 0.0
+    var float vma = na
+    vma := na(vma) ? src : (1.0 - k * vI) * nz(vma[1]) + k * vI * src
+    vma
+f_vama(src, len) =>
+    atr_val = ta.atr(len)
+    atr_avg = ta.sma(atr_val, len)
+    vol_ratio = atr_avg > 0 ? atr_val / atr_avg : 1.0
+    adj_len = math.max(2.0, len / vol_ratio)
+    alpha = 2.0 / (adj_len + 1.0)
+    var float vama = na
+    vama := na(vama) ? src : alpha * src + (1.0 - alpha) * nz(vama[1])
+    vama
+f_rex(src, len) =>
+    lambda = 0.5
+    alpha = 2.0 / (len + 1.0)
+    var float rex = na
+    rex := na(rex) ? src : (alpha * src + lambda * nz(rex[1])) / (1.0 + lambda - alpha * lambda)
+    rex
+f_quadratic(src, len) =>
+    sum_val = 0.0
+    sum_w = 0.0
+    for i = 0 to len - 1 by 1
+        w = math.pow(len - i, 2)
+        sum_val := sum_val + nz(src[i]) * w
+        sum_w := sum_w + w
+        sum_w
+    sum_w > 0 ? sum_val / sum_w : src
+f_cubic(src, len) =>
+    sum_val = 0.0
+    sum_w = 0.0
+    for i = 0 to len - 1 by 1
+        w = math.pow(len - i, 3)
+        sum_val := sum_val + nz(src[i]) * w
+        sum_w := sum_w + w
+        sum_w
+    sum_w > 0 ? sum_val / sum_w : src
+f_zldema(src, len) =>
+    dema = f_dema(src, len)
+    lag = int((len - 1) / 2)
+    dema + dema - nz(dema[lag])
+f_zltema(src, len) =>
+    tema = f_tema(src, len)
+    lag = int((len - 1) / 2)
+    tema + tema - nz(tema[lag])
+f_butterworth(src, len) =>
+    a = math.exp(-SQRT2 * PI / len)
+    b = 2.0 * a * math.cos(SQRT2 * PI / len)
+    c2 = b
+    c3 = -a * a
+    c1 = (1.0 - b + a * a) / 4.0
+    var float bw = na
+    bw := na(bw[2]) ? src : c1 * (src + 2.0 * nz(src[1]) + nz(src[2])) + c2 * nz(bw[1]) + c3 * nz(bw[2])
+    bw
+f_ehlers(src, len) =>
+    f_supersmoother(src, len)
+f_chebyshev(src, len) =>
+    ripple = 0.5
+    epsilon = math.sqrt(math.pow(10, ripple / 10.0) - 1.0)
+    x_val = 1.0 / 2.0 * math.log(1.0 / epsilon + math.sqrt(1.0 / (epsilon * epsilon) + 1.0))
+    exp_pos = math.exp(x_val)
+    exp_neg = math.exp(-x_val)
+    beta = (exp_pos - exp_neg) / 2.0
+    gamma = (exp_pos + exp_neg) / 2.0
+    wc = PI / len
+    alpha = math.sin(wc) * beta / (math.sin(wc) * beta + math.cos(wc) * gamma)
+    var float cheb = na
+    cheb := na(cheb) ? src : alpha * src + (1.0 - alpha) * nz(cheb[1])
+    cheb
+f_bessel(src, len) =>
+    alpha = 2.0 / (len + 1.0)
+    var float bessel = na
+    bessel := na(bessel) ? src : alpha * src + (1.0 - alpha) * nz(bessel[1])
+    bessel
+f_adaptive_laguerre(src, len) =>
+    vol_ratio = ta.atr(14) / ta.sma(ta.atr(14), 50)
+    gamma = math.min(0.9, math.max(0.1, 0.5 / vol_ratio))
+    f_laguerre(src, gamma)
+f_vzma(src, len) =>
+    vp = ta.vwma(src, len)
+    deviation = ta.stdev(src, len)
+    zone = (src - vp) / (deviation + 0.0001)
+    adj = 1.0 + zone * 0.1
+    adj_len = math.max(2.0, len / adj)
+    alpha = 2.0 / (adj_len + 1.0)
+    var float vzma = na
+    vzma := na(vzma) ? src : alpha * src + (1.0 - alpha) * nz(vzma[1])
+    vzma
+f_karobein(src, len) =>
+    ma = ta.ema(src, len)
+    range_ma = ta.ema(ta.tr(true), len)
+    upper = ma + range_ma
+    lower = ma - range_ma
+    var float kma = na
+    kma := na(kma) ? ma : src > upper ? upper : src < lower ? lower : nz(kma[1])
+    kma
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // DAFE PROPRIETARY MA ENGINES
+    // ═══════════════════════════════════════════════════════════════════════════════
+f_dafe_flux(src, len) =>
+    bb_dev = ta.stdev(src, len)
+    bb_mid = ta.sma(src, len)
+    flux_ratio = bb_dev / (bb_mid * 0.001 + 0.0001)
+    alpha_base = 2.0 / (len + 1.0)
+    sigmoid_val = 1.0 / (1.0 + math.exp(-flux_ratio + 5.0))
+    alpha_dyn = math.min(0.99, alpha_base * (1.0 + sigmoid_val))
+    var float flux = na
+    flux := na(flux) ? src : alpha_dyn * src + (1.0 - alpha_dyn) * nz(flux[1])
+    flux
+f_dafe_tensor(len) =>
+    center = (open + 2.0 * high + 2.0 * low + 3.0 * close) / 8.0
+    f_hull(center, len)
+f_dafe_quantum(src, len) =>
+    q_step = ta.atr(len) * 0.5
+    var float q_ma = na
+    q_ma := na(q_ma) ? src : math.abs(src - q_ma) > q_step ? src : q_ma
+    ta.ema(q_ma, math.max(1, int(len / 4)))
+f_dafe_spectral(src, len) =>
+    lp1 = ta.ema(src, len)
+    lp2 = ta.ema(lp1, len)
+    hp = src - lp1
+    lp2 + hp * 0.1
+f_dafe_gravity(src, len) =>
+    num = 0.0
+    denom = 0.0
+    for i = 0 to len - 1 by 1
+        weight = (len - i) * (nz(volume[i]) + 1.0)
+        num := num + nz(src[i]) * weight
+        denom := denom + weight
+        denom
+    denom > 0 ? num / denom : src
+f_dafe_hybrid(src, len) =>
+    er = f_er(src, len)
+    var float kal = na
+    kal := na(kal) ? src : kal + 0.1 * (src - kal)
+    wilder = ta.rma(src, len)
+    er * kal + (1.0 - er) * wilder
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // SMOOTHER FUNCTIONS
+    // ═══════════════════════════════════════════════════════════════════════════════
+f_smooth_supersmoother(src, len) =>
+    f_supersmoother(src, len)
+f_smooth_2pole(src, len) =>
+    (src + 2.0 * nz(src[1]) + nz(src[2])) / 4.0
+f_smooth_3pole(src, len) =>
+    a1 = math.exp(-PI / len)
+    b1 = 2.0 * a1 * math.cos(1.738 * PI / len)
+    c1 = a1 * a1
+    coef2 = b1 + c1
+    coef3 = -(c1 + b1 * c1)
+    coef4 = c1 * c1
+    coef1 = 1.0 - coef2 - coef3 - coef4
+    var float filt = na
+    filt := na(filt[1]) ? src : coef1 * src + coef2 * nz(filt[1]) + coef3 * nz(filt[2]) + coef4 * nz(filt[3])
+    filt
+f_smooth_gaussian(src, len, sigma) =>
+    sum_w = 0.0
+    sum_val = 0.0
+    for i = 0 to len - 1 by 1
+        w = math.exp(-0.5 * math.pow(i / sigma, 2))
+        sum_w := sum_w + w
+        sum_val := sum_val + w * nz(src[i])
+        sum_val
+    sum_w > 0 ? sum_val / sum_w : src
+f_smooth_kalman(src, len) =>
+    var float est = na
+    var float err = 1.0
+    q = 0.1
+    r = 0.1
+    if na(est)
+        est := src
+        est
+    err := err + q
+    k = err / (err + r)
+    est := est + k * (src - est)
+    err := (1.0 - k) * err
+    est
+f_smooth_hamming(src, len) =>
+    sum_w = 0.0
+    sum_val = 0.0
+    for i = 0 to len - 1 by 1
+        w = 0.54 - 0.46 * math.cos(2.0 * PI * i / (len - 1.0))
+        sum_w := sum_w + w
+        sum_val := sum_val + w * nz(src[i])
+        sum_val
+    sum_w > 0 ? sum_val / sum_w : src
+f_smooth_hann(src, len) =>
+    sum_w = 0.0
+    sum_val = 0.0
+    for i = 0 to len - 1 by 1
+        w = 0.5 * (1.0 - math.cos(2.0 * PI * i / (len - 1.0)))
+        sum_w := sum_w + w
+        sum_val := sum_val + w * nz(src[i])
+        sum_val
+    sum_w > 0 ? sum_val / sum_w : src
+f_smooth_blackman(src, len) =>
+    sum_w = 0.0
+    sum_val = 0.0
+    for i = 0 to len - 1 by 1
+        w = 0.42 - 0.5 * math.cos(2.0 * PI * i / (len - 1.0)) + 0.08 * math.cos(4.0 * PI * i / (len - 1.0))
+        sum_w := sum_w + w
+        sum_val := sum_val + w * nz(src[i])
+        sum_val
+    sum_w > 0 ? sum_val / sum_w : src
+f_smooth_phase_zero(src, len) =>
+    ema1 = ta.ema(src, len)
+    ema2 = ta.ema(ema1, len)
+    ema1 + ema1 - ema2
+f_smooth_spectral(src, len) =>
+    lp = ta.ema(src, len)
+    hp = src - lp
+    lp + hp * 0.05
+f_smooth_quantum(src, len) =>
+    q_step = ta.stdev(src, len) * 0.5
+    var float q_smooth = na
+    q_smooth := na(q_smooth) ? src : math.abs(src - q_smooth) > q_step ? src : q_smooth
+    q_smooth
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // MASTER MA CALCULATOR
+    // ═══════════════════════════════════════════════════════════════════════════════
+calc_ma(src, len, ma_type, alma_offset, alma_sigma, t3_factor) =>
+    float result = src
+    switch ma_type
+        'SMA' => 
+    	    result := ta.sma(src, len)
+    	    result
+        'EMA' => 
+    	    result := ta.ema(src, len)
+    	    result
+        'WMA' => 
+    	    result := ta.wma(src, len)
+    	    result
+        'VWMA' => 
+    	    result := ta.vwma(src, len)
+    	    result
+        'RMA (Wilder)' => 
+    	    result := ta.rma(src, len)
+    	    result
+        'SMMA' => 
+    	    result := ta.rma(src, len)
+    	    result
+        'DEMA' => 
+    	    result := f_dema(src, len)
+    	    result
+        'TEMA' => 
+    	    result := f_tema(src, len)
+    	    result
+        'Hull MA' => 
+    	    result := f_hull(src, len)
+    	    result
+        'ZLEMA' => 
+    	    result := f_zlema(src, len)
+    	    result
+        'ALMA' => 
+    	    result := ta.alma(src, len, alma_offset, alma_sigma)
+    	    result
+        'T3 Tillson' => 
+    	    result := f_t3(src, len, t3_factor)
+    	    result
+        'KAMA' => 
+    	    result := f_kama(src, len)
+    	    result
+        'VIDYA' => 
+    	    result := f_vidya(src, len)
+    	    result
+        'FRAMA' => 
+    	    result := f_frama(src, len)
+    	    result
+        'McGinley Dynamic' => 
+    	    result := f_mcginley(src, len)
+    	    result
+        'Jurik (JMA)' => 
+    	    result := f_t3(src, len, 0.7)
+    	    result
+        'Ahrens MA' => 
+    	    result := f_ahrens(src, len)
+    	    result
+        'REMA' => 
+    	    result := f_rema(src, len)
+    	    result
+        'EVWMA' => 
+    	    result := f_evwma(src, len)
+    	    result
+        'Gaussian MA' => 
+    	    result := f_gaussian(src, len)
+    	    result
+        'Sine-Weighted MA' => 
+    	    result := f_swma_custom(src, len)
+    	    result
+        'Triangular MA' => 
+    	    result := f_tma(src, len)
+    	    result
+        'Linear Regression' => 
+    	    result := ta.linreg(src, len, 0)
+    	    result
+        'Median MA' => 
+    	    result := ta.median(src, len)
+    	    result
+        'Geometric Mean MA' => 
+    	    result := f_geometric(src, len)
+    	    result
+        'Harmonic Mean MA' => 
+    	    result := f_harmonic(src, len)
+    	    result
+        'Quadratic MA' => 
+    	    result := f_quadratic(src, len)
+    	    result
+        'Cubic MA' => 
+    	    result := f_cubic(src, len)
+    	    result
+        'Ehlers Filter' => 
+    	    result := f_ehlers(src, len)
+    	    result
+        'Butterworth MA' => 
+    	    result := f_butterworth(src, len)
+    	    result
+        'Chebyshev MA' => 
+    	    result := f_chebyshev(src, len)
+    	    result
+        'Bessel MA' => 
+    	    result := f_bessel(src, len)
+    	    result
+        'SuperSmoother MA' => 
+    	    result := f_supersmoother(src, len)
+    	    result
+        'Laguerre MA' => 
+    	    result := f_laguerre(src, 0.5)
+    	    result
+        'Adaptive Laguerre' => 
+    	    result := f_adaptive_laguerre(src, len)
+    	    result
+        'Zero-Lag DEMA' => 
+    	    result := f_zldema(src, len)
+    	    result
+        'Zero-Lag TEMA' => 
+    	    result := f_zltema(src, len)
+    	    result
+        'Variable MA' => 
+    	    result := f_vma(src, len)
+    	    result
+        'Volatility Adjusted MA' => 
+    	    result := f_vama(src, len)
+    	    result
+        'Volume Zone MA' => 
+    	    result := f_vzma(src, len)
+    	    result
+        'Karobein MA' => 
+    	    result := f_karobein(src, len)
+    	    result
+        'Rex MA' => 
+    	    result := f_rex(src, len)
+    	    result
+        'DAFE Flux Reactor' => 
+    	    result := f_dafe_flux(src, len)
+    	    result
+        'DAFE Tensor Flow' => 
+    	    result := f_dafe_tensor(len)
+    	    result
+        'DAFE Quantum Step' => 
+    	    result := f_dafe_quantum(src, len)
+    	    result
+        'DAFE Spectral Filter' => 
+    	    result := f_dafe_spectral(src, len)
+    	    result
+        'DAFE Gravity Well' => 
+    	    result := f_dafe_gravity(src, len)
+    	    result
+        'DAFE Hybrid Adaptive' => 
+    	    result := f_dafe_hybrid(src, len)
+    	    result
+        'Parabolic SAR MA' => 
+    	    result := ta.sar(0.02, 0.02, 0.2)
+    	    result
+    result
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // APPLY SMOOTHER
+    // ═══════════════════════════════════════════════════════════════════════════════
+apply_smoother(src, len, smooth_type) =>
+    float result = src
+    switch smooth_type
+        'None' => 
+    	    result := src
+    	    result
+        'SuperSmoother' => 
+    	    result := f_smooth_supersmoother(src, len)
+    	    result
+        'Ehlers 2-Pole' => 
+    	    result := f_smooth_2pole(src, len)
+    	    result
+        'Ehlers 3-Pole' => 
+    	    result := f_smooth_3pole(src, len)
+    	    result
+        'Gaussian Filter' => 
+    	    result := f_smooth_gaussian(src, len, 2.0)
+    	    result
+        'Butterworth' => 
+    	    result := f_butterworth(src, len)
+    	    result
+        'Chebyshev' => 
+    	    result := f_chebyshev(src, len)
+    	    result
+        'Bessel' => 
+    	    result := f_bessel(src, len)
+    	    result
+        'Kalman Filter' => 
+    	    result := f_smooth_kalman(src, len)
+    	    result
+        'Laguerre Filter' => 
+    	    result := f_laguerre(src, 0.5)
+    	    result
+        'Adaptive Laguerre' => 
+    	    result := f_adaptive_laguerre(src, len)
+    	    result
+        'Hamming Window' => 
+    	    result := f_smooth_hamming(src, len)
+    	    result
+        'Hann Window' => 
+    	    result := f_smooth_hann(src, len)
+    	    result
+        'Blackman Window' => 
+    	    result := f_smooth_blackman(src, len)
+    	    result
+        'Linear Regression' => 
+    	    result := ta.linreg(src, len, 0)
+    	    result
+        'Median Filter' => 
+    	    result := ta.median(src, len)
+    	    result
+        'DAFE Phase-Zero' => 
+    	    result := f_smooth_phase_zero(src, len)
+    	    result
+        'DAFE Spectral Smooth' => 
+    	    result := f_smooth_spectral(src, len)
+    	    result
+        'DAFE Quantum Smooth' => 
+    	    result := f_smooth_quantum(src, len)
+    	    result
+    result
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // CALCULATE MAs
+    // ═══════════════════════════════════════════════════════════════════════════════
+ma1_raw = calc_ma(i_ma1_src, i_ma1_len, i_ma1_type, i_alma_offset, i_alma_sigma, i_t3_factor)
+ma1 = i_use_smoothing ? apply_smoother(ma1_raw, i_smooth_len, i_smooth_type) : ma1_raw
+ma2_raw = use_ma2 ? calc_ma(i_ma2_src, i_ma2_len, i_ma2_type, i_alma_offset, i_alma_sigma, i_t3_factor) : na
+ma2 = use_ma2 ? i_use_smoothing ? apply_smoother(ma2_raw, i_smooth_len, i_smooth_type) : ma2_raw : na
+ma3_raw = use_ma3 ? calc_ma(i_ma3_src, i_ma3_len, i_ma3_type, i_alma_offset, i_alma_sigma, i_t3_factor) : na
+ma3 = use_ma3 ? i_use_smoothing ? apply_smoother(ma3_raw, i_smooth_len, i_smooth_type) : ma3_raw : na
+// ═══════════════════════════════════════════════════════════════════════════════
+// FILTER CALCULATIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+vol_avg = ta.sma(volume, i_vol_len)
+vol_ratio = volume / vol_avg
+f_vol_filter_pass(is_buy) =>
+    if not i_enable_filters or not i_vol_enable
+        true
+    else
+        switch i_vol_mode
+            'Above Average' => volume > vol_avg
+            'Above Threshold' => volume > vol_avg * i_vol_mult
+            'Climax Detection' => vol_ratio > 2.5
+            'Dry Up Detection' => vol_ratio < 0.5
+            => true
+atr_val = ta.atr(i_volatility_atr_len)
+atr_avg = ta.sma(atr_val, i_volatility_atr_len * 3)
+bb_basis = ta.sma(close, 20)
+bb_dev = ta.stdev(close, 20) * 2.0
+bb_width = bb_dev / bb_basis
+bb_width_percentile = ta.percentrank(bb_width, 100)
+atr_percentile = ta.percentrank(atr_val, 100)
+f_volatility_filter_pass() =>
+    if not i_enable_filters or not i_volatility_enable
+        true
+    else
+        switch i_volatility_mode
+            'ATR Above Threshold' => atr_val > atr_avg * i_volatility_atr_mult
+            'ATR Below Threshold' => atr_val < atr_avg * i_volatility_atr_mult
+            'BB Squeeze' => bb_width_percentile < i_volatility_atr_mult * 100
+            'BB Expansion' => bb_width_percentile > (1.0 - i_volatility_atr_mult) * 100
+            'Historical Percentile High' => atr_percentile > i_volatility_atr_mult * 100
+            'Historical Percentile Low' => atr_percentile < i_volatility_atr_mult * 100
+            => true
+[diplus, diminus, adx_val] = ta.dmi(i_trend_adx_len, i_trend_adx_len)
+f_trend_filter_pass(is_buy) =>
+    if not i_enable_filters or not i_trend_enable
+        true
+    else
+        switch i_trend_mode
+            'Require Strong Trend' => adx_val > i_trend_adx_thresh
+            'Require Weak Trend' => adx_val < i_trend_adx_thresh
+            'Directional Alignment' => is_buy ? diplus > diminus : diminus > diplus
+            => true
+rsi_val = ta.rsi(close, i_mom_rsi_len)
+roc_val = ta.roc(close, i_mom_roc_len)
+[macd_line, macd_signal, macd_hist] = ta.macd(close, i_mom_macd_fast, i_mom_macd_slow, i_mom_macd_signal)
+stoch_k = ta.stoch(close, high, low, i_mom_stoch_len)
+f_momentum_filter_pass(is_buy) =>
+    if not i_enable_filters or not i_mom_enable
+        true
+    else
+        switch i_mom_mode
+            'RSI Confirmation' => is_buy ? rsi_val > i_mom_rsi_bull : rsi_val < i_mom_rsi_bear
+            'ROC Direction' => is_buy ? roc_val > 0 : roc_val < 0
+            'MACD Alignment' => is_buy ? macd_line > macd_signal : macd_line < macd_signal
+            'Stochastic Zone' => is_buy ? stoch_k < i_mom_stoch_bull : stoch_k > i_mom_stoch_bear
+            => true
+            // ═══════════════════════════════════════════════════════════════════════════════
+            // SLOPE CALCULATIONS
+            // ═══════════════════════════════════════════════════════════════════════════════
+ma1_slope = ma1 - nz(ma1[1])
+ma1_slope_stdev = ta.stdev(ma1_slope, 20)
+ma1_slope_norm = 50.0 + ma1_slope / (ma1_slope_stdev * 2.0 + 0.0001) * 50.0
+ma1_slope_norm := math.max(0.0, math.min(100.0, ma1_slope_norm))
+ma2_slope = use_ma2 ? ma2 - nz(ma2[1]) : 0.0
+ma2_slope_stdev = use_ma2 ? ta.stdev(ma2_slope, 20) : 1.0
+ma2_slope_norm = use_ma2 ? 50.0 + ma2_slope / (ma2_slope_stdev * 2.0 + 0.0001) * 50.0 : 50.0
+ma2_slope_norm := math.max(0.0, math.min(100.0, ma2_slope_norm))
+ma3_slope = use_ma3 ? ma3 - nz(ma3[1]) : 0.0
+ma3_slope_stdev = use_ma3 ? ta.stdev(ma3_slope, 20) : 1.0
+ma3_slope_norm = use_ma3 ? 50.0 + ma3_slope / (ma3_slope_stdev * 2.0 + 0.0001) * 50.0 : 50.0
+ma3_slope_norm := math.max(0.0, math.min(100.0, ma3_slope_norm))
+// ═══════════════════════════════════════════════════════════════════════════════
+// COLOR CALCULATIONS 
+// ═══════════════════════════════════════════════════════════════════════════════
+ma1_color = i_use_gradient ? color.from_gradient(ma1_slope_norm, 0, 100, i_ma1_color_bear, i_ma1_color_bull) : ma1 > ma1[1] ? i_ma1_color_bull : i_ma1_color_bear
+ma2_color = use_ma2 ? i_use_gradient ? color.from_gradient(ma2_slope_norm, 0, 100, i_ma2_color_bear, i_ma2_color_bull) : ma2 > ma2[1] ? i_ma2_color_bull : i_ma2_color_bear : na
+ma3_color = use_ma3 ? i_use_gradient ? color.from_gradient(ma3_slope_norm, 0, 100, i_ma3_color_bear, i_ma3_color_bull) : ma3 > ma3[1] ? i_ma3_color_bull : i_ma3_color_bear : na
+// ═══════════════════════════════════════════════════════════════════════════════
+// SIGNAL GENERATION 
+// ═══════════════════════════════════════════════════════════════════════════════
+var bool was_bull_aligned = false
+var bool was_bear_aligned = false
+var bool waiting_bull = false
+var bool waiting_bear = false
+var int wait_count = 0
+ma1_slope_change_bull = ma1 > ma1[1] and ma1[1] <= ma1[2]
+ma1_slope_change_bear = ma1 < ma1[1] and ma1[1] >= ma1[2]
+triple_bull_aligned = false
+triple_bear_aligned = false
+if use_ma2 and use_ma3
+    if i_triple_alignment_strict
+        triple_bull_aligned := ma1 > ma2 and ma2 > ma3
+        triple_bear_aligned := ma1 < ma2 and ma2 < ma3
+        triple_bear_aligned
+    else
+        triple_bull_aligned := ma1 > ma1[1] and ma2 > ma2[1] and ma3 > ma3[1]
+        triple_bear_aligned := ma1 < ma1[1] and ma2 < ma2[1] and ma3 < ma3[1]
+        triple_bear_aligned
+var bool raw_buy = false
+var bool raw_sell = false
+switch eff_signal_mode
+    'Price Cross MA1' => 
+	    raw_buy := ta.crossover(close, ma1)
+	    raw_sell := ta.crossunder(close, ma1)
+	    raw_sell
+    'Dual MA Cross' => 
+	    raw_buy := ta.crossover(ma1, ma2)
+	    raw_sell := ta.crossunder(ma1, ma2)
+	    raw_sell
+    'Triple MA Aligned' => 
+	    raw_buy := triple_bull_aligned and not was_bull_aligned
+	    raw_sell := triple_bear_aligned and not was_bear_aligned
+	    was_bull_aligned := triple_bull_aligned
+	    was_bear_aligned := triple_bear_aligned
+	    was_bear_aligned
+    'Triple MA Cross' => 
+	    ma1_cross_ma2_up = ta.crossover(ma1, ma2)
+	    ma1_cross_ma2_dn = ta.crossunder(ma1, ma2)
+	    ma23_confirms_bull = ma2 > ma3
+	    ma23_confirms_bear = ma2 < ma3
+	    raw_buy := ma1_cross_ma2_up and ma23_confirms_bull
+	    raw_sell := ma1_cross_ma2_dn and ma23_confirms_bear
+	    raw_sell
+    'Fast Cross Slow' => 
+	    raw_buy := ta.crossover(ma1, ma3)
+	    raw_sell := ta.crossunder(ma1, ma3)
+	    raw_sell
+    'Sequential Cross' => 
+	    if ta.crossover(ma1, ma2)
+	        waiting_bull := true
+	        waiting_bear := false
+	        wait_count := 0
+	        wait_count
+	    else if ta.crossunder(ma1, ma2)
+	        waiting_bear := true
+	        waiting_bull := false
+	        wait_count := 0
+	        wait_count
+	    if waiting_bull or waiting_bear
+	        wait_count := wait_count + 1
+	        wait_count
+	    if wait_count > 20
+	        waiting_bull := false
+	        waiting_bear := false
+	        wait_count := 0
+	        wait_count
+	    if waiting_bull and ta.crossover(ma2, ma3)
+	        raw_buy := true
+	        waiting_bull := false
+	        waiting_bull
+	    else
+	        raw_buy := false
+	        raw_buy
+	    if waiting_bear and ta.crossunder(ma2, ma3)
+	        raw_sell := true
+	        waiting_bear := false
+	        waiting_bear
+	    else
+	        raw_sell := false
+	        raw_sell
+    'Slope Change' => 
+	    raw_buy := ma1_slope_change_bull
+	    raw_sell := ma1_slope_change_bear
+	    raw_sell
+    'Price + Slope' => 
+	    raw_buy := ta.crossover(close, ma1) and ma1 > ma1[1]
+	    raw_sell := ta.crossunder(close, ma1) and ma1 < ma1[1]
+	    raw_sell
+    'Triple Confirm' => 
+	    cross_up = use_ma2 ? ta.crossover(ma1, ma2) : ta.crossover(close, ma1)
+	    cross_dn = use_ma2 ? ta.crossunder(ma1, ma2) : ta.crossunder(close, ma1)
+	    slope_up = ma1 > ma1[1]
+	    slope_dn = ma1 < ma1[1]
+	    align_up = use_ma2 and use_ma3 ? ma2 > ma3 : true
+	    align_dn = use_ma2 and use_ma3 ? ma2 < ma3 : true
+	    raw_buy := cross_up and slope_up and align_up
+	    raw_sell := cross_dn and slope_dn and align_dn
+	    raw_sell
+if eff_signal_mode != 'Triple MA Aligned'
+    was_bull_aligned := triple_bull_aligned
+    was_bear_aligned := triple_bear_aligned
+    was_bear_aligned
+if eff_signal_mode != 'Sequential Cross'
+    waiting_bull := false
+    waiting_bear := false
+    wait_count := 0
+    wait_count
+var int buy_confirm_count = 0
+var int sell_confirm_count = 0
+if raw_buy
+    buy_confirm_count := buy_confirm_count + 1
+    sell_confirm_count := 0
+    sell_confirm_count
+else if raw_sell
+    sell_confirm_count := sell_confirm_count + 1
+    buy_confirm_count := 0
+    buy_confirm_count
+else
+    buy_confirm_count := 0
+    sell_confirm_count := 0
+    sell_confirm_count
+confirmed_buy = buy_confirm_count >= i_signal_confirm_bars
+confirmed_sell = sell_confirm_count >= i_signal_confirm_bars
+// ═══════════════════════════════════════════════════════════════════════════════
+// APPLY FILTERS TO CONFIRMED SIGNALS
+// ═══════════════════════════════════════════════════════════════════════════════
+vol_pass_buy = f_vol_filter_pass(true)
+vol_pass_sell = f_vol_filter_pass(false)
+volatility_pass = f_volatility_filter_pass()
+trend_pass_buy = f_trend_filter_pass(true)
+trend_pass_sell = f_trend_filter_pass(false)
+mom_pass_buy = f_momentum_filter_pass(true)
+mom_pass_sell = f_momentum_filter_pass(false)
+var int bars_since_signal = 999
+bars_since_signal := bars_since_signal + 1
+time_filter_pass = bars_since_signal >= i_min_bars
+buy_signal = confirmed_buy and vol_pass_buy and volatility_pass and trend_pass_buy and mom_pass_buy and time_filter_pass
+sell_signal = confirmed_sell and vol_pass_sell and volatility_pass and trend_pass_sell and mom_pass_sell and time_filter_pass
+if buy_signal or sell_signal
+    bars_since_signal := 0
+    bars_since_signal
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // PERFORMANCE TRACKING
+    // ═══════════════════════════════════════════════════════════════════════════════
+type TradeStats
+	int trades = 0
+	int wins = 0
+	int losses = 0
+	float total_pnl = 0.0
+	float win_pnl = 0.0
+	float loss_pnl = 0.0
+	float max_dd = 0.0
+	float peak_equity = 0.0
+	float current_equity = 0.0
+	bool in_trade = false
+	int direction = 0
+	float entry_price = 0.0
+var TradeStats stats = TradeStats.new()
+stats.current_equity := i_perf_capital
+if i_perf_enable
+    if buy_signal and not stats.in_trade
+        stats.in_trade := true
+        stats.direction := 1
+        stats.entry_price := close
+        stats.entry_price
+    if sell_signal and not stats.in_trade
+        stats.in_trade := true
+        stats.direction := -1
+        stats.entry_price := close
+        stats.entry_price
+    if stats.in_trade
+        exit_trade = false
+        if stats.direction == 1 and sell_signal
+            exit_trade := true
+            exit_trade
+        else if stats.direction == -1 and buy_signal
+            exit_trade := true
+            exit_trade
+        if exit_trade
+            pos_value = stats.current_equity * (i_perf_pos_size / 100.0)
+            pnl_pct = stats.direction == 1 ? (close - stats.entry_price) / stats.entry_price : (stats.entry_price - close) / stats.entry_price
+            gross_pnl = pos_value * pnl_pct
+            comm = pos_value * (i_perf_commission / 100.0) * 2.0
+            net_pnl = gross_pnl - comm
+            stats.trades := stats.trades + 1
+            stats.total_pnl := stats.total_pnl + net_pnl
+            stats.current_equity := stats.current_equity + net_pnl
+            if net_pnl > 0
+                stats.wins := stats.wins + 1
+                stats.win_pnl := stats.win_pnl + net_pnl
+                stats.win_pnl
+            else
+                stats.losses := stats.losses + 1
+                stats.loss_pnl := stats.loss_pnl + math.abs(net_pnl)
+                stats.loss_pnl
+            stats.peak_equity := math.max(stats.peak_equity, stats.current_equity)
+            dd = (stats.peak_equity - stats.current_equity) / stats.peak_equity * 100.0
+            stats.max_dd := math.max(stats.max_dd, dd)
+            stats.in_trade := false
+            stats.in_trade
+            // ═══════════════════════════════════════════════════════════════════════════════
+            // VISUALIZATION
+            // ═══════════════════════════════════════════════════════════════════════════════
+slope_stdev = ta.stdev(ma1_slope, 20)
+slope_norm = 50.0 + ma1_slope / (slope_stdev * 2.0 + 0.0001) * 50.0
+slope_norm := math.max(0.0, math.min(100.0, slope_norm))
+plot(ma1, 'Primary MA', ma1_color, math.max(1, i_ma1_width), offset = i_ma1_offset)
+plot(i_glow_effect ? ma1 : na, 'MA1 Glow 1', color.new(ma1_color, 60), math.max(1, i_ma1_width + 3), offset = i_ma1_offset)
+plot(i_glow_effect ? ma1 : na, 'MA1 Glow 2', color.new(ma1_color, 80), math.max(1, i_ma1_width + 6), offset = i_ma1_offset)
+plot(use_ma2 ? ma2 : na, 'Secondary MA', ma2_color, math.max(1, i_ma2_width), offset = i_ma2_offset)
+plot(use_ma2 and i_glow_effect ? ma2 : na, 'MA2 Glow', color.new(ma2_color, 70), math.max(1, i_ma2_width + 2), offset = i_ma2_offset)
+plot(use_ma3 ? ma3 : na, 'Tertiary MA', ma3_color, math.max(1, i_ma3_width), offset = i_ma3_offset)
+plot(use_ma3 and i_glow_effect ? ma3 : na, 'MA3 Glow', color.new(ma3_color, 70), math.max(1, i_ma3_width + 2), offset = i_ma3_offset)
+show_ribbon = eff_ribbon_mode != 'None'
+ribbon_12_bull = use_ma2 and ma1 > ma2
+ribbon_23_bull = use_ma2 and use_ma3 and ma2 > ma3
+ribbon_13_bull = use_ma3 and ma1 > ma3
+ribbon_12_trans = eff_ribbon_mode == 'Gradient Stack' ? i_ribbon_transparency - 10 : i_ribbon_transparency
+ribbon_23_trans = i_ribbon_transparency
+ribbon_13_trans = i_ribbon_transparency
+ribbon_12_color_final = ribbon_12_bull ? color.new(i_ma1_color_bull, ribbon_12_trans) : color.new(i_ma1_color_bear, ribbon_12_trans)
+ribbon_23_color_final = ribbon_23_bull ? color.new(i_ma2_color_bull, ribbon_23_trans) : color.new(i_ma2_color_bear, ribbon_23_trans)
+ribbon_13_color_final = ribbon_13_bull ? color.new(i_ma3_color_bull, ribbon_13_trans) : color.new(i_ma3_color_bear, ribbon_13_trans)
+p_ma1_fill = plot(show_ribbon ? ma1 : na, display = display.none)
+p_ma2_fill = plot(show_ribbon and use_ma2 ? ma2 : na, display = display.none)
+p_ma3_fill = plot(show_ribbon and use_ma3 ? ma3 : na, display = display.none)
+show_ribbon_12 = (eff_ribbon_mode == 'MA1-MA2 Only' or eff_ribbon_mode == 'All Ribbons' or eff_ribbon_mode == 'Gradient Stack') and use_ma2
+show_ribbon_23 = (eff_ribbon_mode == 'MA2-MA3 Only' or eff_ribbon_mode == 'All Ribbons' or eff_ribbon_mode == 'Gradient Stack') and use_ma2 and use_ma3
+show_ribbon_13 = eff_ribbon_mode == 'MA1-MA3 Span' and use_ma3
+fill(p_ma1_fill, p_ma2_fill, show_ribbon_12 ? ribbon_12_color_final : na, 'Ribbon MA1-MA2')
+fill(p_ma2_fill, p_ma3_fill, show_ribbon_23 ? ribbon_23_color_final : na, 'Ribbon MA2-MA3')
+fill(p_ma1_fill, p_ma3_fill, show_ribbon_13 ? ribbon_13_color_final : na, 'Ribbon MA1-MA3')
+plotshape(i_show_signals and buy_signal and i_signal_size == 'Tiny', 'Buy Signal Tiny', shape.labelup, location.belowbar, i_ma1_color_bull, text = 'BUY', textcolor = color.white, size = size.tiny)
+plotshape(i_show_signals and sell_signal and i_signal_size == 'Tiny', 'Sell Signal Tiny', shape.labeldown, location.abovebar, i_ma1_color_bear, text = 'SELL', textcolor = color.white, size = size.tiny)
+plotshape(i_show_signals and buy_signal and i_signal_size == 'Small', 'Buy Signal Small', shape.labelup, location.belowbar, i_ma1_color_bull, text = 'BUY', textcolor = color.white, size = size.small)
+plotshape(i_show_signals and sell_signal and i_signal_size == 'Small', 'Sell Signal Small', shape.labeldown, location.abovebar, i_ma1_color_bear, text = 'SELL', textcolor = color.white, size = size.small)
+plotshape(i_show_signals and buy_signal and i_signal_size == 'Normal', 'Buy Signal Normal', shape.labelup, location.belowbar, i_ma1_color_bull, text = 'BUY', textcolor = color.white, size = size.normal)
+plotshape(i_show_signals and sell_signal and i_signal_size == 'Normal', 'Sell Signal Normal', shape.labeldown, location.abovebar, i_ma1_color_bear, text = 'SELL', textcolor = color.white, size = size.normal)
+// ═══════════════════════════════════════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════════════════════════════════════
+if i_dash_enable
+    dash_pos = switch i_dash_pos
+        'Top Right' => position.top_right
+        'Top Left' => position.top_left
+        'Bottom Right' => position.bottom_right
+        'Bottom Left' => position.bottom_left
+        => position.top_right
+    text_sz = switch i_dash_size
+        'Small' => size.tiny
+        'Normal' => size.small
+        'Large' => size.normal
+        => size.small
+    var table dash = table.new(dash_pos, 2, 25, border_width = 1, border_color = color.gray, bgcolor = color.new(color.black, 80))
+    if barstate.islast
+        row = 0
+        table.cell(dash, 0, row, '╔═══ MA LABORATORY ═══╗', text_color = color.white, text_size = text_sz, bgcolor = color.new(color.purple, 60))
+        table.merge_cells(dash, 0, row, 1, row)
+        row := row + 1
+        table.cell(dash, 0, row, 'Mode:', text_color = color.gray, text_size = text_sz)
+        table.cell(dash, 1, row, i_mode, text_color = color.orange, text_size = text_sz)
+        row := row + 1
+        ma1_short = str.replace(i_ma1_type, 'DAFE ', '')
+        ma1_short := str.replace(ma1_short, ' (Wilder)', '')
+        table.cell(dash, 0, row, 'MA1:', text_color = color.gray, text_size = text_sz)
+        table.cell(dash, 1, row, ma1_short + ' (' + str.tostring(i_ma1_len) + ')', text_color = i_ma1_color_bull, text_size = text_sz)
+        row := row + 1
+        if i_ma2_enable
+            ma2_short = str.replace(i_ma2_type, 'DAFE ', '')
+            ma2_short := str.replace(ma2_short, ' (Wilder)', '')
+            table.cell(dash, 0, row, 'MA2:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, ma2_short + ' (' + str.tostring(i_ma2_len) + ')', text_color = i_ma2_color_bull, text_size = text_sz)
+            row := row + 1
+            row
+        if i_ma3_enable
+            ma3_short = str.replace(i_ma3_type, 'DAFE ', '')
+            ma3_short := str.replace(ma3_short, ' (Wilder)', '')
+            table.cell(dash, 0, row, 'MA3:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, ma3_short + ' (' + str.tostring(i_ma3_len) + ')', text_color = i_ma3_color_bull, text_size = text_sz)
+            row := row + 1
+            row
+        trend_txt = ma1 > ma1[1] ? '▲ BULLISH' : '▼ BEARISH'
+        trend_col = ma1 > ma1[1] ? i_ma1_color_bull : i_ma1_color_bear
+        table.cell(dash, 0, row, 'Trend:', text_color = color.gray, text_size = text_sz)
+        table.cell(dash, 1, row, trend_txt, text_color = trend_col, text_size = text_sz)
+        row := row + 1
+        if i_ma3_enable
+            align_txt = triple_bull_aligned ? '▲ BULL ALIGNED' : triple_bear_aligned ? '▼ BEAR ALIGNED' : '○ NOT ALIGNED'
+            align_col = triple_bull_aligned ? color.green : triple_bear_aligned ? color.red : color.gray
+            table.cell(dash, 0, row, 'Alignment:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, align_txt, text_color = align_col, text_size = text_sz)
+            row := row + 1
+            row
+        mom_intensity = math.abs(slope_norm - 50) * 2
+        mom_col = mom_intensity > 70 ? color.green : mom_intensity > 40 ? color.yellow : color.gray
+        table.cell(dash, 0, row, 'Momentum:', text_color = color.gray, text_size = text_sz)
+        table.cell(dash, 1, row, str.tostring(mom_intensity, '#.0') + '%', text_color = mom_col, text_size = text_sz)
+        row := row + 1
+        dist = (close - ma1) / close * 100
+        dist_col = math.abs(dist) > 3 ? color.orange : color.white
+        table.cell(dash, 0, row, 'MA1 Dev:', text_color = color.gray, text_size = text_sz)
+        table.cell(dash, 1, row, str.tostring(dist, '#.##') + '%', text_color = dist_col, text_size = text_sz)
+        row := row + 1
+        table.cell(dash, 0, row, 'Signal:', text_color = color.gray, text_size = text_sz)
+        table.cell(dash, 1, row, i_signal_mode, text_color = color.aqua, text_size = text_sz)
+        row := row + 1
+        table.cell(dash, 0, row, 'Bars Since:', text_color = color.gray, text_size = text_sz)
+        table.cell(dash, 1, row, str.tostring(bars_since_signal), text_color = color.white, text_size = text_sz)
+        row := row + 1
+        if i_enable_filters
+            table.cell(dash, 0, row, '╔══ FILTERS ══╗', text_color = color.white, text_size = text_sz, bgcolor = color.new(color.blue, 60))
+            table.merge_cells(dash, 0, row, 1, row)
+            row := row + 1
+            if i_vol_enable
+                vol_status = vol_pass_buy ? '✓ PASS' : '✗ BLOCK'
+                vol_col = vol_pass_buy ? color.green : color.red
+                table.cell(dash, 0, row, 'Volume:', text_color = color.gray, text_size = text_sz)
+                table.cell(dash, 1, row, vol_status + ' (' + str.tostring(vol_ratio, '#.##') + 'x)', text_color = vol_col, text_size = text_sz)
+                row := row + 1
+                row
+            if i_volatility_enable
+                volatility_status = volatility_pass ? '✓ PASS' : '✗ BLOCK'
+                volatility_col = volatility_pass ? color.green : color.red
+                table.cell(dash, 0, row, 'Volatility:', text_color = color.gray, text_size = text_sz)
+                table.cell(dash, 1, row, volatility_status, text_color = volatility_col, text_size = text_sz)
+                row := row + 1
+                row
+            if i_trend_enable
+                trend_status = trend_pass_buy ? '✓ PASS' : '✗ BLOCK'
+                trend_filter_col = trend_pass_buy ? color.green : color.red
+                table.cell(dash, 0, row, 'ADX (' + str.tostring(adx_val, '#.0') + '):', text_color = color.gray, text_size = text_sz)
+                table.cell(dash, 1, row, trend_status, text_color = trend_filter_col, text_size = text_sz)
+                row := row + 1
+                row
+            if i_mom_enable
+                mom_status = mom_pass_buy ? '✓ PASS' : '✗ BLOCK'
+                mom_filter_col = mom_pass_buy ? color.green : color.red
+                table.cell(dash, 0, row, 'Momentum:', text_color = color.gray, text_size = text_sz)
+                table.cell(dash, 1, row, mom_status, text_color = mom_filter_col, text_size = text_sz)
+                row := row + 1
+                row
+            if i_min_bars > 0
+                time_status = time_filter_pass ? '✓ READY' : '⏳ WAIT ' + str.tostring(i_min_bars - bars_since_signal)
+                time_col = time_filter_pass ? color.green : color.orange
+                table.cell(dash, 0, row, 'Cooldown:', text_color = color.gray, text_size = text_sz)
+                table.cell(dash, 1, row, time_status, text_color = time_col, text_size = text_sz)
+                row := row + 1
+                row
+        if i_perf_enable
+            table.cell(dash, 0, row, '╔══ PERFORMANCE ══╗', text_color = color.white, text_size = text_sz, bgcolor = color.new(color.orange, 60))
+            table.merge_cells(dash, 0, row, 1, row)
+            row := row + 1
+            table.cell(dash, 0, row, 'Trades:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, str.tostring(stats.trades) + ' (' + str.tostring(stats.wins) + 'W/' + str.tostring(stats.losses) + 'L)', text_color = color.white, text_size = text_sz)
+            row := row + 1
+            win_rate = stats.trades > 0 ? stats.wins / stats.trades * 100 : 0
+            wr_col = win_rate > 55 ? color.green : win_rate > 45 ? color.yellow : color.red
+            table.cell(dash, 0, row, 'Win Rate:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, str.tostring(win_rate, '#.1') + '%', text_color = wr_col, text_size = text_sz)
+            row := row + 1
+            pf = stats.loss_pnl > 0 ? stats.win_pnl / stats.loss_pnl : stats.win_pnl > 0 ? 999 : 0
+            pf_col = pf > 1.5 ? color.green : pf > 1.0 ? color.yellow : color.red
+            table.cell(dash, 0, row, 'Profit Factor:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, str.tostring(pf, '#.##'), text_color = pf_col, text_size = text_sz)
+            row := row + 1
+            pnl_col = stats.total_pnl > 0 ? color.green : color.red
+            pnl_pct = stats.total_pnl / i_perf_capital * 100
+            table.cell(dash, 0, row, 'Net P&L:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, '$' + str.tostring(stats.total_pnl, '#.##') + ' (' + str.tostring(pnl_pct, '#.##') + '%)', text_color = pnl_col, text_size = text_sz)
+            row := row + 1
+            dd_col = stats.max_dd > 20 ? color.red : stats.max_dd > 10 ? color.yellow : color.green
+            table.cell(dash, 0, row, 'Max DD:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, str.tostring(stats.max_dd, '#.#') + '%', text_color = dd_col, text_size = text_sz)
+            row := row + 1
+            row
+        table.cell(dash, 0, row, '⚡ DAFE Trading Systems ⚡', text_color = color.new(color.purple, 20), text_size = size.tiny)
+        table.merge_cells(dash, 0, row, 1, row)
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // ALERTS
+        // ═══════════════════════════════════════════════════════════════════════════════
+alertcondition(i_alert_buy and buy_signal, 'MA Lab Buy Signal', 'MA Laboratory: BUY signal on {{ticker}} {{interval}}')
+alertcondition(i_alert_sell and sell_signal, 'MA Lab Sell Signal', 'MA Laboratory: SELL signal on {{ticker}} {{interval}}')
+alertcondition(i_alert_cross and (buy_signal or sell_signal), 'MA Lab Any Signal', 'MA Laboratory: Signal on {{ticker}} {{interval}}')
+alertcondition(i_ma2_enable and ta.cross(ma1, ma2), 'MA1-MA2 Cross', 'MA Laboratory: MA1/MA2 Cross on {{ticker}} {{interval}}')
+alertcondition(i_ma3_enable and ta.cross(ma1, ma3), 'MA1-MA3 Cross', 'MA Laboratory: MA1/MA3 Cross on {{ticker}} {{interval}}')
+alertcondition(i_ma3_enable and triple_bull_aligned and not triple_bull_aligned[1], 'Triple Bull Alignment', 'MA Laboratory: Triple BULLISH alignment on {{ticker}}')
+alertcondition(i_ma3_enable and triple_bear_aligned and not triple_bear_aligned[1], 'Triple Bear Alignment', 'MA Laboratory: Triple BEARISH alignment on {{ticker}}')
+// ╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+// ║                                                                                                               ║
+// ║                           DAFE MA LABORATORY - THEORY GUIDE                                                   ║
+// ║                                                                                                               ║
+// ╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+//
+// ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+// │ 1. THE PHYSICS OF LAG (Why Standard Moving Averages Fail)                                                     │
+// └───────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+//
+//   Standard MAs (SMA, EMA) use fixed lookback periods. This assumes trends move at a constant speed
+//   regardless of volatility, volume, or market regime. This is physically impossible in liquid markets.
+//
+//   THE LAG PROBLEM:
+//   • Long periods = Smooth but late signals (you catch trends after they've run)
+//   • Short periods = Fast but noisy signals (you get chopped to pieces in consolidation)
+//
+//   DAFE Logic: Price movement behaves like a physical system with inertia, momentum, and friction.
+//   • High Volatility = High Friction -> MA should adapt slower to filter noise
+//   • High Efficiency = Low Friction -> MA should adapt faster to capture trend
+//   • Volume Expansion = Force Applied -> MA should weight recent data more heavily
+//
+//   THE CROSSOVER TRAP:
+//   Traditional dual-MA crossovers generate signals AFTER the move has happened. By the time the
+//   fast MA crosses the slow MA, you've already missed 30-60% of the move. Our adaptive algorithms
+//   and triple-confirmation systems solve this by detecting trend ACCELERATION, not just direction.
+//
+// ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+// │ 2. CLASSICAL FOUNDATIONS (The Giants We Stand Upon)                                                           │
+// └───────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+//
+//   A. JOHN EHLERS - Digital Signal Processing Pioneer
+//      • SuperSmoother: Removes aliasing noise while preserving trend information
+//      • Laguerre Filter: Time-warped smoothing that adapts to market cycles
+//      • Hilbert Transform: Extracts dominant cycle period for synchronization
+//
+//   B. PERRY KAUFMAN - Adaptive Moving Average (KAMA)
+//      Uses Efficiency Ratio (ER) to measure trend quality: ER = Direction / Volatility
+//      • ER near 1.0: Strong trend, MA speeds up
+//      • ER near 0.0: Choppy market, MA slows down
+//
+//   C. TUSHAR CHANDE - VIDYA & Chande Momentum Oscillator
+//      Volatility Index Dynamic Average adapts speed based on momentum intensity.
+//      Result: An MA that breathes with the market's energy.
+//
+//   D. ALAN HULL - Hull Moving Average
+//      Uses weighted MA differencing to reduce lag by ~50% while maintaining smoothness.
+//      The gold standard for responsive-yet-smooth trend following.
+//
+//   E. TIM TILLSON - T3 Moving Average
+//      Six-stage EMA cascade with volume factor creates ultra-smooth curves.
+//      Tunable between responsiveness (VF=0) and smoothness (VF=1).
+//
+// ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+// │ 3. DAFE PROPRIETARY MA ENGINES                                                                                │
+// └───────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+//
+//   A. DAFE FLUX REACTOR
+//      Monitors Bollinger Band expansion/contraction to detect volatility regimes.
+//      Uses a sigmoid activation function to create smooth alpha transitions.
+//      • Volatility Expansion: Alpha decreases (smooths out the noise)
+//      • Volatility Contraction: Alpha increases (captures breakout moves)
+//      Result: An MA that "breathes" with market volatility in real-time.
+//
+//   B. DAFE TENSOR FLOW
+//      Treats OHLC as a 4-dimensional vector and calculates a weighted centroid:
+//      Center = (Open + 2×High + 2×Low + 3×Close) / 8
+//      Then applies Hull MA smoothing to this balanced price representation.
+//      Result: Superior noise rejection while maintaining price fidelity.
+//
+//   C. DAFE QUANTUM STEP
+//      Implements ATR-quantized movement thresholds. The MA only updates when price
+//      moves a significant distance (0.5× ATR), creating a step-function behavior.
+//      • Eliminates micro-noise completely
+//      • Only responds to "meaningful" price movement
+//      Result: Crystal-clear trend visualization with zero chatter.
+//
+//   D. DAFE SPECTRAL FILTER
+//      Separates price into low-frequency (trend) and high-frequency (noise) components.
+//      Reconstructs the signal using only 10% of the noise component.
+//      Result: Preserves trend structure while filtering 90% of random fluctuations.
+//
+//   E. DAFE GRAVITY WELL
+//      Volume-weighted center of gravity calculation. Price bars with higher volume
+//      exert stronger "gravitational pull" on the MA value.
+//      • High volume bars anchor the MA
+//      • Low volume bars have minimal effect
+//      Result: MA that respects institutional footprints and ignores retail noise.
+//
+//   F. DAFE HYBRID ADAPTIVE
+//      Combines Efficiency Ratio weighting with Kalman-style estimation.
+//      Blends two calculation methods based on trend quality:
+//      • Strong Trend (High ER): Uses Kalman prediction
+//      • Weak Trend (Low ER): Uses Wilder smoothing
+//      Result: Best-of-both-worlds adaptation for any market condition.
+//
+// ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+// │ 4. ADVANCED POST-SMOOTHING FILTERS                                                                            │
+// └───────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+//
+//   After calculating any MA, optional post-smoothing can be applied to further reduce noise.
+//   This is a two-stage filtering approach: MA → Smoother → Final Output
+//
+//   DIGITAL SIGNAL PROCESSING FILTERS:
+//   • SuperSmoother: Ehlers' 2-pole Butterworth variant, optimal noise rejection
+//   • Butterworth: Maximally flat frequency response, no ripple in passband
+//   • Chebyshev: Steeper rolloff than Butterworth, slight ripple tradeoff
+//   • Bessel: Preserves waveform shape, best phase linearity
+//
+//   WINDOW FUNCTIONS (From Audio/RF Engineering):
+//   • Hamming: Good sidelobe suppression, smooth frequency response
+//   • Hann: Zero endpoints, excellent for avoiding edge artifacts
+//   • Blackman: Maximum sidelobe suppression, wider main lobe
+//
+//   ADAPTIVE FILTERS:
+//   • Kalman Filter: Optimal state estimation, predicts next value
+//   • Adaptive Laguerre: Volatility-adjusted gamma for time-warping
+//
+//   DAFE PROPRIETARY SMOOTHERS:
+//   • Phase-Zero: Forward/reverse EMA cancellation eliminates lag entirely
+//   • Spectral Smooth: Frequency-domain noise separation
+//   • Quantum Smooth: Step-quantized updates for noise immunity
+//
+// ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+// │ 5. MULTI-MA ARCHITECTURE & SIGNAL GENERATION                                                                  │
+// └───────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+//
+//   THE TRIPLE-MA FRAMEWORK:
+//   ┌─────────────────────────────────────────────────────────────────┐
+//   │  MA1 (Fast)    │  MA2 (Medium)   │  MA3 (Slow)                  │
+//   │  5-20 periods  │  20-50 periods  │  50-200 periods              │
+//   │  Entry timing  │  Trend confirm  │  Regime filter               │
+//   └─────────────────────────────────────────────────────────────────┘
+//
+//   SIGNAL MODES EXPLAINED:
+//
+//   • PRICE CROSS MA1: Fastest signals, good for scalping
+//     Buy: Close crosses above MA1 | Sell: Close crosses below MA1
+//
+//   • DUAL MA CROSS: Classic trend-following
+//     Buy: MA1 crosses above MA2 | Sell: MA1 crosses below MA2
+//
+//   • TRIPLE MA ALIGNED: High-probability regime filter
+//     Buy: MA1 > MA2 > MA3 (Perfect bullish stack)
+//     Sell: MA1 < MA2 < MA3 (Perfect bearish stack)
+//
+//   • TRIPLE MA CROSS: Crossover with alignment confirmation
+//     Buy: MA1 crosses MA2 upward WHILE MA2 > MA3
+//     Sell: MA1 crosses MA2 downward WHILE MA2 < MA3
+//
+//   • FAST CROSS SLOW: Skip the medium MA
+//     Buy: MA1 crosses above MA3 | Sell: MA1 crosses below MA3
+//
+//   • SEQUENTIAL CROSS: Two-stage confirmation
+//     Buy: MA1 crosses MA2 up, THEN MA2 crosses MA3 up within 20 bars
+//     Maximizes probability at cost of speed
+//
+//   • SLOPE CHANGE: Momentum reversal detection
+//     Buy: MA1 slope turns positive | Sell: MA1 slope turns negative
+//
+//   • TRIPLE CONFIRM: Maximum confluence
+//     Requires: Crossover + Correct Slope + Alignment = Signal
+//
+// ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+// │ 6. SIGNAL FILTER SYSTEM                                                                                       │
+// └───────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+//
+//   Raw signals are filtered through multiple confirmation layers:
+//
+//   📦 VOLUME FILTER
+//   • Above Average: Volume > SMA(Volume, 20)
+//   • Threshold: Volume > X% above average (institutional participation)
+//   • Climax: Volume > 250% average (potential exhaustion)
+//   • Dry Up: Volume < 50% average (accumulation/distribution)
+//
+//   🌊 VOLATILITY FILTER
+//   • ATR Threshold: Require minimum/maximum volatility
+//   • BB Squeeze: Low volatility = potential breakout setup
+//   • BB Expansion: High volatility = trending conditions
+//   • Percentile: Compare current volatility to historical range
+//
+//   💪 TREND STRENGTH (ADX)
+//   • Strong Trend: ADX > 25 (trend-following conditions)
+//   • Weak Trend: ADX < 20 (range-trading conditions)
+//   • Directional: DI+ vs DI- alignment confirmation
+//
+//   🚀 MOMENTUM FILTER
+//   • RSI: Confirm momentum direction (>50 bull, <50 bear)
+//   • ROC: Rate of change direction alignment
+//   • MACD: Line vs Signal relationship
+//   • Stochastic: Overbought/Oversold zone confirmation
+//
+//   ⏰ TIME FILTER
+//   • Minimum bars between signals prevents overtrading
+//   • Allows market structure to develop between entries
+//
+// ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+// │ 7. TUNING & STRATEGY RECOMMENDATIONS                                                                          │
+// └───────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+//
+//   SCALPING (1m - 5m)
+//   ┌─────────────────────────────────────────────────────────────────┐
+//   │ MA1: Hull MA or ZLEMA (8-12 periods)                           │
+//   │ MA2: EMA (20-25 periods)                                       │
+//   │ Signal: Price Cross MA1 or Dual MA Cross                       │
+//   │ Smoother: None or SuperSmoother (Length 5)                     │
+//   │ Filters: Volume Above Threshold (1.2x), Min Bars = 3           │
+//   └─────────────────────────────────────────────────────────────────┘
+//
+//   DAY TRADING (15m - 1H)
+//   ┌─────────────────────────────────────────────────────────────────┐
+//   │ MA1: KAMA or DAFE Flux Reactor (14-20 periods)                 │
+//   │ MA2: EMA or SMA (50 periods)                                   │
+//   │ MA3: SMA (200 periods) - as regime filter                      │
+//   │ Signal: Dual MA Cross or Triple MA Aligned                     │
+//   │ Smoother: SuperSmoother (Length 8)                             │
+//   │ Filters: ADX > 25, RSI Confirmation, Min Bars = 5              │
+//   └─────────────────────────────────────────────────────────────────┘
+//
+//   SWING TRADING (4H - Daily)
+//   ┌─────────────────────────────────────────────────────────────────┐
+//   │ MA1: DAFE Gravity Well or T3 Tillson (20 periods)              │
+//   │ MA2: KAMA or VIDYA (50 periods)                                │
+//   │ MA3: SMA (200 periods)                                         │
+//   │ Signal: Triple MA Cross or Sequential Cross                    │
+//   │ Smoother: Phase-Zero or Kalman (Length 12)                     │
+//   │ Filters: BB Expansion, Strong Trend, Min Bars = 10             │
+//   └─────────────────────────────────────────────────────────────────┘
+//
+//   POSITION/INVESTING (Daily - Weekly)
+//   ┌─────────────────────────────────────────────────────────────────┐
+//   │ MA1: DAFE Quantum Step (50 periods)                            │
+//   │ MA2: SMA (100 periods)                                         │
+//   │ MA3: SMA (200 periods)                                         │
+//   │ Signal: Triple MA Aligned                                      │
+//   │ Smoother: None (preserve long-term structure)                  │
+//   │ Filters: Momentum RSI, Min Bars = 20                           │
+//   └─────────────────────────────────────────────────────────────────┘
+//
+// ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+// │ 8. VISUALIZATION FEATURES                                                                                     │
+// └───────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+//
+//   SLOPE GRADIENT COLORING:
+//   MA color shifts dynamically based on slope intensity:
+//   • Strong Bullish Slope: Bright bull color
+//   • Weak/Flat Slope: Muted color transition
+//   • Strong Bearish Slope: Bright bear color
+//
+//   GLOW EFFECT:
+//   Multiple transparent layers create a "glow" around each MA line.
+//   This provides visual weight and makes trend direction instantly recognizable.
+//
+//   RIBBON FILLS:
+//   • MA1-MA2 Fill: Shows fast/medium relationship
+//   • MA2-MA3 Fill: Shows medium/slow relationship  
+//   • MA1-MA3 Span: Shows full trend structure
+//   • Gradient Stack: Layered transparency for depth perception
+//
+//   COLOR LOGIC:
+//   • Bull Color: When MA is rising or above reference MA
+//   • Bear Color: When MA is falling or below reference MA
+//   • Fill Transparency: Adjustable 50-95% for chart clarity
+//
+// ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+// │ 9. PERFORMANCE TRACKING                                                                                       │
+// └───────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+//
+//   Built-in backtesting metrics (when enabled):
+//   • Trade Count: Total signals generated
+//   • Win Rate: Percentage of profitable trades
+//   • Profit Factor: Gross Wins / Gross Losses (>1.5 is good)
+//   • Net P&L: Cumulative profit/loss
+//   • Maximum Drawdown: Largest peak-to-trough decline
+//
+//   Note: Performance tracking is indicative only. Actual results depend on
+//   execution, slippage, and market conditions not modeled here.
+//
+// ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+// │ 10. BEST PRACTICES                                                                                            │
+// └───────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+//
+//   ✓ START SIMPLE: Begin with EMA/SMA, understand the signals, then upgrade algorithms
+//   ✓ MATCH TIMEFRAME: Faster MAs for lower timeframes, slower for higher
+//   ✓ USE FILTERS WISELY: 2-3 filters maximum, too many = no signals
+//   ✓ RESPECT MA3: The 200-period MA is the "truth" - don't fight it
+//   ✓ CONFIRMATION BARS: Use 1-2 bars to filter noise, more adds lag
+//   ✓ VOLUME MATTERS: High-volume signals are more reliable
+//   ✓ TREND IS FRIEND: MA systems work best in trending markets
+//   ✓ AVOID CHOP: When MAs are flat and intertwined, step aside
+//
+//   ✗ DON'T OVER-OPTIMIZE: If settings only work on one chart, they'll fail forward
+//   ✗ DON'T IGNORE CONTEXT: Support/resistance matters even with perfect MA signals
+//   ✗ DON'T CHASE: If you missed the cross, wait for the next one
+//
+// ══════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+//                                         DAFE TRADING SYSTEMS
+//                                    "Where Mathematics Meets Markets"
+// ══════════════════════════════════════════════════════════════════════════════════════════════════════════════════

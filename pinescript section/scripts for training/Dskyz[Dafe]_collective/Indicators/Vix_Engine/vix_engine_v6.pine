@@ -1,0 +1,831 @@
+//@version=6
+indicator("VIX Engine [DAFE]", "⟡ VIX-E", overlay=false, max_labels_count=500, max_lines_count=500, max_boxes_count=500, max_bars_back=500, precision=4)
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+//    VIX Engine [DAFE]
+//    ─────────────────────────────────────────────
+//    Term Structure Analysis | Vol Surprise Detection
+//    7-Regime Classification | Transition Probability
+//    Realized Vol: Parkinson + Yang-Zhang
+//    Footprint Delta Integration | Danger Scoring
+//    Rolling Confluence Bubble | Dual-Pane Dashboard
+//    ─────────────────────────────────────────────
+//    "Fear is Data. Data is Edge."
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+// INPUTS
+// ═══════════════════════════════════════════════════════════════════════════════
+string G_ENG    = "═══ ⟡ VIX ENGINE ═══"
+string G_DISP   = "═══ ⟡ DISPLAY LAYERS ═══"
+string G_DET    = "═══ ⟡ DETECTION OVERLAYS ═══"
+string G_VIZ    = "═══ ⟡ VISUALIZATION ═══"
+string G_DASH   = "═══ ⟡ DASHBOARD ═══"
+// Engine
+int    i_zLookback   = input.int(50, "Z-Score Lookback", minval=20, maxval=200, group=G_ENG, tooltip="Normalization period for all Z-score calculations.\n\n" + "Controls how 'normal' is defined for VIX levels, slopes, and spreads.\n" + "• 30-40: More adaptive, reacts faster to regime changes\n" + "• 50: Standard — good balance\n" + "• 100+: Very stable baseline, slower to adapt")
+int    i_rvLookback  = input.int(20, "Realized Vol Lookback", minval=10, maxval=50, group=G_ENG, tooltip="Lookback for Parkinson and Yang-Zhang realized volatility estimators.\n\n" + "Measures ACTUAL market volatility vs VIX (implied) to detect fear mispricing.\n" + "• 10-15: Short-term\n• 20: Standard\n• 30-50: Smoother")
+int    i_fpTicks     = input.int(100, "Footprint Ticks/Row", minval=1, maxval=500, group=G_ENG, tooltip="Only active with TradingView Premium footprint data.\n\n" + "Provides real tick-level delta for enhanced vol surprise and transition detection.\n" + "Free users: OHLCV approximation used automatically.")
+// Display Layers
+bool   i_showVixZ    = input.bool(true, "Show VIX Level Z-Score", group=G_DISP)
+bool   i_showSlope   = input.bool(true, "Show VIX Slope", group=G_DISP)
+bool   i_showTS      = input.bool(true, "Show Term Structure", group=G_DISP)
+bool   i_showSurp    = input.bool(true, "Show Vol Surprise", group=G_DISP)
+bool   i_showTrans   = input.bool(true, "Show Transition Probability", group=G_DISP)
+bool   i_showDanger  = input.bool(true, "Show Danger Bar", group=G_DISP)
+// Detection Overlays
+bool   i_showRegime  = input.bool(true, "Show Regime Dots", group=G_DET, tooltip="Colored circles above price bars showing current volatility regime.\n" + "Opacity scales with confidence — brighter = higher conviction.")
+bool   i_showTransW  = input.bool(true, "Show Transition Warnings", group=G_DET, tooltip="Purple dots below price when transition probability exceeds threshold.")
+bool   i_showStale   = input.bool(true, "Show Stale Data Warnings", group=G_DET, tooltip="Gray dots when VIX data quality is degraded.")
+bool   i_showSurpD   = input.bool(true, "Show Vol Surprise Dots", group=G_DET, tooltip="Gold/red dots when fear is significantly mispriced vs realized vol.")
+bool   i_showBubble  = input.bool(true, "Show Confluence Bubble", group=G_DET, tooltip="Single rolling bubble that follows price with live regime intelligence.\n" + "Color = net bias. Green = bullish confluence. Red = bearish. Gold = neutral.\n" + "Updates on every tick in realtime.")
+float  i_transThresh = input.float(0.4, "Transition Warning Threshold", minval=0.1, maxval=0.9, step=0.05, group=G_DET)
+// Visualization
+string i_vizMode     = input.string("Layered Analysis", "Visualization Mode", options=["Layered Analysis", "Regime Heatmap", "Oscillator Stack", "Risk Waterfall"], group=G_VIZ, tooltip="How VIX intelligence data is rendered in the lower pane.\n\n" + "• Layered Analysis: Classic multi-layer view\n" + "• Regime Heatmap: Intensity-based color strips\n" + "• Oscillator Stack: Zero-centered oscillators\n" + "• Risk Waterfall: Cascading cumulative risk")
+string i_theme       = input.string("Quantum Dark", "Color Theme", options=["Quantum Dark", "Neon Tokyo", "Ocean Depths", "Terminal Green", "DAFE Signature"], group=G_VIZ)
+// Dashboard
+bool   i_showDash    = input.bool(true, "Show Dashboard", group=G_DASH)
+bool   i_dashOverlay = input.bool(false, "Dashboard on Price Chart", group=G_DASH, tooltip="When enabled: dashboard appears on main price chart.\n" + "When disabled: dashboard appears in indicator pane.\n\n" + "Use overlay mode to see intelligence alongside price without looking down.")
+string i_dashPos     = input.string("Top Right", "Dashboard Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=G_DASH, tooltip="Corner position — works in both overlay and pane modes.")
+string i_dashSz      = input.string("Large", "Dashboard Size", options=["Large", "Normal", "Small"], group=G_DASH)
+// ═══════════════════════════════════════════════════════════════════════════════
+// THEME ENGINE
+// ═══════════════════════════════════════════════════════════════════════════════
+type ThemeColors
+    color bull
+    color bear
+    color neutral
+    color cyan
+    color purple
+    color orange
+    color gold
+    color bg
+    color frame
+    color text_hi
+    color text_lo
+    color compression
+    color lowvol
+    color normal
+    color elevated
+    color expansion
+    color panic
+    color euphoria
+f_theme(string name) =>
+    ThemeColors t = ThemeColors.new()
+    if name == "Quantum Dark"
+        t.bull := #00FF88, t.bear := #FF0066, t.neutral := #8899AA
+        t.cyan := #00CCFF, t.purple := #AA00FF, t.orange := #FF6600
+        t.gold := #FFCC00, t.bg := #0A0A14, t.frame := #00CCFF
+        t.text_hi := #FFFFFF, t.text_lo := #667788
+    else if name == "Neon Tokyo"
+        t.bull := #00FFAA, t.bear := #FF0055, t.neutral := #8899AA
+        t.cyan := #00DDFF, t.purple := #FF00FF, t.orange := #FF8800
+        t.gold := #FFFF00, t.bg := #0A0A14, t.frame := #00DDFF
+        t.text_hi := #FFFFFF, t.text_lo := #667788
+    else if name == "Ocean Depths"
+        t.bull := #00CED1, t.bear := #FF6B6B, t.neutral := #708090
+        t.cyan := #40E0D0, t.purple := #9370DB, t.orange := #FF8C00
+        t.gold := #DAA520, t.bg := #0C1929, t.frame := #1E90FF
+        t.text_hi := #E0E0E0, t.text_lo := #556677
+    else if name == "Terminal Green"
+        t.bull := #00FF00, t.bear := #FF0000, t.neutral := #888888
+        t.cyan := #00FFFF, t.purple := #FFFF00, t.orange := #FF6600
+        t.gold := #FFD700, t.bg := #000000, t.frame := #00FF00
+        t.text_hi := #00FF00, t.text_lo := #446644
+    else
+        t.bull := #00FF88, t.bear := #FF0066, t.neutral := #8899AA
+        t.cyan := #00CCFF, t.purple := #AA00FF, t.orange := #FF6600
+        t.gold := #FFCC00, t.bg := #0A0A14, t.frame := #AA00FF
+        t.text_hi := #FFFFFF, t.text_lo := #556677
+    t.compression := #00BFFF, t.lowvol := #00FF88, t.normal := #AAAAAA
+    t.elevated := #FFCC00, t.expansion := #FF6600, t.panic := #FF0000
+    t.euphoria := #AA00FF
+    t
+ThemeColors TH = f_theme(i_theme)
+// ═══════════════════════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════════════════════
+float EPS = 1e-10
+_clamp(float x, float lo, float hi) => math.max(lo, math.min(hi, x))
+_fStr(float val, int d) => na(val) ? "—" : str.tostring(val, d == 0 ? "#" : d == 1 ? "#.#" : d == 2 ? "#.##" : "#.####")
+_confBar(float conf, int len) =>
+    int filled = math.round(conf * len)
+    string bar = ""
+    for i = 0 to len - 1
+        bar += i < filled ? "█" : "░"
+    bar
+f_zscore(float value, float mn, float vr, int bars) =>
+    float a = 2.0 / (math.max(bars, 20) + 1.0)
+    float nm = mn * (1.0 - a) + value * a
+    float d = value - nm
+    float nv = vr * (1.0 - a) + d * d * a
+    float s = math.sqrt(math.max(nv, EPS))
+    float z = s > 0 ? d / s : 0.0
+    [_clamp(z, -4.0, 4.0), nm, nv]
+f_stale_decay(int bars_stale, float half_life) =>
+    bars_stale <= 0 ? 1.0 : math.exp(-0.693 * float(bars_stale) / half_life)
+f_rv_parkinson(float h, float l, int lb) =>
+    float hl_log = h > 0 and l > 0 ? math.log(h / l) : 0.0
+    float hl_sqr = hl_log * hl_log
+    float pk_var = ta.sma(hl_sqr, lb) / (4.0 * math.log(2.0))
+    math.sqrt(math.max(pk_var, 0.0)) * math.sqrt(252.0) * 100.0
+f_rv_yang_zhang(float o, float h, float l, float c, int lb) =>
+    float oc_log = o > 0 and nz(c[1]) > 0 ? math.log(o / nz(c[1], o)) : 0.0
+    float overnight_var = ta.sma(oc_log * oc_log, lb)
+    float co_log = c > 0 and o > 0 ? math.log(c / o) : 0.0
+    float close_var = ta.sma(co_log * co_log, lb)
+    float rs1 = h > 0 and c > 0 ? math.log(h / c) : 0.0
+    float rs2 = h > 0 and o > 0 ? math.log(h / o) : 0.0
+    float rs3 = l > 0 and c > 0 ? math.log(l / c) : 0.0
+    float rs4 = l > 0 and o > 0 ? math.log(l / o) : 0.0
+    float rs_var = ta.sma(rs1 * rs2 + rs3 * rs4, lb)
+    float k = 0.34 / (1.34 + (lb + 1.0) / (lb - 1.0))
+    float ov = na(overnight_var) ? 0.0 : overnight_var
+    float cv = na(close_var) ? 0.0 : close_var
+    float rv = na(rs_var) ? 0.0 : rs_var
+    float yz_var = ov + k * cv + (1.0 - k) * rv
+    math.sqrt(math.max(yz_var, 0.0)) * math.sqrt(252.0) * 100.0
+f_detect_instrument() =>
+    string sym = str.lower(syminfo.ticker)
+    string root = str.lower(syminfo.root != "" ? syminfo.root : syminfo.ticker)
+    string base = str.lower(syminfo.basecurrency != "" ? syminfo.basecurrency : "")
+    string prefix = str.lower(syminfo.prefix)
+    bool is_nq = str.contains(root, "nq") or str.contains(sym, "mnq")
+    bool is_es = str.contains(root, "es") or str.contains(sym, "mes") or str.contains(sym, "spy")
+    bool is_rty = str.contains(root, "rty") or str.contains(sym, "m2k")
+    bool is_btc = base == "btc" or str.contains(sym, "btc")
+    bool is_eth = base == "eth" or str.contains(sym, "eth")
+    bool is_crypto = str.contains(prefix, "binance") or str.contains(prefix, "bybit") or str.contains(prefix, "okx") or base == "btc" or base == "eth"
+    bool is_gold = str.contains(root, "gc") or str.contains(sym, "xau")
+    bool is_bond = str.contains(root, "zb") or str.contains(root, "zn") or str.contains(sym, "tlt")
+    string instName = is_nq ? "NQ/Nasdaq" : is_es ? "ES/S&P500" : is_rty ? "RTY/Russell" : is_btc ? "BTC" : is_eth ? "ETH" : is_crypto ? "Crypto" : is_gold ? "Gold" : is_bond ? "Bonds" : syminfo.ticker
+    string instClass = is_nq or is_es or is_rty ? "equity_index" : is_crypto or is_btc or is_eth ? "crypto" : is_gold ? "commodity" : is_bond ? "bond" : "unknown"
+    float instSens = is_nq ? 1.8 : is_es ? 1.0 : is_rty ? 1.3 : is_btc ? 0.6 : is_eth ? 0.7 : is_crypto ? 0.5 : is_gold ? 0.7 : is_bond ? 0.8 : 0.8
+    float instPM = is_nq ? 2.2 : is_btc ? 2.5 : is_eth ? 2.8 : is_rty ? 1.8 : is_es ? 1.5 : 1.3
+    float instCM = is_btc or is_eth ? 0.3 : is_crypto ? 0.2 : is_gold ? 0.5 : 0.8
+    [instName, instClass, instSens, instPM, instCM]
+f_regime_name(int id) =>
+    id == 0 ? "Compression" : id == 1 ? "Low Vol" : id == 2 ? "Normal" : id == 3 ? "Elevated" : id == 4 ? "Expansion" : id == 5 ? "Panic" : id == 6 ? "Euphoria" : "Unknown"
+f_regime_color(int id, ThemeColors th) =>
+    id == 0 ? th.compression : id == 1 ? th.lowvol : id == 2 ? th.normal : id == 3 ? th.elevated : id == 4 ? th.expansion : id == 5 ? th.panic : id == 6 ? th.euphoria : th.neutral
+// ═══════════════════════════════════════════════════════════════════════════════
+// FOOTPRINT INTEGRATION
+// ═══════════════════════════════════════════════════════════════════════════════
+footprint fp = request.footprint(i_fpTicks, 70)
+bool fpActive = not na(fp)
+float fpDelta   = fpActive ? fp.delta() : na
+float fpBuyVol  = fpActive ? fp.buy_volume() : na
+float fpSellVol = fpActive ? fp.sell_volume() : na
+var float fpDeltaMn = 0.0, var float fpDeltaVr = 1.0
+float fpDeltaRaw = fpActive ? _clamp(fpDelta, -1e9, 1e9) : 0.0
+float zA_fp = 2.0 / (math.max(bar_index + 1, 20) + 1.0)
+fpDeltaMn := fpDeltaMn * (1.0 - zA_fp) + fpDeltaRaw * zA_fp
+float fpDD = fpDeltaRaw - fpDeltaMn
+fpDeltaVr := fpDeltaVr * (1.0 - zA_fp) + fpDD * fpDD * zA_fp
+float fpDeltaZ = _clamp(fpDD / math.sqrt(math.max(fpDeltaVr, EPS)), -4.0, 4.0)
+bool fpAbsorption = fpActive and ((close > open and not na(fpDelta) and fpDelta < 0) or (close < open and not na(fpDelta) and fpDelta > 0))
+// ═══════════════════════════════════════════════════════════════════════════════
+// DATA INGESTION
+// ═══════════════════════════════════════════════════════════════════════════════
+[vixRaw, vixOk] = request.security("CBOE:VIX", timeframe.period, [close, true], ignore_invalid_symbol=true, lookahead=barmerge.lookahead_off)
+[vix9dRaw, vix9dOk] = request.security("CBOE:VIX9D", timeframe.period, [close, true], ignore_invalid_symbol=true, lookahead=barmerge.lookahead_off)
+[vx1Raw, vx1Ok] = request.security("CBOE:VX1!", timeframe.period, [close, true], ignore_invalid_symbol=true, lookahead=barmerge.lookahead_off)
+float rvPk = f_rv_parkinson(high, low, i_rvLookback)
+float rvYz = f_rv_yang_zhang(open, high, low, close, i_rvLookback)
+float rvBlended = rvPk * 0.4 + rvYz * 0.6
+[instName, instClass, instSens, instPM, instCM] = f_detect_instrument()
+// ═══════════════════════════════════════════════════════════════════════════════
+// STALE DETECTION & VALIDATION
+// ═══════════════════════════════════════════════════════════════════════════════
+bool vixRangeOk = not na(vixRaw) and vixOk and vixRaw > 5.0 and vixRaw < 90.0
+bool vix9dRangeOk = not na(vix9dRaw) and vix9dOk and vix9dRaw > 3.0 and vix9dRaw < 100.0
+bool vx1RangeOk = not na(vx1Raw) and vx1Ok and vx1Raw > 5.0 and vx1Raw < 90.0
+var float prevVix = 0.0, var float prevVix9d = 0.0, var float prevVx1 = 0.0
+var int staleBarsVix = 0, var int staleBarsVix9d = 0, var int staleBarsVx1 = 0
+var float vixValue = 20.0, var float vix9dValue = 0.0, var float vx1Value = 0.0
+if vixRangeOk
+    vixValue := vixRaw
+    staleBarsVix := math.abs(vixRaw - prevVix) > 0.01 ? 0 : staleBarsVix + 1
+    prevVix := vixRaw
+else
+    staleBarsVix += 1
+if vix9dRangeOk
+    vix9dValue := vix9dRaw
+    staleBarsVix9d := math.abs(vix9dRaw - prevVix9d) > 0.01 ? 0 : staleBarsVix9d + 1
+    prevVix9d := vix9dRaw
+else
+    staleBarsVix9d += 1
+if vx1RangeOk
+    vx1Value := vx1Raw
+    staleBarsVx1 := math.abs(vx1Raw - prevVx1) > 0.01 ? 0 : staleBarsVx1 + 1
+    prevVx1 := vx1Raw
+else
+    staleBarsVx1 += 1
+bool vixValid = staleBarsVix < 30
+bool vix9dValid = staleBarsVix9d < 30
+bool vx1Valid = staleBarsVx1 < 30
+float vixConf = vixValid ? f_stale_decay(staleBarsVix, 15.0) : 0.0
+float vix9dConf = vix9dValid ? f_stale_decay(staleBarsVix9d, 15.0) : 0.0
+float vx1Conf = vx1Valid ? f_stale_decay(staleBarsVx1, 15.0) : 0.0
+float dataConfidence = vixConf * 0.5 + vix9dConf * 0.25 + vx1Conf * 0.25
+bool usingFallback = dataConfidence < 0.5
+if usingFallback
+    float fbVix = rvBlended * 1.15
+    vixValue := vixValue * dataConfidence + fbVix * (1.0 - dataConfidence)
+float workingVix = vixValue > 0 ? vixValue : rvBlended * 1.15
+// ═══════════════════════════════════════════════════════════════════════════════
+// COMPUTE ALL METRICS
+// ═══════════════════════════════════════════════════════════════════════════════
+var int barsProcessed = 0
+barsProcessed += 1
+float zA = 2.0 / (math.max(bar_index + 1, 20) + 1.0)
+var float vixMn = 20.0, var float vixVr = 25.0
+[vixZ, nvmn, nvvr] = f_zscore(workingVix, vixMn, vixVr, barsProcessed)
+vixMn := nvmn, vixVr := nvvr
+var array<float> vixHist = array.new<float>()
+float vixSlopeRaw = 0.0
+int vhSz = array.size(vixHist)
+if vhSz >= 2
+    float pv = array.get(vixHist, vhSz - 1)
+    vixSlopeRaw := pv > 0 ? (workingVix - pv) / pv * 100.0 : 0.0
+var float slopeMn = 0.0, var float slopeVr = 1.0
+[slopeZ, nsmn, nsvr] = f_zscore(vixSlopeRaw, slopeMn, slopeVr, barsProcessed)
+slopeMn := nsmn, slopeVr := nsvr
+array.push(vixHist, workingVix)
+if array.size(vixHist) > 200
+    array.shift(vixHist)
+var array<float> rvHist = array.new<float>()
+array.push(rvHist, rvBlended)
+if array.size(rvHist) > 200
+    array.shift(rvHist)
+var float prevTsSlope = 0.0
+float tsSlope = prevTsSlope
+float tsContango = 0.0
+string tsState = "unknown"
+float tsInversion = 0.0
+float tsSvl = 0.0
+float tsSlopeRoc = 0.0
+if vixValid and vx1Valid and vx1Value > 0 and vixValue > 0
+    float spread = vx1Value - vixValue
+    float spreadPct = spread / vixValue * 100.0
+    tsSlope := spreadPct
+    tsContango := _clamp(spreadPct / 10.0, -1.0, 1.0)
+    tsState := spreadPct > 2.0 ? "contango" : spreadPct > -2.0 ? "flat" : spreadPct > -8.0 ? "backwardation" : "inverted"
+    tsInversion := spreadPct <= -2.0 ? (spreadPct > -8.0 ? math.abs(spreadPct) / 8.0 : math.min(2.0, math.abs(spreadPct) / 8.0)) : 0.0
+if vixValid and vix9dValid and vixValue > 0
+    tsSvl := (vix9dValue - vixValue) / vixValue * 100.0
+tsSlopeRoc := tsSlope - prevTsSlope
+prevTsSlope := tsSlope
+var float tsMn = 0.0, var float tsVr = 1.0
+[tsSlopeZ, ntmn, ntvr] = f_zscore(tsSlope, tsMn, tsVr, barsProcessed)
+tsMn := ntmn, tsVr := ntvr
+var float svlMn = 0.0, var float svlVr = 1.0
+[svlZ, nsvlmn, nsvlvr] = f_zscore(tsSvl, svlMn, svlVr, barsProcessed)
+svlMn := nsvlmn, svlVr := nsvlvr
+var array<float> slopeHist = array.new<float>()
+array.push(slopeHist, tsSlope)
+if array.size(slopeHist) > 200
+    array.shift(slopeHist)
+float surpriseRaw = workingVix - rvBlended
+float estSpread = rvYz > 0 ? math.abs(rvPk - rvYz) / rvYz : 0.0
+float adjSurprise = surpriseRaw * (1.0 + estSpread * 0.5)
+float vrp = rvBlended > 0 ? (workingVix - rvBlended) / rvBlended * 100.0 : 0.0
+var float surprMn = 0.0, var float surprVr = 1.0
+[surpriseZ, nspmn, nspvr] = f_zscore(adjSurprise, surprMn, surprVr, barsProcessed)
+surprMn := nspmn, surprVr := nspvr
+bool fearOver = surpriseZ > 1.5
+bool fearUnder = surpriseZ < -1.5
+float atr14_global = ta.atr(14)
+// ═══════════════════════════════════════════════════════════════════════════════
+// REGIME CLASSIFICATION
+// ═══════════════════════════════════════════════════════════════════════════════
+var int prevRegimeId = 2
+var int regimeDur = 0
+float volScore = vixZ * 0.3
+volScore += (vixSlopeRaw > 2.0 ? 1.0 : vixSlopeRaw > 0.5 ? 0.5 : vixSlopeRaw < -2.0 ? -1.0 : vixSlopeRaw < -0.5 ? -0.5 : 0.0) * 0.2
+float tsContrib = tsState == "inverted" ? 1.5 : tsState == "backwardation" ? 0.8 : tsState == "contango" ? -0.5 : 0.0
+volScore += tsContrib * 0.2
+volScore += surpriseZ * -0.15
+float lvContrib = workingVix > 40 ? 2.0 : workingVix > 30 ? 1.0 : workingVix > 20 ? 0.0 : workingVix > 15 ? -0.5 : workingVix > 12 ? -1.0 : -1.5
+volScore += lvContrib * 0.15
+volScore += tsInversion * 0.15
+int regimeId = volScore < -1.5 ? 0 : volScore < -0.5 ? 1 : volScore < 0.5 ? 2 : volScore < 1.2 ? 3 : volScore < 2.0 ? 4 : (volScore >= 2.0 and vixSlopeRaw > 0 ? 5 : 6)
+string regimeName = f_regime_name(regimeId)
+color regimeCol = f_regime_color(regimeId, TH)
+float riskMult = regimeId == 0 ? 1.3 : regimeId == 1 ? 1.15 : regimeId == 2 ? 1.0 : regimeId == 3 ? 0.8 : regimeId == 4 ? 0.5 : regimeId == 5 ? 0.2 : regimeId == 6 ? 0.6 : 1.0
+float sigPenalty = regimeId == 0 ? 0.85 : regimeId == 1 ? 0.9 : regimeId == 2 ? 1.0 : regimeId == 3 ? 0.9 : regimeId == 4 ? 0.7 : regimeId == 5 ? 0.4 : regimeId == 6 ? 0.75 : 1.0
+float regimeConf = math.min(1.0, math.abs(volScore) / 2.0)
+float bdist = math.min(math.abs(volScore + 1.5), math.min(math.abs(volScore + 0.5), math.min(math.abs(volScore - 0.5), math.min(math.abs(volScore - 1.2), math.abs(volScore - 2.0)))))
+if bdist < 0.3
+    regimeConf *= 0.6
+regimeDur := regimeId == prevRegimeId ? regimeDur + 1 : 0
+bool regimeChanged = regimeId != prevRegimeId and barsProcessed > 1
+int prevRegimeIdSnap = prevRegimeId
+var array<float> transMatrix = array.new<float>(49, 1.0)
+var bool tmInit = false
+if not tmInit
+    for i = 0 to 6
+        array.set(transMatrix, i * 7 + i, 5.0)
+    tmInit := true
+if regimeChanged
+    int tidx = prevRegimeId * 7 + regimeId
+    if tidx >= 0 and tidx < 49
+        array.set(transMatrix, tidx, array.get(transMatrix, tidx) + 1.0)
+prevRegimeId := regimeId
+// ═══════════════════════════════════════════════════════════════════════════════
+// TRANSITION PROBABILITY
+// ═══════════════════════════════════════════════════════════════════════════════
+float slopeAccel = 0.0
+int slSz = array.size(slopeHist)
+if slSz >= 5
+    float slRecent = array.get(slopeHist, slSz - 1)
+    float slOlder = array.get(slopeHist, slSz - 5)
+    float slMid = slSz >= 3 ? array.get(slopeHist, slSz - 3) : (slRecent + slOlder) / 2.0
+    float accel = slRecent - 2.0 * slMid + slOlder
+    float slStd = 0.0
+    if slSz >= 10
+        float slMeanC = 0.0
+        for i = 0 to slSz - 1
+            slMeanC += array.get(slopeHist, i)
+        slMeanC /= slSz
+        for i = 0 to slSz - 1
+            float dd = array.get(slopeHist, i) - slMeanC
+            slStd += dd * dd
+        slStd := math.sqrt(slStd / slSz)
+    slopeAccel := slStd > 0.01 ? math.abs(accel) / slStd : math.abs(accel)
+slopeAccel := math.min(2.0, slopeAccel)
+float volAccel = 0.0
+int rvSz = array.size(rvHist)
+if rvSz >= 5
+    float rvR = array.get(rvHist, rvSz - 1)
+    float rvO = array.get(rvHist, rvSz - 5)
+    volAccel := rvO > 0 ? math.abs((rvR - rvO) / rvO) * 10.0 : 0.0
+volAccel := math.min(2.0, volAccel)
+float skewMom = math.abs(svlZ) > 1.5 ? math.abs(svlZ) / 2.0 : 0.0
+skewMom += math.abs(tsSlopeRoc) > 1.0 ? 0.3 : 0.0
+skewMom := math.min(2.0, skewMom)
+float mrPressure = 0.0
+mrPressure += math.abs(vixZ) > 2.0 ? (math.abs(vixZ) - 2.0) * 0.5 : 0.0
+if (regimeId == 0 or regimeId >= 5) and regimeDur > 10
+    mrPressure += float(regimeDur - 10) / 50.0
+if math.abs(surpriseZ) > 2.0
+    mrPressure += 0.3
+int vhSz2 = array.size(vixHist)
+if vhSz2 >= 10
+    float curV = array.get(vixHist, vhSz2 - 1)
+    int belowCount = 0
+    for i = 0 to vhSz2 - 1
+        if array.get(vixHist, i) < curV
+            belowCount += 1
+    float vixPctl = float(belowCount) / float(vhSz2) * 100.0
+    if vixPctl > 90.0 or vixPctl < 10.0
+        mrPressure += (math.abs(vixPctl - 50.0) - 40.0) / 30.0
+mrPressure := math.min(2.0, mrPressure)
+float fpTransBoost = fpActive ? _clamp(math.abs(fpDeltaZ) / 4.0, 0.0, 0.3) : 0.0
+float transComposite = slopeAccel * 0.28 + volAccel * 0.23 + skewMom * 0.19 + mrPressure * 0.23 + fpTransBoost * 0.07
+float transProb = transComposite / (transComposite + 1.5)
+if regimeId == 2
+    transProb *= 0.7
+else if regimeId == 0 or regimeId >= 5
+    transProb *= 1.3
+transProb := _clamp(transProb, 0.0, 1.0)
+int predRegime = regimeId
+float bestTransP = 0.0
+for j = 0 to 6
+    if j != regimeId
+        float totalFrom = 0.0
+        for k = 0 to 6
+            int mIdx = regimeId * 7 + k
+            if mIdx >= 0 and mIdx < 49
+                totalFrom += array.get(transMatrix, mIdx)
+        int pIdx = regimeId * 7 + j
+        float thisP = totalFrom > 0 and pIdx >= 0 and pIdx < 49 ? array.get(transMatrix, pIdx) / totalFrom : 0.0
+        if thisP > bestTransP
+            bestTransP := thisP
+            predRegime := j
+if slopeAccel > 1.0 and vixSlopeRaw > 0
+    predRegime := math.min(6, regimeId + 1)
+else if slopeAccel > 1.0 and vixSlopeRaw < 0
+    predRegime := math.max(0, regimeId - 1)
+else if mrPressure > 1.0
+    predRegime := 2
+string predRegimeName = f_regime_name(predRegime)
+color predRegimeCol = f_regime_color(predRegime, TH)
+float earlyWarning = math.min(1.0, transProb * (1.0 + mrPressure * 0.3))
+float instSensEff = instSens
+if regimeId >= 5
+    instSensEff *= instPM
+else if regimeId <= 1
+    instSensEff *= instCM
+float vixNonlinear = workingVix > 30 ? 1.0 + (workingVix - 30.0) / 50.0 : 1.0
+instSensEff *= vixNonlinear
+instSensEff := _clamp(instSensEff, 0.1, 5.0)
+float finalRisk = riskMult
+if instSensEff > 1.0 and regimeId >= 3
+    finalRisk *= math.max(0.3, (2.0 - instSensEff))
+finalRisk := _clamp(finalRisk, 0.1, 2.0)
+float dataPen = dataConfidence < 0.5 ? 0.7 : 1.0
+float finalPenalty = _clamp(sigPenalty * dataPen, 0.1, 1.0)
+if transProb > 0.6
+    finalPenalty := math.max(0.1, finalPenalty * (1.0 - (transProb - 0.6) * 0.5))
+float dangerScore = 0.0
+dangerScore += _clamp(vixZ * 10.0, 0.0, 30.0)
+dangerScore += regimeId == 0 ? 0.0 : regimeId == 1 ? 5.0 : regimeId == 2 ? 10.0 : regimeId == 3 ? 15.0 : regimeId == 4 ? 20.0 : regimeId == 5 ? 25.0 : 12.0
+dangerScore += tsInversion * 10.0
+dangerScore += transProb * 15.0
+if fearUnder
+    dangerScore += 10.0
+if fpAbsorption and fpDeltaZ < -1.0
+    dangerScore += 5.0
+dangerScore := _clamp(dangerScore, 0.0, 100.0)
+// ═══════════════════════════════════════════════════════════════════════════════
+// VISUALIZATION — LOWER PANE
+// ═══════════════════════════════════════════════════════════════════════════════
+float p1 = na, float p2 = na, float p3 = na, float p4 = na, float p5 = na, float p6 = na
+color c1 = na, color c2 = na, color c3 = na, color c4 = na, color c5 = na, color c6 = na
+if i_vizMode == "Layered Analysis"
+    p1 := i_showVixZ ? vixZ * 12 : na
+    p2 := i_showSlope ? slopeZ * 8 : na
+    p3 := i_showTS ? tsSlopeZ * 6 : na
+    p4 := i_showSurp ? surpriseZ * 6 : na
+    p5 := i_showTrans ? transProb * 40 : na
+    p6 := i_showDanger ? dangerScore / 2.5 : na
+    c1 := color.from_gradient(vixZ, -3, 3, TH.bull, TH.bear)
+    c2 := color.from_gradient(slopeZ, -2, 2, TH.bull, TH.bear)
+    c3 := color.from_gradient(tsSlopeZ, -2, 2, TH.cyan, TH.orange)
+    c4 := surpriseZ > 0 ? color.from_gradient(surpriseZ, 0, 3, color.new(TH.gold, 60), TH.gold) : color.from_gradient(surpriseZ, -3, 0, TH.purple, color.new(TH.purple, 60))
+    c5 := color.from_gradient(transProb, 0, 1, color.new(TH.purple, 80), TH.purple)
+    c6 := color.from_gradient(dangerScore, 0, 100, color.new(TH.bull, 50), TH.bear)
+else if i_vizMode == "Regime Heatmap"
+    p1 := i_showVixZ ? 35 : na
+    p2 := i_showSlope ? 25 : na
+    p3 := i_showTS ? 15 : na
+    p4 := i_showSurp ? 5 : na
+    p5 := i_showTrans ? -5 : na
+    p6 := i_showDanger ? -15 : na
+    float vixInt = math.min(math.abs(vixZ) / 3, 1)
+    c1 := vixZ > 0 ? color.from_gradient(vixInt * 100, 0, 100, color.new(TH.bear, 90), TH.bear) : color.from_gradient(vixInt * 100, 0, 100, color.new(TH.bull, 90), TH.bull)
+    float slInt = math.min(math.abs(slopeZ) / 2, 1)
+    c2 := slopeZ > 0 ? color.from_gradient(slInt * 100, 0, 100, color.new(TH.bear, 90), TH.bear) : color.from_gradient(slInt * 100, 0, 100, color.new(TH.bull, 90), TH.bull)
+    float tsInt = math.min(math.abs(tsSlopeZ) / 2, 1)
+    c3 := tsState == "backwardation" or tsState == "inverted" ? color.from_gradient(tsInt * 100, 0, 100, color.new(TH.orange, 90), TH.orange) : color.from_gradient(tsInt * 100, 0, 100, color.new(TH.cyan, 90), TH.cyan)
+    float spInt = math.min(math.abs(surpriseZ) / 3, 1)
+    c4 := surpriseZ > 0 ? color.from_gradient(spInt * 100, 0, 100, color.new(TH.gold, 90), TH.gold) : color.from_gradient(spInt * 100, 0, 100, color.new(TH.purple, 90), TH.purple)
+    c5 := color.from_gradient(transProb * 100, 0, 100, color.new(TH.purple, 95), TH.purple)
+    c6 := color.new(regimeCol, math.round(90 - regimeConf * 70))
+else if i_vizMode == "Oscillator Stack"
+    p1 := i_showVixZ ? vixZ * 15 : na
+    p2 := i_showSlope ? slopeZ * 10 : na
+    p3 := i_showTS ? tsSlopeZ * 8 : na
+    p4 := i_showSurp ? -surpriseZ * 6 : na
+    float compOsc = (vixZ * 0.3 + slopeZ * 0.2 + tsSlopeZ * 0.2 - surpriseZ * 0.15 + transProb * 20 * 0.15) * 8
+    p5 := i_showTrans ? transProb * 30 : na
+    p6 := i_showDanger ? compOsc : na
+    c1 := color.new(vixZ > 0 ? TH.bear : TH.bull, 40)
+    c2 := color.new(slopeZ > 0 ? TH.bear : TH.bull, 50)
+    c3 := color.new(tsSlopeZ < 0 ? TH.orange : TH.cyan, 50)
+    c4 := color.new(surpriseZ > 0 ? TH.gold : TH.purple, 50)
+    c5 := color.new(TH.purple, math.round(80 - transProb * 60))
+    c6 := color.new(compOsc > 0 ? TH.bear : TH.bull, 20)
+else if i_vizMode == "Risk Waterfall"
+    float l1 = vixZ * 8
+    float l2 = l1 + slopeZ * 5
+    float l3 = l2 + tsSlopeZ * 4
+    float l4 = l3 - surpriseZ * 3
+    float l5 = l4 + transProb * 15
+    p1 := i_showVixZ ? l1 : na
+    p2 := i_showSlope ? l2 : na
+    p3 := i_showTS ? l3 : na
+    p4 := i_showSurp ? l4 : na
+    p5 := i_showTrans ? l5 : na
+    p6 := l5
+    c1 := color.new(vixZ > 0 ? TH.bear : TH.bull, 55)
+    c2 := color.new(slopeZ > 0 ? TH.bear : TH.bull, 65)
+    c3 := color.new(tsSlopeZ < 0 ? TH.orange : TH.cyan, 65)
+    c4 := color.new(surpriseZ > 0 ? TH.gold : TH.purple, 70)
+    c5 := color.new(TH.purple, 60)
+    c6 := color.new(TH.frame, 30)
+bool isHist = i_vizMode == "Oscillator Stack"
+bool isLine = i_vizMode == "Risk Waterfall"
+plot(p1, "VIX Z", color=c1, style=isHist ? plot.style_histogram : isLine ? plot.style_line : plot.style_columns, linewidth=isHist ? 3 : isLine ? 2 : 4)
+plot(p2, "VIX Slope", color=c2, style=isHist ? plot.style_histogram : isLine ? plot.style_line : i_vizMode == "Layered Analysis" ? plot.style_area : plot.style_columns, linewidth=isLine ? 2 : isHist ? 2 : i_vizMode == "Regime Heatmap" ? 8 : 2)
+plot(p3, "Term Structure", color=c3, style=isLine ? plot.style_line : i_vizMode == "Layered Analysis" ? plot.style_line : plot.style_columns, linewidth=2)
+plot(p4, "Vol Surprise", color=c4, style=isLine ? plot.style_line : plot.style_columns, linewidth=2)
+plot(p5, "Transition", color=c5, style=isLine ? plot.style_line : i_vizMode == "Layered Analysis" ? plot.style_area : plot.style_columns, linewidth=2)
+plot(p6, "Composite", color=c6, style=i_vizMode == "Layered Analysis" ? plot.style_stepline_diamond : isLine ? plot.style_line : plot.style_columns, linewidth=isLine ? 3 : 2)
+hline(0,   "Zero",  color=#8899AA, linestyle=hline.style_solid,  linewidth=1)
+hline(25,  "Upper", color=#445566, linestyle=hline.style_dotted, linewidth=1)
+hline(-25, "Lower", color=#445566, linestyle=hline.style_dotted, linewidth=1)
+bgcolor(regimeId == 5 ? color.new(TH.panic, 92) : regimeId == 4 ? color.new(TH.expansion, 94) : regimeId == 0 ? color.new(TH.compression, 94) : regimeId == 6 ? color.new(TH.euphoria, 94) : na)
+// ═══════════════════════════════════════════════════════════════════════════════
+// OVERLAY DETECTION DOTS
+// ═══════════════════════════════════════════════════════════════════════════════
+int regimeAlpha = math.round(math.max(10, 90 - regimeConf * 80))
+plotshape(i_showRegime and regimeId == 0, "Compression",  shape.circle, location.abovebar, color.new(TH.compression, regimeAlpha), size=size.small,  force_overlay=true)
+plotshape(i_showRegime and regimeId == 1, "Low Vol",      shape.circle, location.abovebar, color.new(TH.lowvol,      regimeAlpha), size=size.tiny,   force_overlay=true)
+plotshape(i_showRegime and regimeId == 3, "Elevated",     shape.circle, location.abovebar, color.new(TH.elevated,    regimeAlpha), size=size.small,  force_overlay=true)
+plotshape(i_showRegime and regimeId == 4, "Expansion",    shape.circle, location.abovebar, color.new(TH.expansion,   regimeAlpha), size=size.small,  force_overlay=true)
+plotshape(i_showRegime and regimeId == 5, "Panic",        shape.circle, location.abovebar, color.new(TH.panic,       regimeAlpha), size=size.normal, force_overlay=true)
+plotshape(i_showRegime and regimeId == 6, "Euphoria",     shape.circle, location.abovebar, color.new(TH.euphoria,    regimeAlpha), size=size.small,  force_overlay=true)
+int transAlpha = transProb > i_transThresh ? math.round(math.max(10, 90 - transProb * 80)) : 100
+plotshape(i_showTransW and transProb > i_transThresh, "Transition Warning", shape.circle, location.belowbar, color.new(TH.purple, transAlpha), size=size.small, force_overlay=true)
+plotshape(i_showStale and usingFallback, "Stale Data", shape.circle, location.belowbar, color.new(TH.neutral, 50), size=size.tiny, force_overlay=true)
+int overAlpha  = fearOver  ? math.round(math.max(10, 90 - math.abs(surpriseZ) / 3 * 80)) : 100
+int underAlpha = fearUnder ? math.round(math.max(10, 90 - math.abs(surpriseZ) / 3 * 80)) : 100
+plotshape(i_showSurpD and fearOver,  "Fear Overpriced",   shape.circle, location.belowbar, color.new(TH.gold, overAlpha),  size=size.small, force_overlay=true)
+plotshape(i_showSurpD and fearUnder, "Fear Underpriced",  shape.circle, location.belowbar, color.new(TH.bear, underAlpha), size=size.small, force_overlay=true)
+// ═══════════════════════════════════════════════════════════════════════════════
+// ROLLING CONFLUENCE BUBBLE
+// ═══════════════════════════════════════════════════════════════════════════════
+var label confluenceBubble = na
+float recentHigh = ta.highest(high, 5)
+if i_showBubble and (barstate.islast or barstate.isrealtime)
+    if not na(confluenceBubble)
+        label.delete(confluenceBubble)
+    // ── Bias Scoring ──
+    int bullPts = 0
+    int bearPts = 0
+    // Regime contribution
+    if regimeId == 0 or regimeId == 1
+        bullPts += 1
+    else if regimeId == 4 or regimeId == 5
+        bearPts += 2
+    else if regimeId == 6
+        bearPts += 1
+    else if regimeId == 3
+        bearPts += 1
+    // VIX slope
+    if vixSlopeRaw < -1.5
+        bullPts += 2
+    else if vixSlopeRaw < -0.5
+        bullPts += 1
+    else if vixSlopeRaw > 1.5
+        bearPts += 2
+    else if vixSlopeRaw > 0.5
+        bearPts += 1
+    // Term structure
+    if tsState == "contango"
+        bullPts += 1
+    else if tsState == "backwardation"
+        bearPts += 1
+    else if tsState == "inverted"
+        bearPts += 2
+    // Vol surprise (contrarian read)
+    if fearOver
+        bullPts += 1
+    else if fearUnder
+        bearPts += 2
+    // Transition pressure direction
+    if transProb > 0.5
+        if regimeId <= 2
+            bearPts += 1
+        else
+            bullPts += 1
+    // Footprint delta
+    if fpActive
+        if fpDeltaZ > 1.5 and not fpAbsorption
+            bullPts += 1
+        else if fpDeltaZ < -1.5 and not fpAbsorption
+            bearPts += 1
+        else if fpAbsorption and fpDeltaZ > 0
+            bullPts += 1 
+        else if fpAbsorption and fpDeltaZ < 0
+            bearPts += 1  
+    // ── Net Bias → Label + Color ──
+    int netBias = bullPts - bearPts
+    string biasLine = netBias >= 3 ? "▲ BULLISH" : netBias == 2 ? "▲ LEAN BULL" : netBias == 1 ? "△ SLIGHT BULL" : netBias == -1 ? "▽ SLIGHT BEAR" : netBias == -2 ? "▼ LEAN BEAR" : netBias <= -3 ? "▼ BEARISH" : "— NEUTRAL"
+    color biasColor = netBias >= 2 ? TH.bull : netBias <= -2 ? TH.bear : netBias == 1 ? color.new(TH.bull, 35) : netBias == -1 ? color.new(TH.bear, 35) : TH.gold
+    // ── Component Tags ──
+    string dangerTag = dangerScore > 70 ? " ⚠⚠⚠" : dangerScore > 50 ? " ⚠⚠" : dangerScore > 30 ? " ⚠" : ""
+    string tsTag = tsState == "contango" ? "Contango" : tsState == "flat" ? "Flat" : tsState == "backwardation" ? "Backwd" : "INVERTED"
+    string fearTag = fearOver ? "Overpriced" : fearUnder ? "Underpriced" : "Fair"
+    string transTag = transProb > 0.65 ? "⚡" + _fStr(transProb * 100, 0) + "%" : transProb > 0.35 ? _fStr(transProb * 100, 0) + "%" : "Stable"
+    string fpTag = fpActive ? (fpAbsorption ? (fpDeltaZ > 0 ? "Accum ▲" : "Distrib ▼") : fpDeltaZ > 1.0 ? "Bull Δ ▲" : fpDeltaZ < -1.0 ? "Bear Δ ▼" : "Neutral") : "No FP"
+    string slopeTag = vixSlopeRaw > 0 ? "+" + _fStr(vixSlopeRaw, 1) + "%" : _fStr(vixSlopeRaw, 1) + "%"
+    // ── Bubble Text ──
+    string bubbleText =
+         biasLine + dangerTag              + "\n" +
+         "━━━━━━━━━━━━━━━━━"              + "\n" +
+         "Regime  : " + regimeName         + "\n" +
+         "VIX     : " + _fStr(workingVix, 1) + "  Δ" + slopeTag + "\n" +
+         "Term    : " + tsTag              + "\n" +
+         "Fear    : " + fearTag            + "\n" +
+         "Trans   : " + transTag           + "\n" +
+         "Flow    : " + fpTag              + "\n" +
+         "Danger  : " + _fStr(dangerScore, 0) + "/100"
+    float bubbleY = recentHigh + atr14_global * 1.2
+    confluenceBubble := label.new(
+         bar_index + 2,
+         bubbleY,
+         bubbleText,
+         style=label.style_label_lower_left,
+         color=color.new(biasColor, 75),  
+         textcolor=#FFFFFF,
+         size=size.small,
+         textalign=text.align_left,
+         force_overlay=true)
+// ═══════════════════════════════════════════════════════════════════════════════
+// ALERTS
+// ═══════════════════════════════════════════════════════════════════════════════
+alertcondition(regimeChanged, "Regime Shift", "⟡ VIX Regime Shift Detected")
+alertcondition(regimeId == 5, "Panic Regime", "⟡ VIX PANIC Regime Active")
+alertcondition(transProb > 0.6, "High Transition", "⟡ High regime transition probability")
+alertcondition(fearOver, "Fear Overpriced", "⟡ Fear overpriced vs realized vol")
+alertcondition(fearUnder, "Fear Underpriced", "⟡ Fear underpriced — danger signal")
+alertcondition(dangerScore > 70, "Extreme Danger", "⟡ Danger score critical")
+alertcondition(fpActive and fpAbsorption and fpDeltaZ < -1.5, "FP Bear Absorption", "⟡ Footprint: Bearish absorption detected")
+alertcondition(fpActive and fpAbsorption and fpDeltaZ > 1.5, "FP Bull Accumulation", "⟡ Footprint: Hidden accumulation detected")
+// ═══════════════════════════════════════════════════════════════════════════════
+// DASHBOARD 
+// ═══════════════════════════════════════════════════════════════════════════════
+if barstate.islast and i_showDash
+    string dPos = i_dashPos == "Top Right" ? position.top_right : i_dashPos == "Top Left" ? position.top_left : i_dashPos == "Bottom Right" ? position.bottom_right : position.bottom_left
+    string tSize = i_dashSz == "Large" ? size.small : size.tiny
+    bool isSmall = i_dashSz == "Small"
+    bool showLarge = i_dashSz == "Large"
+    int dashCols = 6
+    int dashRows = 30
+    var table dashOverlay = table.new(dPos, dashCols, dashRows, bgcolor=color.new(#0A0A14, 5), border_color=color.new(#00CCFF, 40), border_width=1, frame_color=color.new(#00CCFF, 20), frame_width=2, force_overlay=true)
+    var table dashPanel = table.new(dPos, dashCols, dashRows, bgcolor=color.new(#0A0A14, 5), border_color=color.new(#00CCFF, 40), border_width=1, frame_color=color.new(#00CCFF, 20), frame_width=2, force_overlay=false)
+    table dash = i_dashOverlay ? dashOverlay : dashPanel
+    if i_dashOverlay
+        table.clear(dashPanel, 0, 0, dashCols - 1, dashRows - 1)
+    else
+        table.clear(dashOverlay, 0, 0, dashCols - 1, dashRows - 1)
+    int dr = 0
+    if isSmall
+        table.cell(dash, 0, dr, " 🌡️ VIX IE: " + instName, text_color=TH.frame, text_size=size.tiny, bgcolor=color.new(TH.frame, 90), text_font_family=font.family_monospace)
+        table.merge_cells(dash, 0, dr, 5, dr), dr += 1
+        string dngTxt = dangerScore > 70 ? "EXTREME" : dangerScore > 50 ? "HIGH" : dangerScore > 30 ? "ELEVATED" : dangerScore > 15 ? "MODERATE" : "LOW"
+        color dngCol = dangerScore > 70 ? #FF0000 : dangerScore > 50 ? #FF4400 : dangerScore > 30 ? TH.orange : dangerScore > 15 ? TH.gold : TH.bull
+        table.cell(dash, 0, dr, " VIX", text_color=TH.text_lo, text_size=size.tiny, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 1, dr, " " + _fStr(workingVix, 1), text_color=TH.text_hi, text_size=size.tiny, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 2, dr, " Reg", text_color=TH.text_lo, text_size=size.tiny, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 3, dr, " " + regimeName, text_color=regimeCol, text_size=size.tiny, bgcolor=color.new(regimeCol, 85), text_font_family=font.family_monospace)
+        table.cell(dash, 4, dr, " Dngr", text_color=TH.text_lo, text_size=size.tiny, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 5, dr, " " + dngTxt, text_color=dngCol, text_size=size.tiny, bgcolor=color.new(dngCol, 85), text_font_family=font.family_monospace)
+        dr += 1
+        color tpc = transProb > 0.6 ? TH.bear : transProb > 0.4 ? TH.orange : transProb > 0.2 ? TH.gold : TH.neutral
+        color tsc = tsState == "contango" ? TH.cyan : tsState == "backwardation" ? TH.orange : tsState == "inverted" ? TH.bear : TH.neutral
+        string surpTxt = fearOver ? "OVERPRICED" : fearUnder ? "UNDERPRICED" : "FAIR"
+        color surpCol = fearOver ? TH.gold : fearUnder ? TH.bear : TH.bull
+        table.cell(dash, 0, dr, " Trns", text_color=TH.text_lo, text_size=size.tiny, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 1, dr, " " + _fStr(transProb * 100, 0) + "%", text_color=tpc, text_size=size.tiny, bgcolor=color.new(tpc, 85), text_font_family=font.family_monospace)
+        table.cell(dash, 2, dr, " Term", text_color=TH.text_lo, text_size=size.tiny, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 3, dr, " " + (tsState == "backwardation" ? "BACKWD" : str.upper(tsState)), text_color=tsc, text_size=size.tiny, bgcolor=color.new(tsc, 85), text_font_family=font.family_monospace)
+        table.cell(dash, 4, dr, " Fear", text_color=TH.text_lo, text_size=size.tiny, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 5, dr, " " + surpTxt, text_color=surpCol, text_size=size.tiny, bgcolor=color.new(surpCol, 85), text_font_family=font.family_monospace)
+        dr += 1
+    else
+        table.cell(dash, 0, dr, " 🌡️ VIX ENGINE", text_color=TH.frame, text_size=tSize, bgcolor=color.new(TH.frame, 90), text_font_family=font.family_monospace)
+        table.merge_cells(dash, 0, dr, 5, dr), dr += 1
+        table.cell(dash, 0, dr, " ── VIX FAMILY ──", text_color=color.new(TH.frame, 30), text_size=tSize, bgcolor=color.new(TH.bg, 0), text_font_family=font.family_monospace)
+        table.merge_cells(dash, 0, dr, 5, dr), dr += 1
+        table.cell(dash, 0, dr, " VIX",   text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 1, dr, " " + _fStr(vixValue, 2) + (vixValid ? " ✓" : " ✗"), text_color=vixValid ? TH.bull : TH.bear, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 2, dr, " VIX9D", text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 3, dr, " " + _fStr(vix9dValue, 2) + (vix9dValid ? " ✓" : " ✗"), text_color=vix9dValid ? TH.bull : TH.bear, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 4, dr, " VX1!",  text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 5, dr, " " + _fStr(vx1Value, 2) + (vx1Valid ? " ✓" : " ✗"),  text_color=vx1Valid ? TH.bull : TH.bear, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        dr += 1
+        color confCol = dataConfidence > 0.7 ? TH.bull : dataConfidence > 0.4 ? TH.gold : TH.bear
+        table.cell(dash, 0, dr, " Data Conf", text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 1, dr, " " + _fStr(dataConfidence * 100, 0) + "%", text_color=confCol, text_size=tSize, bgcolor=color.new(confCol, 88), text_font_family=font.family_monospace)
+        table.cell(dash, 2, dr, " Mode",  text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 3, dr, usingFallback ? " FALLBACK" : " LIVE", text_color=usingFallback ? TH.orange : TH.bull, text_size=tSize, bgcolor=usingFallback ? color.new(TH.orange, 85) : color.new(TH.bull, 88), text_font_family=font.family_monospace)
+        table.cell(dash, 4, dr, " Stale", text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 5, dr, " " + str.tostring(staleBarsVix) + "b", text_color=staleBarsVix > 10 ? TH.bear : TH.neutral, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        dr += 1
+        table.cell(dash, 0, dr, " ── FOOTPRINT ──", text_color=color.new(TH.frame, 30), text_size=tSize, bgcolor=color.new(TH.bg, 0), text_font_family=font.family_monospace)
+        table.merge_cells(dash, 0, dr, 5, dr), dr += 1
+        table.cell(dash, 0, dr, " Source", text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 1, dr, fpActive ? " ✅ Live FP" : " ⚡ OHLCV", text_color=fpActive ? TH.bull : TH.orange, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 2, dr, " Delta Z", text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        color fpDZCol = fpDeltaZ > 1.5 ? TH.bull : fpDeltaZ < -1.5 ? TH.bear : TH.neutral
+        table.cell(dash, 3, dr, " " + _fStr(fpDeltaZ, 2) + "σ", text_color=fpDZCol, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 4, dr, " Absorb", text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 5, dr, fpAbsorption ? (fpDeltaZ > 0 ? " ACCUM" : " DISTRIB") : " —", text_color=fpAbsorption ? (fpDeltaZ > 0 ? TH.bull : TH.bear) : TH.neutral, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        dr += 1
+        if showLarge
+            table.cell(dash, 0, dr, " ── INSTRUMENT ──", text_color=color.new(TH.frame, 30), text_size=tSize, bgcolor=color.new(TH.bg, 0), text_font_family=font.family_monospace)
+            table.merge_cells(dash, 0, dr, 5, dr), dr += 1
+            color sensCol = instSensEff > 1.5 ? TH.bear : instSensEff < 0.5 ? TH.bull : TH.gold
+            table.cell(dash, 0, dr, " Asset",       text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            table.cell(dash, 1, dr, " " + instName, text_color=TH.cyan,    text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            table.cell(dash, 2, dr, " Class",       text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            table.cell(dash, 3, dr, " " + instClass, text_color=TH.text_hi, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            table.cell(dash, 4, dr, " Sensitivity", text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            table.cell(dash, 5, dr, " " + _fStr(instSensEff, 2) + "x", text_color=sensCol, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            dr += 1
+        table.cell(dash, 0, dr, " ── STATE ──", text_color=color.new(TH.frame, 30), text_size=tSize, bgcolor=color.new(TH.bg, 0), text_font_family=font.family_monospace)
+        table.merge_cells(dash, 0, dr, 5, dr), dr += 1
+        color vixZCol = vixZ > 1.5 ? TH.bear : vixZ < -1.5 ? TH.bull : vixZ > 0.5 ? TH.orange : vixZ < -0.5 ? TH.cyan : TH.neutral
+        table.cell(dash, 0, dr, " VIX Z",   text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 1, dr, " " + _fStr(vixZ, 2), text_color=vixZCol, text_size=tSize, bgcolor=color.new(vixZCol, 88), text_font_family=font.family_monospace)
+        table.cell(dash, 2, dr, " Slope",   text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 3, dr, " " + _fStr(vixSlopeRaw, 2) + "%", text_color=vixSlopeRaw > 0 ? TH.bear : TH.bull, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 4, dr, " Slope Z", text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 5, dr, " " + _fStr(slopeZ, 2), text_color=slopeZ > 1 ? TH.bear : slopeZ < -1 ? TH.bull : TH.neutral, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        dr += 1
+        if showLarge
+            color rmCol = finalRisk > 1.0 ? TH.bull : finalRisk < 0.5 ? TH.bear : TH.orange
+            color spCol = finalPenalty > 0.8 ? TH.bull : finalPenalty < 0.5 ? TH.bear : TH.orange
+            table.cell(dash, 0, dr, " Risk Mult",  text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            table.cell(dash, 1, dr, " " + _fStr(finalRisk, 2) + "x", text_color=rmCol, text_size=tSize, bgcolor=color.new(rmCol, 88), text_font_family=font.family_monospace)
+            table.cell(dash, 2, dr, " Sig Pen",   text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            table.cell(dash, 3, dr, " " + _fStr(finalPenalty, 2), text_color=spCol, text_size=tSize, bgcolor=color.new(spCol, 88), text_font_family=font.family_monospace)
+            table.cell(dash, 4, dr, " Realized",  text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            table.cell(dash, 5, dr, " " + _fStr(rvBlended, 1) + "%", text_color=TH.text_hi, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            dr += 1
+        table.cell(dash, 0, dr, " ══ VOLATILITY REGIME ══", text_color=TH.frame, text_size=tSize, bgcolor=color.new(TH.frame, 88), text_font_family=font.family_monospace)
+        table.merge_cells(dash, 0, dr, 5, dr), dr += 1
+        table.cell(dash, 0, dr, " REGIME",    text_color=TH.text_hi,  text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 1, dr, " " + regimeName, text_color=regimeCol, text_size=tSize, bgcolor=color.new(regimeCol, 78), text_font_family=font.family_monospace)
+        table.cell(dash, 2, dr, " Duration",  text_color=TH.text_lo,  text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 3, dr, " " + str.tostring(regimeDur) + " bars", text_color=TH.text_hi, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 4, dr, " Conf",      text_color=TH.text_lo,  text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 5, dr, " " + _confBar(regimeConf, 5), text_color=regimeConf > 0.6 ? TH.bull : TH.neutral, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        dr += 1
+        table.cell(dash, 0, dr, " ── TERM STRUCTURE ──", text_color=color.new(TH.frame, 30), text_size=tSize, bgcolor=color.new(TH.bg, 0), text_font_family=font.family_monospace)
+        table.merge_cells(dash, 0, dr, 5, dr), dr += 1
+        color tsCol = tsState == "contango" ? TH.cyan : tsState == "backwardation" ? TH.orange : tsState == "inverted" ? TH.bear : TH.neutral
+        table.cell(dash, 0, dr, " Structure", text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 1, dr, " " + str.upper(tsState), text_color=tsCol, text_size=tSize, bgcolor=color.new(tsCol, 85), text_font_family=font.family_monospace)
+        table.cell(dash, 2, dr, " Slope",     text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 3, dr, " " + _fStr(tsSlope, 1) + "%", text_color=tsSlope > 0 ? TH.cyan : TH.orange, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 4, dr, " Inversion", text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        color invCol = tsInversion > 1.0 ? TH.bear : tsInversion > 0.5 ? TH.orange : TH.neutral
+        table.cell(dash, 5, dr, " " + _fStr(tsInversion, 2), text_color=invCol, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        dr += 1
+        if showLarge
+            table.cell(dash, 0, dr, " S/L Fear",  text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            table.cell(dash, 1, dr, " " + _fStr(tsSvl, 1) + "%", text_color=tsSvl > 5 ? TH.bear : tsSvl < -5 ? TH.bull : TH.neutral, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            table.cell(dash, 2, dr, " Slope Z",   text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            table.cell(dash, 3, dr, " " + _fStr(tsSlopeZ, 2), text_color=tsSlopeZ < -1 ? TH.orange : TH.neutral, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            table.cell(dash, 4, dr, " Contango",  text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            table.cell(dash, 5, dr, tsContango > 0 ? " YES" : " NO", text_color=tsContango > 0 ? TH.cyan : TH.orange, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            dr += 1
+        table.cell(dash, 0, dr, " ── VOL SURPRISE ──", text_color=color.new(TH.frame, 30), text_size=tSize, bgcolor=color.new(TH.bg, 0), text_font_family=font.family_monospace)
+        table.merge_cells(dash, 0, dr, 5, dr), dr += 1
+        table.cell(dash, 0, dr, " Implied",    text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 1, dr, " " + _fStr(workingVix, 1), text_color=TH.text_hi, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 2, dr, " Realized",   text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 3, dr, " " + _fStr(rvBlended, 1), text_color=TH.text_hi, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        color surprCol = fearOver ? TH.gold : fearUnder ? TH.bear : TH.neutral
+        table.cell(dash, 4, dr, " Surprise Z", text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 5, dr, " " + _fStr(surpriseZ, 2), text_color=surprCol, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        dr += 1
+        if showLarge
+            string surprStatus = fearOver ? "OVERPRICED" : fearUnder ? "UNDERPRICED ⚠" : "FAIR"
+            color surprStatusCol = fearOver ? TH.gold : fearUnder ? TH.bear : TH.bull
+            table.cell(dash, 0, dr, " VRP",        text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            table.cell(dash, 1, dr, " " + _fStr(vrp, 1) + "%", text_color=vrp > 0 ? TH.gold : TH.purple, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            table.cell(dash, 2, dr, " Status",     text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            table.cell(dash, 3, dr, " " + surprStatus, text_color=surprStatusCol, text_size=tSize, bgcolor=color.new(surprStatusCol, 88), text_font_family=font.family_monospace)
+            table.cell(dash, 4, dr, " PK-YZ Δ",   text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            table.cell(dash, 5, dr, " " + _fStr(estSpread * 100, 1) + "%", text_color=estSpread > 0.3 ? TH.orange : TH.neutral, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            dr += 1
+        table.cell(dash, 0, dr, " ══ TRANSITION ENGINE ★ ══", text_color=TH.purple, text_size=tSize, bgcolor=color.new(TH.purple, 88), text_font_family=font.family_monospace)
+        table.merge_cells(dash, 0, dr, 5, dr), dr += 1
+        color tpCol = transProb > 0.6 ? TH.bear : transProb > 0.4 ? TH.orange : transProb > 0.2 ? TH.gold : TH.neutral
+        color ewCol = earlyWarning > 0.6 ? TH.bear : earlyWarning > 0.3 ? TH.orange : TH.neutral
+        table.cell(dash, 0, dr, " Trans Prob",  text_color=TH.text_hi, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 1, dr, " " + _fStr(transProb * 100, 1) + "%", text_color=tpCol, text_size=tSize, bgcolor=color.new(tpCol, 85), text_font_family=font.family_monospace)
+        table.cell(dash, 2, dr, " Predicted →", text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 3, dr, " " + predRegimeName, text_color=predRegimeCol, text_size=tSize, bgcolor=color.new(predRegimeCol, 85), text_font_family=font.family_monospace)
+        table.cell(dash, 4, dr, " Early Warn",  text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 5, dr, " " + _fStr(earlyWarning * 100, 0) + "%", text_color=ewCol, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        dr += 1
+        if showLarge
+            table.cell(dash, 0, dr, " Slope Acc",  text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            table.cell(dash, 1, dr, " " + _fStr(slopeAccel, 2), text_color=slopeAccel > 1 ? TH.orange : TH.neutral, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            table.cell(dash, 2, dr, " Vol Acc",    text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            table.cell(dash, 3, dr, " " + _fStr(volAccel, 2), text_color=volAccel > 1 ? TH.orange : TH.neutral, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            color mrCol = mrPressure > 1.0 ? TH.orange : mrPressure > 0.5 ? TH.gold : TH.neutral
+            table.cell(dash, 4, dr, " MR Press",   text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            table.cell(dash, 5, dr, " " + _fStr(mrPressure, 2), text_color=mrCol, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            dr += 1
+        table.cell(dash, 0, dr, " ══ DANGER ══", text_color=TH.frame, text_size=tSize, bgcolor=color.new(TH.frame, 88), text_font_family=font.family_monospace)
+        table.merge_cells(dash, 0, dr, 5, dr), dr += 1
+        string dangerText = dangerScore > 70 ? "EXTREME" : dangerScore > 50 ? "HIGH" : dangerScore > 30 ? "ELEVATED" : dangerScore > 15 ? "MODERATE" : "LOW"
+        color dangerTextCol = dangerScore > 70 ? #FF0000 : dangerScore > 50 ? #FF4400 : dangerScore > 30 ? TH.orange : dangerScore > 15 ? TH.gold : TH.bull
+        table.cell(dash, 0, dr, " ⚠ DANGER",  text_color=TH.text_hi, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 1, dr, " " + dangerText, text_color=dangerTextCol, text_size=tSize, bgcolor=color.new(dangerTextCol, 80), text_font_family=font.family_monospace)
+        table.cell(dash, 2, dr, " Score",      text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 3, dr, " " + _fStr(dangerScore, 1) + "/100", text_color=dangerTextCol, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 4, dr, " FP Boost",   text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 5, dr, fpActive ? " +" + _fStr(fpTransBoost * 100, 0) + "%" : " —", text_color=fpActive ? TH.orange : TH.neutral, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        dr += 1
+        if showLarge
+            table.cell(dash, 0, dr, " ── OVERLAY LEGEND ──", text_color=color.new(TH.frame, 30), text_size=tSize, bgcolor=color.new(TH.bg, 0), text_font_family=font.family_monospace)
+            table.merge_cells(dash, 0, dr, 5, dr), dr += 1
+            table.cell(dash, 0, dr, " ● Regime",     text_color=regimeCol, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            table.cell(dash, 1, dr, " above bar",    text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            table.cell(dash, 2, dr, " ● Transition", text_color=TH.purple,  text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            table.cell(dash, 3, dr, " below bar",    text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            table.cell(dash, 4, dr, " ■ Bubble",     text_color=TH.gold,    text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            table.cell(dash, 5, dr, " live bias",    text_color=TH.text_lo, text_size=tSize, bgcolor=TH.bg, text_font_family=font.family_monospace)
+            dr += 1
+        table.cell(dash, 0, dr, " ⟡ DAFE Trading Systems | " + instName + " | Bars: " + str.tostring(barsProcessed), text_color=color.new(TH.frame, 50), text_size=size.tiny, bgcolor=color.new(TH.frame, 95), text_font_family=font.family_monospace)
+        table.merge_cells(dash, 0, dr, 5, dr)
+// ═══════════════════════════════════════════════════════════════════════════════
+//  "Fear is Data. Data is Edge."
+// ═══════════════════════════════════════════════════════════════════════════════

@@ -1,0 +1,76 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0
+// Original concept: Mladen | Upgraded to Pine Script v6 by Dskyz[Dafe]
+//@version=6
+indicator("HMA Pro Flow [Mladen] + Signals", shorttitle="HMA Pro Flow", overlay=true)
+
+// ==========================================
+// ─── INPUTS ───
+// ==========================================
+
+// --- Entry HMA ---
+grp_entry  = "Entry HMA Settings"
+len_entry  = input.int(14,    title="Entry Period",   minval=2,   group=grp_entry)
+div_entry  = input.float(0.1, title="Entry Divisor",  step=0.1,   minval=0.1, group=grp_entry)
+src_entry  = input.source(close, title="Source",      group=grp_entry)
+
+// --- Trend Filter HMA ---
+grp_filter  = "Trend Filter HMA Settings"
+use_filter  = input.bool(true,  title="Use Trend Filter?",     group=grp_filter)
+len_filter  = input.int(300,    title="Filter Period",  minval=2, group=grp_filter)
+div_filter  = input.float(2.0,  title="Filter Divisor", step=0.1, minval=0.1, group=grp_filter)
+show_filter = input.bool(true,  title="Show Filter on Chart",  group=grp_filter)
+
+// --- Signal Visibility ---
+grp_vis   = "Signal Visibility"
+show_buy  = input.bool(true, title="Show Buy Signals",        group=grp_vis)
+show_sell = input.bool(true, title="Show Sell Signals",       group=grp_vis)
+show_stop = input.bool(true, title="Show Stop/Close Signals", group=grp_vis)
+
+// ==========================================
+// ─── HMA CALCULATION ───
+// ==========================================
+f_hma(_src, _len, _div) =>
+    halfLen = math.round(_len / _div)
+    sqrtLen = math.round(math.sqrt(_len))
+    wmaFull = ta.wma(_src, _len)
+    wmaHalf = ta.wma(_src, halfLen)
+    ta.wma(2.0 * wmaHalf - wmaFull, sqrtLen)
+
+// ==========================================
+// ─── SERIES ───
+// ==========================================
+hmaEntry  = f_hma(src_entry, len_entry,  div_entry)
+hmaFilter = f_hma(src_entry, len_filter, div_filter)
+
+entryRising   = hmaEntry  > hmaEntry[1]
+entryFalling  = hmaEntry  < hmaEntry[1]
+filterRising  = hmaFilter > hmaFilter[1]
+filterFalling = hmaFilter < hmaFilter[1]
+
+// ==========================================
+// ─── SIGNAL LOGIC ───
+// ==========================================
+fastUp   = entryRising  and entryFalling[1]
+fastDown = entryFalling and entryRising[1]
+
+isBuy       = fastUp   and (not use_filter or filterRising)
+isSell      = fastDown and (not use_filter or filterFalling)
+isStopLong  = use_filter and fastDown and filterRising
+isStopShort = use_filter and fastUp   and filterFalling
+
+// ==========================================
+// ─── PLOTS ───
+// ==========================================
+entryColor  = entryRising  ? color.new(#3CB371, 0)  : color.new(#FF4500, 0)
+filterColor = filterRising ? color.new(color.green, 60) : color.new(color.red, 60)
+
+plot(hmaEntry,                                   title="Entry HMA",     color=entryColor,  linewidth=3)
+plot(show_filter and use_filter ? hmaFilter : na, title="Trend Filter", color=filterColor, linewidth=4)
+
+// ==========================================
+// ─── SHAPES ───
+// ==========================================
+plotshape(show_buy  and isBuy,       title="Buy Signal",   style=shape.labelup,   location=location.belowbar, color=color.green,  text="BUY",  textcolor=color.white,  size=size.small)
+plotshape(show_sell and isSell,      title="Sell Signal",  style=shape.labeldown, location=location.abovebar, color=color.red,    text="SELL", textcolor=color.white,  size=size.small)
+plotshape(show_stop and isStopLong,  title="Stop Long",    style=shape.xcross,    location=location.abovebar, color=color.orange, text="STOP", textcolor=color.orange, size=size.small)
+plotshape(show_stop and isStopShort, title="Stop Short",   style=shape.xcross,    location=location.belowbar, color=color.orange, text="STOP", textcolor=color.orange, size=size.small)

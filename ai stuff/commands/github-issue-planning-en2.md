@@ -1,0 +1,21 @@
+---
+description: github-issue-planning-en2
+allowed-tools: Task,TodoWrite,Write,SlashCommand,Skill,Read,NotebookEdit,MCPSearch,KillShell,Grep,Bash,BashOutput,AskUserQuestion
+---
+```mermaid
+flowchart TD
+    start-node-default([Start])
+    end_node_default([End])
+
+```
+
+## Workflow Execution Guide
+
+Follow the Mermaid flowchart above to execute the workflow. Each node type has specific execution methods as described below.
+
+### Execution Methods by Node Type
+
+- **Rectangle nodes (Sub-Agent: ...)**: Execute Sub-Agents
+- **Diamond nodes (AskUserQuestion:...)**: Use the AskUserQuestion tool to prompt the user and branch based on their response
+- **Diamond nodes (Branch/Switch:...)**: Automatically branch based on the results of previous processing (see details section)
+- **Rectangle nodes (Prompt nodes)**: Execute the prompts described in the details section below

@@ -1,0 +1,179 @@
+//@version=6
+// @description Universal Functions Library for Hyper-Configurable Indicators
+// This library provides reusable functions that accept type/method as parameters
+// allowing for maximum configurability in indicators and strategies
+
+library("UniversalFunctions")
+
+// ============================================================================
+// MOVING AVERAGES
+// ============================================================================
+
+// @function Universal Moving Average - calculates MA based on type parameter
+// @param source The data series to calculate MA on
+// @param length The lookback period
+// @param maType String specifying MA type: "SMA", "EMA", "RMA", "WMA", "VWMA", "HMA", "TEMA", "DEMA", "ALMA", "SWMA"
+// @returns Calculated moving average value
+export ma(float source, int length, string maType) =>
+    switch maType
+        "SMA"   => ta.sma(source, length)
+        "EMA"   => ta.ema(source, length)
+        "RMA"   => ta.rma(source, length)
+        "WMA"   => ta.wma(source, length)
+        "VWMA"  => ta.vwma(source, length)
+        "ALMA"  => ta.alma(source, length, 0.85, 6)
+        "SWMA"  => ta.swma(source)
+        "TEMA"  =>
+            ema1 = ta.ema(source, length)
+            ema2 = ta.ema(ema1, length)
+            ema3 = ta.ema(ema2, length)
+            3 * ema1 - 3 * ema2 + ema3
+        "DEMA"  =>
+            ema1 = ta.ema(source, length)
+            ema2 = ta.ema(ema1, length)
+            2 * ema1 - ema2
+        "HMA"   => ta.wma(2 * ta.wma(source, length / 2) - ta.wma(source, length), math.round(math.sqrt(length)))
+        "HMA2"  => ta.wma(2 * ta.wma(source, length / 2) - ta.wma(source, length), math.floor(math.sqrt(length)))
+        "HMA3"  => ta.wma(2 * ta.wma(source, length / 2) - ta.wma(source, length), math.ceil(math.sqrt(length)))
+        "HMA"   => ta.hma(source, length)
+        => ta.sma(source, length)  // default to SMA
+
+// ============================================================================
+// SOURCE SELECTION
+// ============================================================================
+
+// @function Universal Source - returns price data based on type parameter
+// @param sourceType String specifying source: "Close", "Open", "High", "Low", "HL2", "HLC3", "OHLC4", "HLCC4"
+// @returns Selected price series
+export source(string sourceType) =>
+    switch sourceType
+        "Close"  => close
+        "Open"   => open
+        "High"   => high
+        "Low"    => low
+        "HL2"    => hl2
+        "HLC3"   => hlc3
+        "OHLC4"  => ohlc4
+        "HLCC4"  => (high + low + close + close) / 4
+        "Custom" => (high + low) / 2  // Example custom
+        => close  // default
+
+// ============================================================================
+// SMOOTHING
+// ============================================================================
+
+// @function Universal Smoothing - applies MA multiple times for extra smoothing
+// @param source The data series to smooth
+// @param length The MA length
+// @param maType The MA type to use
+// @param passes Number of smoothing passes (1 = no extra smoothing)
+// @returns Smoothed value
+export smooth(float source, int length, string maType, int passes) =>
+    result = source
+    for i = 0 to passes - 1
+        result := ma(result, length, maType)
+    result
+
+// ============================================================================
+// VOLATILITY
+// ============================================================================
+
+// @function Universal ATR - calculates ATR with configurable MA type
+// @param length The ATR length
+// @param maType The MA type for smoothing TR
+// @returns ATR value
+export atr(int length, string maType) =>
+    tr = math.max(high - low, math.max(math.abs(high - close[1]), math.abs(low - close[1])))
+    ma(tr, length, maType)
+
+// @function Universal Deviation - calculates deviation/dispersion using different methods
+// @param source The data series
+// @param length The lookback period
+// @param devType String: "StdDev", "MAD", "ATR"
+// @returns Deviation value
+export deviation(float source, int length, string devType) =>
+    switch devType
+        "StdDev" => ta.stdev(source, length)
+        "MAD"    => ta.median(math.abs(source - ta.median(source, length)), length)
+        "ATR"    => atr(length, "RMA")
+        => ta.stdev(source, length)  // default
+
+// ============================================================================
+// NORMALIZATION
+// ============================================================================
+
+// @function Universal Normalization - normalizes data using different methods
+// @param value The value to normalize
+// @param length The lookback period for normalization
+// @param method String: "Percentage", "MinMax", "ZScore", "None"
+// @returns Normalized value
+export normalize(float value, int length, string method) =>
+    switch method
+        "Percentage" => (value / ta.sma(value, length) - 1) * 100
+        "MinMax"     => (value - ta.lowest(value, length)) / (ta.highest(value, length) - ta.lowest(value, length)) * 100
+        "ZScore"     => (value - ta.sma(value, length)) / ta.stdev(value, length)
+        "None"       => value
+        => value  // default
+
+// ============================================================================
+// OSCILLATORS
+// ============================================================================
+
+// @function Custom RSI with configurable smoothing type
+// @param source The data series
+// @param length The RSI period
+// @param maType The MA type for smoothing
+// @returns RSI value (0-100)
+export rsi(float source, int length, string maType) =>
+    up = math.max(source - source[1], 0)
+    dn = math.max(source[1] - source, 0)
+    upSmooth = ma(up, length, maType)
+    dnSmooth = ma(dn, length, maType)
+    dnSmooth == 0 ? 100 : upSmooth == 0 ? 0 : 100 - (100 / (1 + upSmooth / dnSmooth))
+
+// @function Stochastic with configurable smoothing
+// @param length The %K length
+// @param smoothK The %K smoothing length
+// @param smoothD The %D smoothing length
+// @param maType The MA type for smoothing
+// @returns [K value, D value]
+export stochastic(int length, int smoothK, int smoothD, string maType) =>
+    lowestLow = ta.lowest(low, length)
+    highestHigh = ta.highest(high, length)
+    k = 100 * (close - lowestLow) / (highestHigh - lowestLow)
+    k := ma(k, smoothK, maType)
+    d = ma(k, smoothD, maType)
+    [k, d]
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+// @function Check if value crossed over level
+// @param value The value to check
+// @param level The level to cross
+// @returns True if crossover occurred
+export crossedOver(float value, float level) =>
+    ta.crossover(value, level)
+
+// @function Check if value crossed under level
+// @param value The value to check
+// @param level The level to cross
+// @returns True if crossunder occurred
+export crossedUnder(float value, float level) =>
+    ta.crossunder(value, level)
+
+// @function Percentage change
+// @param current Current value
+// @param previous Previous value
+// @returns Percentage change
+export percentChange(float current, float previous) =>
+    previous == 0 ? 0 : (current - previous) / math.abs(previous) * 100
+
+// @function In range check
+// @param value Value to check
+// @param lower Lower bound
+// @param upper Upper bound
+// @returns True if value is in range (inclusive)
+export inRange(float value, float lower, float upper) =>
+    value >= lower and value <= upper

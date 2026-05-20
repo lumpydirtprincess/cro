@@ -1,0 +1,402 @@
+//@version=6
+strategy("Skeleton Key DEBUG v1", "SK-DEBUG", overlay=true)
+
+// ============================================================================
+// SKELETON KEY - DEBUG BUILD
+// ============================================================================
+// PURPOSE: Test and verify core logic before scaling up
+// SIGNALS: 2 Thresholds (A,B) + 1 External (A) = enough to test AND logic
+// DEBUG:   Table shows ALL states, visual markers show signal firing
+// ============================================================================
+
+// ============================================================================
+// STRATEGY DIRECTION
+// ============================================================================
+stratDirection = input.string("Long", "Direction", options=["Long", "Short"], group="Strategy")
+
+// ============================================================================
+// THRESHOLD A - First building block
+// ============================================================================
+grpA = "══ THRESHOLD A ══"
+
+thA_enabled  = input.bool(true, "Enable", group=grpA)
+thA_source   = input.source(close, "Source", inline="thA", group=grpA)
+thA_operator = input.string(">=", "", inline="thA", options=["<", ">", "<=", ">=", "=="], group=grpA)
+thA_value    = input.float(0, "", inline="thA", group=grpA)
+
+thA_histBar    = input.int(0, "Historical Bar Index", minval=0, group=grpA, tooltip="Look back N bars (0=current)")
+thA_barsValid  = input.int(0, "Bars Signal Valid", minval=0, group=grpA, tooltip="Extend signal for N bars")
+thA_profit     = input.string("ANY", "Profit Filter", options=["ANY", "PROFIT", "LOSS"], group=grpA)
+
+thA_isEntry    = input.bool(true, "Entry", inline="thA_action", group=grpA)
+thA_isExit     = input.bool(false, "Exit", inline="thA_action", group=grpA)
+thA_entryLogic = input.string("AND-A", "Entry Logic Group", options=["AND-A", "AND-B", "OR"], group=grpA)
+thA_exitLogic  = input.string("OR", "Exit Logic Group", options=["AND-A", "AND-B", "OR"], group=grpA)
+
+// ============================================================================
+// THRESHOLD B - Second building block
+// ============================================================================
+grpB = "══ THRESHOLD B ══"
+
+thB_enabled  = input.bool(true, "Enable", group=grpB)
+thB_source   = input.source(close, "Source", inline="thB", group=grpB)
+thB_operator = input.string(">=", "", inline="thB", options=["<", ">", "<=", ">=", "=="], group=grpB)
+thB_value    = input.float(0, "", inline="thB", group=grpB)
+
+thB_histBar    = input.int(0, "Historical Bar Index", minval=0, group=grpB)
+thB_barsValid  = input.int(0, "Bars Signal Valid", minval=0, group=grpB)
+thB_profit     = input.string("ANY", "Profit Filter", options=["ANY", "PROFIT", "LOSS"], group=grpB)
+
+thB_isEntry    = input.bool(true, "Entry", inline="thB_action", group=grpB)
+thB_isExit     = input.bool(false, "Exit", inline="thB_action", group=grpB)
+thB_entryLogic = input.string("AND-A", "Entry Logic Group", options=["AND-A", "AND-B", "OR"], group=grpB)
+thB_exitLogic  = input.string("OR", "Exit Logic Group", options=["AND-A", "AND-B", "OR"], group=grpB)
+
+// ============================================================================
+// EXTERNAL SOURCE A - Compare two sources
+// ============================================================================
+grpExt = "══ EXTERNAL A ══"
+
+extA_enabled  = input.bool(false, "Enable", group=grpExt)
+extA_source1  = input.source(close, "Source 1", inline="extA", group=grpExt)
+extA_operator = input.string("crossover", "", inline="extA", options=["<", ">", "<=", ">=", "==", "crossover", "crossunder"], group=grpExt)
+extA_source2  = input.source(open, "Source 2", inline="extA", group=grpExt)
+
+extA_histBar1  = input.int(0, "Hist Bar Idx 1", minval=0, inline="extA_hist", group=grpExt)
+extA_histBar2  = input.int(0, "Hist Bar Idx 2", minval=0, inline="extA_hist", group=grpExt)
+extA_barsValid = input.int(0, "Bars Signal Valid", minval=0, group=grpExt)
+extA_profit    = input.string("ANY", "Profit Filter", options=["ANY", "PROFIT", "LOSS"], group=grpExt)
+
+extA_isEntry    = input.bool(true, "Entry", inline="extA_action", group=grpExt)
+extA_isExit     = input.bool(false, "Exit", inline="extA_action", group=grpExt)
+extA_entryLogic = input.string("AND-A", "Entry Logic Group", options=["AND-A", "AND-B", "OR"], group=grpExt)
+extA_exitLogic  = input.string("OR", "Exit Logic Group", options=["AND-A", "AND-B", "OR"], group=grpExt)
+
+// ============================================================================
+// DEBUG SETTINGS
+// ============================================================================
+grpDebug = "══ DEBUG ══"
+showTable    = input.bool(true, "Show Debug Table", group=grpDebug)
+showMarkers  = input.bool(true, "Show Signal Markers", group=grpDebug)
+tablePos     = input.string("top_right", "Table Position", options=["top_right", "top_left", "bottom_right", "bottom_left"], group=grpDebug)
+
+// ============================================================================
+// CORE FUNCTIONS
+// ============================================================================
+
+// Threshold comparison: source [op] value
+f_compare(float src, string op, float val) =>
+    switch op
+        "<"  => src < val
+        ">"  => src > val
+        "<=" => src <= val
+        ">=" => src >= val
+        "==" => src == val
+        => false
+
+// External comparison: source1 [op] source2 (with crossover/crossunder)
+f_compare_ext(float src1, string op, float src2, float src1_prev, float src2_prev) =>
+    switch op
+        "<"  => src1 < src2
+        ">"  => src1 > src2
+        "<=" => src1 <= src2
+        ">=" => src1 >= src2
+        "==" => src1 == src2
+        "crossover"  => src1_prev <= src2_prev and src1 > src2
+        "crossunder" => src1_prev >= src2_prev and src1 < src2
+        => false
+
+// Profit filter check
+f_profitOk(string filter) =>
+    switch filter
+        "ANY"    => true
+        "PROFIT" => strategy.position_size == 0 or strategy.openprofit > 0
+        "LOSS"   => strategy.position_size == 0 or strategy.openprofit < 0
+        => true
+
+// ============================================================================
+// SIGNAL PROCESSING - THRESHOLD A
+// ============================================================================
+
+// Step 1: Get source value (with historical lookback)
+thA_srcValue = thA_source[thA_histBar]
+
+// Step 2: Raw comparison (is condition met RIGHT NOW?)
+thA_rawResult = thA_enabled and f_compare(thA_srcValue, thA_operator, thA_value)
+
+// Step 3: Bars Valid extension (keep signal alive for N bars after it fires)
+var int thA_barsSinceTrue = 99999
+if thA_rawResult
+    thA_barsSinceTrue := 0
+else
+    thA_barsSinceTrue += 1
+
+thA_validResult = thA_enabled and (thA_barsSinceTrue <= thA_barsValid)
+
+// Step 4: Apply profit filter
+thA_profitOk = f_profitOk(thA_profit)
+
+// Step 5: Final entry/exit signals
+thA_entrySignal = thA_validResult and thA_isEntry and thA_profitOk
+thA_exitSignal  = thA_validResult and thA_isExit and thA_profitOk
+
+// ============================================================================
+// SIGNAL PROCESSING - THRESHOLD B
+// ============================================================================
+
+thB_srcValue = thB_source[thB_histBar]
+thB_rawResult = thB_enabled and f_compare(thB_srcValue, thB_operator, thB_value)
+
+var int thB_barsSinceTrue = 99999
+if thB_rawResult
+    thB_barsSinceTrue := 0
+else
+    thB_barsSinceTrue += 1
+
+thB_validResult = thB_enabled and (thB_barsSinceTrue <= thB_barsValid)
+thB_profitOk = f_profitOk(thB_profit)
+
+thB_entrySignal = thB_validResult and thB_isEntry and thB_profitOk
+thB_exitSignal  = thB_validResult and thB_isExit and thB_profitOk
+
+// ============================================================================
+// SIGNAL PROCESSING - EXTERNAL A
+// ============================================================================
+
+extA_src1Value = extA_source1[extA_histBar1]
+extA_src2Value = extA_source2[extA_histBar2]
+extA_src1Prev  = extA_source1[extA_histBar1 + 1]
+extA_src2Prev  = extA_source2[extA_histBar2 + 1]
+
+extA_rawResult = extA_enabled and f_compare_ext(extA_src1Value, extA_operator, extA_src2Value, extA_src1Prev, extA_src2Prev)
+
+var int extA_barsSinceTrue = 99999
+if extA_rawResult
+    extA_barsSinceTrue := 0
+else
+    extA_barsSinceTrue += 1
+
+extA_validResult = extA_enabled and (extA_barsSinceTrue <= extA_barsValid)
+extA_profitOk = f_profitOk(extA_profit)
+
+extA_entrySignal = extA_validResult and extA_isEntry and extA_profitOk
+extA_exitSignal  = extA_validResult and extA_isExit and extA_profitOk
+
+// ============================================================================
+// LOGIC GROUP AGGREGATION - THE CORE BRAIN
+// ============================================================================
+//
+// Three independent tracks that DON'T interact:
+// - AND-A: ALL signals assigned to AND-A must be TRUE → triggers
+// - AND-B: ALL signals assigned to AND-B must be TRUE → triggers
+// - OR:    ANY signal assigned to OR being TRUE → triggers
+//
+// Final: (AND-A fires) OR (AND-B fires) OR (OR fires)
+//
+// ============================================================================
+
+// --- ENTRY: Count signals assigned to each group ---
+entry_andA_assigned = (thA_isEntry and thA_entryLogic == "AND-A" ? 1 : 0) +
+                      (thB_isEntry and thB_entryLogic == "AND-A" ? 1 : 0) +
+                      (extA_isEntry and extA_entryLogic == "AND-A" ? 1 : 0)
+
+entry_andB_assigned = (thA_isEntry and thA_entryLogic == "AND-B" ? 1 : 0) +
+                      (thB_isEntry and thB_entryLogic == "AND-B" ? 1 : 0) +
+                      (extA_isEntry and extA_entryLogic == "AND-B" ? 1 : 0)
+
+// --- ENTRY: Count signals that are TRUE in each group ---
+entry_andA_true = (thA_entrySignal and thA_entryLogic == "AND-A" ? 1 : 0) +
+                  (thB_entrySignal and thB_entryLogic == "AND-A" ? 1 : 0) +
+                  (extA_entrySignal and extA_entryLogic == "AND-A" ? 1 : 0)
+
+entry_andB_true = (thA_entrySignal and thA_entryLogic == "AND-B" ? 1 : 0) +
+                  (thB_entrySignal and thB_entryLogic == "AND-B" ? 1 : 0) +
+                  (extA_entrySignal and extA_entryLogic == "AND-B" ? 1 : 0)
+
+// --- ENTRY: Logic group triggers ---
+// AND-A fires when: at least 1 signal assigned AND all assigned are true
+entry_andA_fires = entry_andA_assigned > 0 and entry_andA_true == entry_andA_assigned
+
+// AND-B fires when: at least 1 signal assigned AND all assigned are true
+entry_andB_fires = entry_andB_assigned > 0 and entry_andB_true == entry_andB_assigned
+
+// OR fires when: any OR-assigned signal is true
+entry_or_fires = (thA_entrySignal and thA_entryLogic == "OR") or
+                 (thB_entrySignal and thB_entryLogic == "OR") or
+                 (extA_entrySignal and extA_entryLogic == "OR")
+
+// --- FINAL ENTRY SIGNAL ---
+entry_signal = entry_andA_fires or entry_andB_fires or entry_or_fires
+
+// ============================================================================
+// EXIT LOGIC (same structure as entry)
+// ============================================================================
+
+exit_andA_assigned = (thA_isExit and thA_exitLogic == "AND-A" ? 1 : 0) +
+                     (thB_isExit and thB_exitLogic == "AND-A" ? 1 : 0) +
+                     (extA_isExit and extA_exitLogic == "AND-A" ? 1 : 0)
+
+exit_andB_assigned = (thA_isExit and thA_exitLogic == "AND-B" ? 1 : 0) +
+                     (thB_isExit and thB_exitLogic == "AND-B" ? 1 : 0) +
+                     (extA_isExit and extA_exitLogic == "AND-B" ? 1 : 0)
+
+exit_andA_true = (thA_exitSignal and thA_exitLogic == "AND-A" ? 1 : 0) +
+                 (thB_exitSignal and thB_exitLogic == "AND-A" ? 1 : 0) +
+                 (extA_exitSignal and extA_exitLogic == "AND-A" ? 1 : 0)
+
+exit_andB_true = (thA_exitSignal and thA_exitLogic == "AND-B" ? 1 : 0) +
+                 (thB_exitSignal and thB_exitLogic == "AND-B" ? 1 : 0) +
+                 (extA_exitSignal and extA_exitLogic == "AND-B" ? 1 : 0)
+
+exit_andA_fires = exit_andA_assigned > 0 and exit_andA_true == exit_andA_assigned
+exit_andB_fires = exit_andB_assigned > 0 and exit_andB_true == exit_andB_assigned
+
+exit_or_fires = (thA_exitSignal and thA_exitLogic == "OR") or
+                (thB_exitSignal and thB_exitLogic == "OR") or
+                (extA_exitSignal and extA_exitLogic == "OR")
+
+exit_signal = exit_andA_fires or exit_andB_fires or exit_or_fires
+
+// ============================================================================
+// STRATEGY EXECUTION
+// ============================================================================
+
+isLong = stratDirection == "Long"
+isShort = stratDirection == "Short"
+
+if entry_signal and isLong
+    strategy.entry("Long", strategy.long)
+
+if exit_signal and isLong and strategy.position_size > 0
+    strategy.close("Long")
+
+if entry_signal and isShort
+    strategy.entry("Short", strategy.short)
+
+if exit_signal and isShort and strategy.position_size < 0
+    strategy.close("Short")
+
+// ============================================================================
+// DEBUG TABLE - SEE EVERYTHING
+// ============================================================================
+
+if showTable and barstate.islast
+    var tbl = table.new(
+        tablePos == "top_right" ? position.top_right :
+        tablePos == "top_left" ? position.top_left :
+        tablePos == "bottom_right" ? position.bottom_right : position.bottom_left,
+        6, 12, bgcolor=color.new(color.black, 20), border_width=1)
+
+    // Headers
+    table.cell(tbl, 0, 0, "SIGNAL", text_color=color.white, bgcolor=color.gray)
+    table.cell(tbl, 1, 0, "ENABLED", text_color=color.white, bgcolor=color.gray)
+    table.cell(tbl, 2, 0, "RAW", text_color=color.white, bgcolor=color.gray)
+    table.cell(tbl, 3, 0, "VALID", text_color=color.white, bgcolor=color.gray)
+    table.cell(tbl, 4, 0, "ENTRY", text_color=color.white, bgcolor=color.gray)
+    table.cell(tbl, 5, 0, "EXIT", text_color=color.white, bgcolor=color.gray)
+
+    // Threshold A
+    table.cell(tbl, 0, 1, "Thresh A [" + thA_entryLogic + "]", text_color=color.white)
+    table.cell(tbl, 1, 1, thA_enabled ? "YES" : "no", text_color=thA_enabled ? color.green : color.gray)
+    table.cell(tbl, 2, 1, thA_rawResult ? "TRUE" : "false", text_color=thA_rawResult ? color.lime : color.gray)
+    table.cell(tbl, 3, 1, thA_validResult ? "TRUE" : "false", text_color=thA_validResult ? color.lime : color.gray)
+    table.cell(tbl, 4, 1, thA_entrySignal ? "FIRE" : "-", text_color=thA_entrySignal ? color.lime : color.gray)
+    table.cell(tbl, 5, 1, thA_exitSignal ? "FIRE" : "-", text_color=thA_exitSignal ? color.orange : color.gray)
+
+    // Threshold B
+    table.cell(tbl, 0, 2, "Thresh B [" + thB_entryLogic + "]", text_color=color.white)
+    table.cell(tbl, 1, 2, thB_enabled ? "YES" : "no", text_color=thB_enabled ? color.green : color.gray)
+    table.cell(tbl, 2, 2, thB_rawResult ? "TRUE" : "false", text_color=thB_rawResult ? color.lime : color.gray)
+    table.cell(tbl, 3, 2, thB_validResult ? "TRUE" : "false", text_color=thB_validResult ? color.lime : color.gray)
+    table.cell(tbl, 4, 2, thB_entrySignal ? "FIRE" : "-", text_color=thB_entrySignal ? color.lime : color.gray)
+    table.cell(tbl, 5, 2, thB_exitSignal ? "FIRE" : "-", text_color=thB_exitSignal ? color.orange : color.gray)
+
+    // External A
+    table.cell(tbl, 0, 3, "Extern A [" + extA_entryLogic + "]", text_color=color.white)
+    table.cell(tbl, 1, 3, extA_enabled ? "YES" : "no", text_color=extA_enabled ? color.green : color.gray)
+    table.cell(tbl, 2, 3, extA_rawResult ? "TRUE" : "false", text_color=extA_rawResult ? color.lime : color.gray)
+    table.cell(tbl, 3, 3, extA_validResult ? "TRUE" : "false", text_color=extA_validResult ? color.lime : color.gray)
+    table.cell(tbl, 4, 3, extA_entrySignal ? "FIRE" : "-", text_color=extA_entrySignal ? color.lime : color.gray)
+    table.cell(tbl, 5, 3, extA_exitSignal ? "FIRE" : "-", text_color=extA_exitSignal ? color.orange : color.gray)
+
+    // Separator
+    table.cell(tbl, 0, 4, "─────────", text_color=color.gray)
+    table.cell(tbl, 1, 4, "─────", text_color=color.gray)
+    table.cell(tbl, 2, 4, "─────", text_color=color.gray)
+    table.cell(tbl, 3, 4, "─────", text_color=color.gray)
+    table.cell(tbl, 4, 4, "─────", text_color=color.gray)
+    table.cell(tbl, 5, 4, "─────", text_color=color.gray)
+
+    // Logic Groups - Entry
+    table.cell(tbl, 0, 5, "ENTRY AND-A", text_color=color.white)
+    table.cell(tbl, 1, 5, str.tostring(entry_andA_assigned) + " assigned", text_color=color.white)
+    table.cell(tbl, 2, 5, str.tostring(entry_andA_true) + "/" + str.tostring(entry_andA_assigned) + " true", text_color=color.white)
+    table.cell(tbl, 3, 5, "", text_color=color.white)
+    table.cell(tbl, 4, 5, entry_andA_fires ? "FIRES!" : "no", text_color=entry_andA_fires ? color.lime : color.gray)
+    table.cell(tbl, 5, 5, "", text_color=color.white)
+
+    table.cell(tbl, 0, 6, "ENTRY AND-B", text_color=color.white)
+    table.cell(tbl, 1, 6, str.tostring(entry_andB_assigned) + " assigned", text_color=color.white)
+    table.cell(tbl, 2, 6, str.tostring(entry_andB_true) + "/" + str.tostring(entry_andB_assigned) + " true", text_color=color.white)
+    table.cell(tbl, 3, 6, "", text_color=color.white)
+    table.cell(tbl, 4, 6, entry_andB_fires ? "FIRES!" : "no", text_color=entry_andB_fires ? color.lime : color.gray)
+    table.cell(tbl, 5, 6, "", text_color=color.white)
+
+    table.cell(tbl, 0, 7, "ENTRY OR", text_color=color.white)
+    table.cell(tbl, 1, 7, "any true?", text_color=color.white)
+    table.cell(tbl, 2, 7, "", text_color=color.white)
+    table.cell(tbl, 3, 7, "", text_color=color.white)
+    table.cell(tbl, 4, 7, entry_or_fires ? "FIRES!" : "no", text_color=entry_or_fires ? color.lime : color.gray)
+    table.cell(tbl, 5, 7, "", text_color=color.white)
+
+    // Separator
+    table.cell(tbl, 0, 8, "═════════", text_color=color.yellow)
+    table.cell(tbl, 1, 8, "═════", text_color=color.yellow)
+    table.cell(tbl, 2, 8, "═════", text_color=color.yellow)
+    table.cell(tbl, 3, 8, "═════", text_color=color.yellow)
+    table.cell(tbl, 4, 8, "═════", text_color=color.yellow)
+    table.cell(tbl, 5, 8, "═════", text_color=color.yellow)
+
+    // Final Signals
+    table.cell(tbl, 0, 9, ">>> ENTRY", text_color=color.white, bgcolor=entry_signal ? color.green : color.new(color.black, 50))
+    table.cell(tbl, 1, 9, "", bgcolor=entry_signal ? color.green : color.new(color.black, 50))
+    table.cell(tbl, 2, 9, "", bgcolor=entry_signal ? color.green : color.new(color.black, 50))
+    table.cell(tbl, 3, 9, "", bgcolor=entry_signal ? color.green : color.new(color.black, 50))
+    table.cell(tbl, 4, 9, entry_signal ? "YES!" : "no", text_color=entry_signal ? color.white : color.gray, bgcolor=entry_signal ? color.green : color.new(color.black, 50))
+    table.cell(tbl, 5, 9, "", bgcolor=entry_signal ? color.green : color.new(color.black, 50))
+
+    table.cell(tbl, 0, 10, ">>> EXIT", text_color=color.white, bgcolor=exit_signal ? color.orange : color.new(color.black, 50))
+    table.cell(tbl, 1, 10, "", bgcolor=exit_signal ? color.orange : color.new(color.black, 50))
+    table.cell(tbl, 2, 10, "", bgcolor=exit_signal ? color.orange : color.new(color.black, 50))
+    table.cell(tbl, 3, 10, "", bgcolor=exit_signal ? color.orange : color.new(color.black, 50))
+    table.cell(tbl, 4, 10, "", bgcolor=exit_signal ? color.orange : color.new(color.black, 50))
+    table.cell(tbl, 5, 10, exit_signal ? "YES!" : "no", text_color=exit_signal ? color.white : color.gray, bgcolor=exit_signal ? color.orange : color.new(color.black, 50))
+
+    // Current values
+    table.cell(tbl, 0, 11, "ThA src: " + str.tostring(thA_srcValue, "#.##"), text_color=color.aqua)
+    table.cell(tbl, 1, 11, "ThB src: " + str.tostring(thB_srcValue, "#.##"), text_color=color.aqua)
+    table.cell(tbl, 2, 11, "", text_color=color.aqua)
+    table.cell(tbl, 3, 11, "", text_color=color.aqua)
+    table.cell(tbl, 4, 11, "", text_color=color.aqua)
+    table.cell(tbl, 5, 11, "", text_color=color.aqua)
+
+// ============================================================================
+// VISUAL MARKERS
+// ============================================================================
+
+if showMarkers
+    // Individual signal markers (small, below price)
+    plotshape(thA_entrySignal and thA_entryLogic == "AND-A", "ThA AND-A", shape.circle, location.belowbar, color.new(color.blue, 50), size=size.tiny)
+    plotshape(thB_entrySignal and thB_entryLogic == "AND-A", "ThB AND-A", shape.circle, location.belowbar, color.new(color.purple, 50), size=size.tiny)
+
+    // Entry signal (big green triangle)
+    plotshape(entry_signal and isLong, "ENTRY LONG", shape.triangleup, location.belowbar, color.green, size=size.normal)
+    plotshape(entry_signal and isShort, "ENTRY SHORT", shape.triangledown, location.abovebar, color.red, size=size.normal)
+
+    // Exit signal (orange X)
+    plotshape(exit_signal and isLong and strategy.position_size > 0, "EXIT LONG", shape.xcross, location.abovebar, color.orange, size=size.small)
+    plotshape(exit_signal and isShort and strategy.position_size < 0, "EXIT SHORT", shape.xcross, location.belowbar, color.orange, size=size.small)
+
+// Background highlight when entry is about to fire
+bgcolor(entry_andA_true > 0 and entry_andA_true < entry_andA_assigned ? color.new(color.yellow, 90) : na, title="AND-A Partial")
+bgcolor(entry_andA_fires ? color.new(color.green, 85) : na, title="AND-A Ready")

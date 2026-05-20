@@ -1,0 +1,313 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © EltAlt
+//@version=6
+
+// -----------------------------------------------------------------------------
+//
+// Title:    Bollinger Band Width Percentile - Multi Time Frame
+// Authors:  @EltAlt
+// Revision: v1.02
+// Date:     06-June-2022
+//
+// Description
+// =============================================================================
+// My plan with this indicator was when trading at short timeframes, to modify my expectations on the potential impact of short term volatility based on volatility in 
+// longer timeframes, and when trading on longer timeframes to attempt to find an optimal entry point based on shorter term volatility.
+//
+// =============================================================================
+//
+// I would gladly accept any suggestions to improve the script.
+// If you encounter any problems please share them with me.
+//
+// Thanks to The_Caretaker for "Bollinger Band Width Percentile" upon which this multi time frame version is based.
+//
+// Changlog
+// =============================================================================
+//
+// 1.00 • First public release
+// 1.01 • Added bar color options
+//      • Cleaned up the inputs
+// 1.02 • Added Auto timeframe setting.
+//
+// ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+//
+indicator('Bollinger Band Width Percentile - Multi Time Frame', 'BBWP MTF', overlay = false, format = format.percent, precision = 2, max_bars_back = 1000)
+
+// ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+// ============ Inputs
+
+chartTicker = syminfo.tickerid
+charttf = timeframe.period
+
+source = input.source(defval = close, title = 'Price Source', inline = '1', group = 'General Properties')
+basistype = input.string(defval = 'SMA', title = '  BBPW Basis Type', options = ['SMA', 'EMA', 'VWMA'], inline = '1', group = 'General Properties')
+stfalerttrans = input.int(defval = 50, minval = 1, maxval = 100, title = 'Alert Transparency: Single TF', inline = '2', group = 'General Properties')
+alerttrans = input.int(defval = 50, minval = 1, maxval = 100, title = 'All TF', inline = '2', group = 'General Properties')
+barcolors = input.string(defval = 'Standard', title = 'Price Chart Bar Colors', options = ['Standard', 'From Short TF BBWP', 'From Medium TF BBWP', 'From Long TF BBWP'], inline = '3', group = 'General Properties')
+
+// Short Time Frame BBWP 
+bbwpse = input.bool(defval = true, title = 'Enable', inline = '1', group = 'Short Time Frame BBWP')
+bbwpstf = input.string(defval = 'Chart', title = '        Timeframe', inline = '1', group = 'Short Time Frame BBWP', options = ['Chart', '1', '3', '5', '10', '15', '30', '45', '60', '120', '180', '240', '720', 'D', '3D', '5D', 'W'])
+bbwpsle = input.int(defval = 13, title = 'Length', minval = 1, inline = '2', group = 'Short Time Frame BBWP')
+bbwpslk = input.int(defval = 252, title = '   Lookback', minval = 1, inline = '2', group = 'Short Time Frame BBWP')
+bbwpsmal = input.int(defval = 5, title = 'MA', inline = '3', group = 'Short Time Frame BBWP')
+bbwpsmat = input.string(defval = 'SMA', title = '     MA Type', options = ['SMA', 'EMA', 'HMA', 'VWMA'], inline = '3', group = 'Short Time Frame BBWP')
+
+bbwpspt = input.string(defval = 'Solid Line', title = 'Plot Type', options = ['Solid Line', 'Background', 'Hidden', 'Average S M', 'Average S L', 'Average M L', 'Average S M L'], inline = '4', group = 'Short Time Frame BBWP')
+bbwpspw = input.int(defval = 2, title = '   Width', minval = 1, maxval = 14, inline = '4', group = 'Short Time Frame BBWP')
+bbwpspc = input.string(defval = 'Color from Medium', title = 'Plot Color', options = ['RGB Spectrum', 'RB Spectrum', 'RG Spectrum', 'Solid Color', 'Color from Medium', 'Color from Long'], inline = '5', group = 'Short Time Frame BBWP')
+bbwpsppc = input.color(defval = #FFFF00, title = '   Solid Color', inline = '5', group = 'Short Time Frame BBWP')
+bbwpsmapt = input.string(defval = 'Solid Line', title = 'MA Plot', options = ['Solid Line', 'Hidden'], inline = '6', group = 'Short Time Frame BBWP')
+bbwpsmapw = input.int(defval = 1, title = 'MA Width', inline = '6', group = 'Short Time Frame BBWP')
+bbwpsmappc = input.color(defval = #FFFFFFFF, title = 'MA Color', inline = '6', group = 'Short Time Frame BBWP')
+
+shortalertstip = 'Short timeframe alerts will appear in the bottom third of the chart. If enforced by all other enabled alerts a full length alert will plot.'
+shortalerts = input.bool(defval = true, title = 'Short TF Alerts', inline = 'a1', group = 'Short Time Frame BBWP', tooltip = shortalertstip)
+shtalertsma = input.bool(defval = true, title = 'MA Filter', inline = 'a1', group = 'Short Time Frame BBWP')
+shtalertsri = input.bool(defval = false, title = 'and', inline = 'a1', group = 'Short Time Frame BBWP')
+shtalertsripc = input.float(defval = 1, maxval = 100, minval = 0, title = 'Moving %', inline = 'a1', group = 'Short Time Frame BBWP', step = 0.1)
+shortupperlevel = input.int(98, 'Short Term Extreme High', minval = 1, inline = 'a3', group = 'Short Time Frame BBWP')
+shortlowerlevel = input.int(2, 'Low', minval = 1, inline = 'a3', group = 'Short Time Frame BBWP')
+
+// Medium Time Frame BBWP
+bbwpme = input.bool(defval = true, title = 'Enable', inline = '1', group = 'Medium Time Frame BBWP')
+bbwpmtf = input.string(defval = 'Auto', title = '        Timeframe', inline = '1', group = 'Medium Time Frame BBWP', options = ['Auto', '5', '10', '15', '30', '45', '60', '120', '180', '240', '720', 'D', '3D', '5D', 'W', '2W'])
+bbwpmle = input.int(defval = 13, title = 'Length', minval = 1, inline = '2', group = 'Medium Time Frame BBWP')
+bbwpmlk = input.int(defval = 252, title = '   Lookback', minval = 1, inline = '2', group = 'Medium Time Frame BBWP')
+bbwpmmal = input.int(defval = 5, title = 'MA', inline = '3', group = 'Medium Time Frame BBWP')
+bbwpmmat = input.string(defval = 'SMA', title = '     MA Type', options = ['SMA', 'EMA', 'VWMA'], inline = '3', group = 'Medium Time Frame BBWP')
+
+bbwpmpt = input.string(defval = 'Hidden', title = 'Plot Type', options = ['Solid Line', 'Hidden', 'Average S M', 'Average S L', 'Average M L', 'Average S M L'], inline = '4', group = 'Medium Time Frame BBWP')
+bbwpmpw = input.int(defval = 2, title = '   Width', minval = 1, maxval = 4, inline = '4', group = 'Medium Time Frame BBWP')
+bbwpmpc = input.string(defval = 'RG Spectrum', title = 'Plot Color', options = ['RGB Spectrum', 'RB Spectrum', 'RG Spectrum', 'Solid Color', 'Color from Long'], inline = '5', group = 'Medium Time Frame BBWP')
+bbwpmppc = input.color(defval = #FFFF00, title = '   Solid Color', inline = '5', group = 'Medium Time Frame BBWP')
+bbwpmmapt = input.string(defval = 'Hidden', title = 'MA Plot', options = ['Solid Line', 'Hidden'], inline = '6', group = 'Medium Time Frame BBWP')
+bbwpmmappc = input.color(defval = #FFFFFFCF, title = 'MA Color', inline = '6', group = 'Medium Time Frame BBWP')
+bbwpmmapw = input.int(defval = 1, title = 'MA Width', inline = '6', group = 'Medium Time Frame BBWP')
+
+mediumalertstip = 'Medium timeframe alerts will appear in the middle third of the chart. If enforced by all other enabled alerts a full length alert will plot.'
+mediumalerts = input.bool(defval = true, title = 'Medium TF Alerts', inline = 'm', group = 'Medium Time Frame BBWP', tooltip = mediumalertstip)
+medalertsma = input.bool(defval = true, title = 'MA Filter', inline = 'm', group = 'Medium Time Frame BBWP')
+medalertsri = input.bool(defval = false, title = 'and', inline = 'm', group = 'Medium Time Frame BBWP')
+medalertsripc = input.float(defval = 1, maxval = 100, minval = 0, title = 'Moving %', inline = 'm', group = 'Medium Time Frame BBWP', step = 0.1)
+mediumupperlevel = input.int(98, 'Medium Term Extreme High', minval = 1, inline = 'm2', group = 'Medium Time Frame BBWP')
+mediumlowerlevel = input.int(2, 'Low', minval = 1, inline = 'm2', group = 'Medium Time Frame BBWP')
+
+// Long Time Frame BBWP
+bbwple = input.bool(defval = true, title = 'Enable', inline = '1', group = 'Long Time Frame BBWP')
+bbwpltf = input.string(defval = 'Auto', title = '        Timeframe', inline = '1', group = 'Long Time Frame BBWP', options = ['Auto', '5', '10', '15', '30', '45', '60', '120', '180', '240', '720', 'D', '3D', '5D', 'W', '2W', 'M'])
+bbwplle = input.int(defval = 13, title = 'Length', minval = 1, inline = '2', group = 'Long Time Frame BBWP')
+bbwpllk = input.int(defval = 252, title = '   Lookback', minval = 1, inline = '2', group = 'Long Time Frame BBWP')
+bbwplmal = input.int(defval = 5, title = 'MA', inline = '3', group = 'Long Time Frame BBWP')
+bbwplmat = input.string(defval = 'SMA', title = '     MA Type', options = ['SMA', 'EMA', 'VWMA'], inline = '3', group = 'Long Time Frame BBWP')
+
+bbwplpt = input.string(defval = 'Background', title = 'Plot Type', options = ['Solid Line', 'Background', 'Hidden', 'Average S M', 'Average S L', 'Average M L', 'Average S M L'], inline = '4', group = 'Long Time Frame BBWP')
+bbwplpw = input.int(defval = 2, title = '   Width', minval = 1, maxval = 4, inline = '4', group = 'Long Time Frame BBWP')
+bbwplpc = input.string(defval = 'RG Spectrum', title = 'Plot Color', options = ['RGB Spectrum', 'RB Spectrum', 'RG Spectrum', 'Solid Color'], inline = '5', group = 'Long Time Frame BBWP')
+bbwplppc = input.color(defval = #FFFF00, title = '   Solid Color', inline = '5', group = 'Long Time Frame BBWP')
+bbwplmapt = input.string(defval = 'Hidden', title = 'MA Plot', options = ['Solid Line', 'Hidden'], inline = '6', group = 'Long Time Frame BBWP')
+bbwplmappc = input.color(defval = #FFFFFF99, title = 'MA Color', inline = '6', group = 'Long Time Frame BBWP')
+bbwplmapw = input.int(defval = 1, title = 'MA Width', inline = '6', group = 'Long Time Frame BBWP')
+bbwplbga = input.int(defval = 75, maxval = 100, minval = 0, title = 'Background Transparency Above MA', inline = '7', group = 'Long Time Frame BBWP')
+bbwplbgb = input.int(defval = 90, maxval = 100, minval = 0, title = 'Below MA', inline = '7', group = 'Long Time Frame BBWP')
+linebackground = input.bool(defval = true, title = 'Highlight Lines in Background Mode', inline = '8', group = 'Long Time Frame BBWP')
+highlightcolor = input.color(defval = #00000088, title = 'With Color', inline = '8', group = 'Long Time Frame BBWP')
+
+longalertstip = 'Long timeframe alerts will appear in the top third of the chart. If enforced by all other enabled alerts a full length alert will plot.'
+longalerts = input.bool(defval = true, title = 'Long TF Alerts', inline = 'l', group = 'Long Time Frame BBWP', tooltip = longalertstip)
+lngalertsma = input.bool(defval = true, title = 'MA Filter', inline = 'l', group = 'Long Time Frame BBWP')
+lngalertsri = input.bool(defval = false, title = 'and', inline = 'l', group = 'Long Time Frame BBWP')
+lngalertsripc = input.float(defval = 1, maxval = 100, minval = 0, title = 'Moving %', inline = 'l', group = 'Long Time Frame BBWP', step = 0.1)
+longupperlevel = input.int(98, 'Long Term Extreme High', minval = 1, inline = 'l2', group = 'Long Time Frame BBWP')
+longlowerlevel = input.int(2, 'Low', minval = 1, inline = 'l2', group = 'Long Time Frame BBWP')
+
+backtesttip = 'You can use the Backtest Signal to simulate trades in a backtester, set the values here to match what your backtester is expecting.\nAlert values are totaled and plotted to display.none, if you need to see them for testing change the Style Settings for the Backtest Signal plot.'
+hghalertval = input.float(defval = -3, title = 'All Timeframes Alert Value High', inline = '1', group = 'Backtestable Alerts', tooltip = 'backtesttip')
+lowalertval = input.float(defval = 3, title = 'Low', inline = '1', group = 'Backtestable Alerts')
+hghalertshtval = input.float(defval = -2, title = 'Short Term Alert Value   High', inline = '2', group = 'Backtestable Alerts')
+lowalertshtval = input.float(defval = 2, title = 'Low', inline = '2', group = 'Backtestable Alerts')
+hghalertmedval = input.float(defval = -1, title = 'Medium Term Alert Value  High', inline = '3', group = 'Backtestable Alerts')
+lowalertmedval = input.float(defval = 1, title = 'Low', inline = '3', group = 'Backtestable Alerts')
+hghalertlngval = input.float(defval = -1, title = 'Long Term Alert Value   High', inline = '4', group = 'Backtestable Alerts')
+lowalertlngval = input.float(defval = 1, title = 'Low', inline = '4', group = 'Backtestable Alerts')
+
+// ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+// ============ Functions
+
+f_ma(_type, _source, _length) =>
+    _type == 'VWMA' ? ta.vwma(_source, _length) : _type == 'EMA' ? ta.ema(_source, _length) : _type == 'HMA' ? ta.hma(_source, _length) : ta.sma(_source, _length)
+
+f_mas(_type, _source, _length, _tf) =>
+    request.security(chartTicker, _tf, f_ma(_type, _source, _length))
+
+f_bbw(_src, _length, _type) =>
+    float basis = f_ma(_type, _src, _length)
+    float dev = ta.stdev(_src, _length)
+    _bbw = (basis + dev - (basis - dev)) / basis
+    _bbw
+    //_bbw = ta.bbw(_src,_length,1)
+
+f_percentrank(_source, _lookback) =>
+    _count = 0.0
+    for _i = 1 to _lookback by 1
+        _count := _count + (_source[_i] > _source ? 0 : 1)
+        _count
+    _return = _count / _lookback * 100
+    _return
+
+f_bbwp(_source, _length, _lookback, _type) =>
+    _bbw = f_bbw(_source, _length, _type)
+    _len = bar_index < _lookback ? bar_index : _lookback
+    _bbwp = f_percentrank(_bbw, _len)
+    _return = bar_index >= _length ? _bbwp : na
+    _return
+
+f_bbwps(_length, _lookback, _tf) =>
+    float _bbw = request.security(chartTicker, _tf, f_bbwp(source, _length, _lookback, basistype))
+    _bbw
+
+f_plotaverages(_type, _S, _M, _L) =>
+    switch _type
+        'Average S M' => (_S + _M) / 2
+        'Average S L' => (_S + _L) / 2
+        'Average M L' => (_M + _L) / 2
+        'Average S M L' => (_S + _M + _L) / 3
+
+f_color(_type, _solidcolor, _percent) =>
+    _color = switch _type
+        'RGB Spectrum' => _percent >= 50 ? color.from_gradient(_percent, 50, 100, #0AFF00, #FF2900) : color.from_gradient(_percent, 0, 49, #0000FF, #0AFF00)
+        'RB Spectrum' => color.from_gradient(_percent, 0, 100, #0000FF, #FF2900)
+        'RG Spectrum' => color.from_gradient(_percent, 0, 100, #00FF00, #FF0000)
+        'Solid Line' => _solidcolor
+        'Solid Color' => _solidcolor
+        'Background' => color.from_gradient(_percent, 0, 100, #00FF00, #FF0000)
+        'Hidden' => na
+    _color
+
+f_hghalert(_source, _level, _mafilter, _movingaverage, _rising, _percent) =>
+    _alert = _source > _level ? _mafilter ? _source < _movingaverage ? _rising ? _source < _source[1] * (1 - _percent / 100) ? true : false : true : false : true : false
+    _alert
+
+f_tfhghalert(_tf, _source, _level, _mafilter, _movingaverage, _rising, _percent) =>
+    _alert = request.security(chartTicker, _tf, f_hghalert(_source, _level, _mafilter, _movingaverage, _rising, _percent))
+    _alert
+
+f_lowalert(_source, _level, _mafilter, _movingaverage, _rising, _percent) =>
+    _alert = _source < _level ? _mafilter ? _source > _movingaverage ? _rising ? _source > _source[1] * (1 + _percent / 100) ? true : false : true : false : true : false
+    _alert
+
+f_tflowalert(_tf, _source, _level, _mafilter, _movingaverage, _rising, _percent) =>
+    _alert = request.security(chartTicker, _tf, f_lowalert(_source, _level, _mafilter, _movingaverage, _rising, _percent))
+    _alert
+
+
+// ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+// ============ Logic
+
+bbwpstfc = bbwpstf == 'Chart' ? charttf : bbwpstf
+
+bbwpmtfc = bbwpmtf == 'Auto' ? charttf == '1' ? '5' : charttf == '3' ? '10' : charttf == '5' ? '15' : charttf == '10' ? '30' : charttf == '15' ? '60' : charttf == '30' ? '120' : charttf == '45' ? '120' : charttf == '60' ? '240' : charttf == '120' ? '480' : charttf == '180' ? '720' : charttf == '240' ? 'D' : charttf == '720' ? 'D' : charttf == 'D' ? '3D' : charttf == '3D' ? 'W' : charttf == '5D' ? '2W' : charttf == 'W' ? 'M' : na : bbwpmtf
+
+bbwpltfc = bbwpltf == 'Auto' ? charttf == '1' ? '15' : charttf == '3' ? '30' : charttf == '5' ? '45' : charttf == '10' ? '120' : charttf == '15' ? '240' : charttf == '30' ? '480' : charttf == '45' ? '720' : charttf == '60' ? 'D' : charttf == '120' ? '2D' : charttf == '180' ? '3D' : charttf == '240' ? '4D' : charttf == '720' ? '5D' : charttf == 'D' ? 'W' : charttf == '3D' ? '2W' : charttf == '5D' ? 'M' : charttf == 'W' ? '2M' : na : bbwpltf
+
+bbwps = bbwpse ? bbwpstf == 'Chart' ? f_bbwp(source, bbwpsle, bbwpslk, basistype) : f_bbwps(bbwpsle, bbwpslk, bbwpstfc) : na
+bbwpm = bbwpme ? f_bbwps(bbwpmle, bbwpmlk, bbwpmtfc) : na
+bbwpl = bbwple ? f_bbwps(bbwplle, bbwpllk, bbwpltfc) : na
+
+bbwpsplot = bbwpspt == 'Average S M' or bbwpspt == 'Average S L' or bbwpspt == 'Average M L' or bbwpspt == 'Average S M L' ? f_plotaverages(bbwpspt, bbwps, bbwpm, bbwpl) : bbwps
+
+bbwpmplot = bbwpmpt == 'Average S M' or bbwpmpt == 'Average S L' or bbwpmpt == 'Average M L' or bbwpmpt == 'Average S M L' ? f_plotaverages(bbwpmpt, bbwps, bbwpm, bbwpl) : bbwpm
+
+bbwplplot = bbwplpt == 'Average S M' or bbwplpt == 'Average S L' or bbwplpt == 'Average M L' or bbwplpt == 'Average S M L' ? f_plotaverages(bbwplpt, bbwps, bbwpm, bbwpl) : bbwpl
+
+bbwpsma = bbwpsmal > 1 ? bbwpstf == 'Chart' ? f_ma(bbwpsmat, bbwpsplot, bbwpsmal) : f_mas(bbwpsmat, bbwpsplot, bbwpsmal, bbwpstfc) : na
+bbwpmma = bbwpmmal > 1 ? f_mas(bbwpmmat, bbwpmplot, bbwpmmal, bbwpmtfc) : na
+bbwplma = bbwplmal > 1 ? f_mas(bbwplmat, bbwplplot, bbwplmal, bbwpltfc) : na
+
+c_bbwps = bbwpspt != 'Hidden' ? bbwpspc == 'Color from Medium' ? bbwpme ? f_color(bbwpmpc, bbwpmppc, bbwpm) : na : bbwpspc == 'Color from Long' ? bbwple ? f_color(bbwplpc, bbwplppc, bbwpl) : na : f_color(bbwpspc, bbwpsppc, bbwpsplot) : na
+
+c_bbwpm = bbwpmpt != 'Hidden' ? bbwpmpc == 'Color from Long' ? bbwple ? f_color(bbwplpc, bbwplppc, bbwpl) : na : f_color(bbwpmpc, bbwpmppc, bbwpm) : na
+
+c_bbwpl = bbwplpt != 'Hidden' ? f_color(bbwplpc, bbwplppc, bbwplplot) : na
+
+plotbackground = bbwple and bbwplpt == 'Background' ? true : false
+
+c_bbwpsma = bbwpspt == 'Hidden' or bbwpsmapt == 'Hidden' ? na : bbwpsmappc
+c_bbwpmma = bbwpmpt == 'Hidden' or bbwpmmapt == 'Hidden' ? na : bbwpmmappc
+c_bbwplma = bbwplpt == 'Hidden' or bbwplpt == 'Background' or bbwplmapt == 'Hidden' ? na : bbwplmappc
+
+plotshortbackground = plotbackground and linebackground and bbwpspt != 'Hidden' ? bbwpsplot : na
+plotmediumbackground = plotbackground and linebackground and bbwpmpt != 'Hidden' ? bbwpmplot : na
+
+highcolor = color.red
+lowcolor = bbwpspc == 'RGB Spectrum' or bbwpspc == 'RB Spectrum' ? color.blue : color.green
+
+bool hghalertsht = false
+bool lowalertsht = false
+
+if bbwpstf == 'Chart'
+    hghalertsht := bbwpse and shortalerts ? f_hghalert(bbwpsplot, shortupperlevel, shtalertsma, bbwpsma, shtalertsri, shtalertsripc) : false
+    lowalertsht := bbwpse and shortalerts ? f_lowalert(bbwpsplot, shortlowerlevel, shtalertsma, bbwpsma, shtalertsri, shtalertsripc) : false
+    lowalertsht
+else
+    hghalertsht := bbwpse and shortalerts ? f_tfhghalert(bbwpstfc, bbwpsplot, shortupperlevel, shtalertsma, bbwpsma, shtalertsri, shtalertsripc) : false
+    lowalertsht := bbwpse and shortalerts ? f_tflowalert(bbwpstfc, bbwpsplot, shortlowerlevel, shtalertsma, bbwpsma, shtalertsri, shtalertsripc) : false
+    lowalertsht
+
+hghalertmed = bbwpme and mediumalerts ? f_tfhghalert(bbwpmtfc, bbwpmplot, mediumupperlevel, medalertsma, bbwpmma, medalertsri, medalertsripc) : false
+lowalertmed = bbwpme and mediumalerts ? f_tflowalert(bbwpmtfc, bbwpm, mediumlowerlevel, medalertsma, bbwpmma, medalertsri, medalertsripc) : false
+
+hghalertlng = bbwple and longalerts ? f_tfhghalert(bbwpltfc, bbwplplot, longupperlevel, lngalertsma, bbwplma, lngalertsri, lngalertsripc) : false
+lowalertlng = bbwple and longalerts ? f_tflowalert(bbwpltfc, bbwpl, longlowerlevel, lngalertsma, bbwplma, lngalertsri, lngalertsripc) : false
+
+hghalert = (bbwpse and shortalerts or bbwpme and mediumalerts or bbwple and longalerts) and (bbwpse and shortalerts ? hghalertsht : true) and (bbwpme and mediumalerts ? hghalertmed : true) and (bbwple and longalerts ? hghalertlng : true)
+
+lowalert = (bbwpse and shortalerts or bbwpme and mediumalerts or bbwple and longalerts) and (bbwpse and shortalerts ? lowalertsht : true) and (bbwpme and mediumalerts ? lowalertmed : true) and (bbwple and longalerts ? lowalertlng : true)
+
+// ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+// ============ Plots
+
+bgcolor(plotbackground ? color.new(c_bbwpl, bbwplplot > bbwplma ? bbwplbga : bbwplbgb) : na)
+barcolor(barcolors == 'From Short TF BBWP' ? f_color(bbwpspc, bbwpsppc, bbwps) : barcolors == 'From Medium TF BBWP' ? f_color(bbwpmpc, bbwpmppc, bbwpm) : barcolors == 'From Long TF BBWP' ? f_color(bbwplpc, bbwplppc, bbwpl) : na)
+
+p_bbwpsbk = plot(plotshortbackground, 'BBWP Short Time Frame Background', highlightcolor, math.max(1, bbwpspw + 3))
+p_bbwpmbk = plot(plotmediumbackground, 'BBWP Medium Time Frame Background', highlightcolor, math.max(1, bbwpmpw + 3))
+
+p_bbwps = plot(bbwpsplot, 'BBWP Short Time Frame', c_bbwps, math.max(1, bbwpspw), plot.style_line)
+p_bbwpsma = plot(bbwpsma, 'BBWP Short MA', c_bbwpsma, math.max(1, bbwpsmapw), plot.style_line)
+
+p_bbwpm = plot(bbwpmplot, 'BBWP Medium Time Frame', c_bbwpm, math.max(1, bbwpmpw), plot.style_line)
+p_bbwpmma = plot(bbwpmma, 'BBWP Medium MA', c_bbwpmma, math.max(1, bbwpmmapw), plot.style_line)
+
+p_bbwpl = plot(plotbackground ? na : bbwplplot, 'BBWP Long Time Frame', c_bbwpl, math.max(1, bbwplpw), plot.style_line)
+p_bbwplma = plot(plotbackground ? na : bbwplma, 'BBWP Long MA', c_bbwplma, math.max(1, bbwplmapw), plot.style_line)
+
+p_scaleHi = hline(100, 'Scale High', highcolor, hline.style_solid)
+p_midLine = hline(50, 'Mid-Line', color.silver, hline.style_dashed)
+p_scaleLo = hline(0, 'Scale Low', lowcolor, hline.style_solid)
+
+// ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+// ============ Alerts
+
+p_lowalertsht = plot(lowalertsht ? 33 : na, 'Short Timeframe Low', color.new(lowcolor, stfalerttrans), 1, plot.style_columns, histbase = 0)
+p_lowalertmed = plot(lowalertmed ? 66 : na, 'Medium Timeframe Low', color.new(lowcolor, stfalerttrans), 1, plot.style_columns, histbase = 33)
+p_lowalertlng = plot(lowalertlng ? 100 : na, 'Long Timeframe Low', color.new(lowcolor, stfalerttrans), 1, plot.style_columns, histbase = 66)
+
+p_hghalertsht = plot(hghalertsht ? 33 : na, 'Short Timeframe High', color.new(highcolor, stfalerttrans), 1, plot.style_columns, histbase = 0)
+p_hghalertmed = plot(hghalertmed ? 66 : na, 'Medium Timeframe High', color.new(highcolor, stfalerttrans), 1, plot.style_columns, histbase = 33)
+p_hghalertlng = plot(hghalertlng ? 100 : na, 'Long Timeframe High', color.new(highcolor, stfalerttrans), 1, plot.style_columns, histbase = 66)
+
+p_hghalertall = plot(hghalert ? 100 : na, 'Extreme High', color.new(highcolor, alerttrans), 1, plot.style_columns, histbase = 0)
+p_lowalertall = plot(lowalert ? 100 : na, 'Extreme Low', color.new(lowcolor, alerttrans), 1, plot.style_columns, histbase = 0)
+
+float alertlevel = 0
+alertlevel := alertlevel + (hghalert ? hghalertval : 0)
+alertlevel := alertlevel + (lowalert ? lowalertval : 0)
+alertlevel := alertlevel + (hghalertsht ? hghalertshtval : 0)
+alertlevel := alertlevel + (lowalertsht ? lowalertshtval : 0)
+alertlevel := alertlevel + (hghalertmed ? hghalertmedval : 0)
+alertlevel := alertlevel + (lowalertmed ? lowalertmedval : 0)
+alertlevel := alertlevel + (hghalertlng ? hghalertlngval : 0)
+alertlevel := alertlevel + (lowalertlng ? lowalertlngval : 0)
+
+p_alertsignal = plot(alertlevel, 'Backtest Signal', style = plot.style_columns, display = display.none)

@@ -1,0 +1,1171 @@
+//@version=6
+indicator('ADX Curvature Suite', shorttitle = '📐ADX² St', overlay = false, max_labels_count = 500, max_lines_count = 500, max_boxes_count = 500, precision = 2)
+// ─────────────────────────────────────────────────────────────────────────────
+// INPUTS
+// ─────────────────────────────────────────────────────────────────────────────
+grpCore = '⚙️ Core ADX Settings'
+adxLen = input.int(14, 'ADX Length', minval = 5, maxval = 50, group = grpCore, tooltip = 'Period for ADX calculation. Controls responsiveness vs. noise trade-off:\n\n' + 'TIMEFRAME RECOMMENDATIONS:\n' + '• 1m: 10-14 (faster response for scalping)\n' + '• 5m: 14 (default, balanced)\n' + '• 1h: 14-21 (smoother, fewer whipsaws)\n' + '• 4h: 14-21 (focus on major trends)\n\n' + 'SHORTER (7-10):\n' + '+ More responsive to quick momentum shifts\n' + '+ Better for scalping and day trading\n' + '- More false signals in choppy markets\n\n' + 'LONGER (21-30):\n' + '+ Smoother signals, filters noise\n' + '+ Better for swing trading\n' + '- Slower to detect trend changes\n\n' + 'Default 14 provides optimal balance across most instruments and timeframes.')
+diLen = input.int(14, 'DI Length', minval = 5, maxval = 50, group = grpCore, tooltip = 'Period for Directional Indicator calculation. Determines trend bias sensitivity:\n\n' + 'MATCHING ADX LENGTH (recommended):\n' + 'Keep this equal to ADX Length for coherent signals. When ADX and DI use the same period, ' + 'directional bias aligns perfectly with trend strength measurements.\n\n' + 'INDEPENDENT TUNING:\n' + 'Advanced users may adjust independently:\n' + '• Shorter DI (10): More reactive bias changes, good for fast markets\n' + '• Longer DI (21): More stable bias, reduces flip-flopping in consolidation\n\n' + 'The DI values determine bullish vs. bearish bias for all signals. When +DI > -DI, ' + 'ignition signals are bullish; when -DI > +DI, ignition signals are bearish.')
+smoothType = input.string('RMA', 'Smoothing', options = ['RMA', 'EMA', 'SMA', 'WMA'], group = grpCore, tooltip = 'Smoothing algorithm for ADX and DI calculations:\n\n' + '• RMA (Recommended): Wilder\'s original method, balanced lag and smoothness. ' + 'Standard for ADX, used in most literature. Best all-around choice.\n\n' + '• EMA: More responsive than RMA, reacts faster to price changes. ' + 'Good for scalping (1m/5m) but may generate more false signals.\n\n' + '• SMA: Simplest average, equal weight to all periods. ' + 'Very smooth but slowest to react. Best for 4h+ timeframes.\n\n' + '• WMA: Recent data weighted more heavily. ' + 'Balance between EMA responsiveness and SMA stability.\n\n' + 'RECOMMENDATION: Stick with RMA unless you have specific needs. ' + 'Changing this alters ADX behavior fundamentally - backtest thoroughly before live use.')
+grpCurvature = '📐 Curvature Analysis'
+curvatureSmooth = input.int(3, 'Curvature Smoothing', minval = 1, maxval = 10, group = grpCurvature, tooltip = 'Smoothing period for ADX velocity and acceleration calculations. ' + 'This is the SECRET SAUCE of the ADX² Suite.\n\n' + 'WHAT IT DOES:\n' + 'Applies EMA smoothing to velocity (1st derivative) and acceleration (2nd derivative) ' + 'of ADX. Lower values = more sensitive to rapid changes, higher = smoother signals.\n\n' + 'TIMEFRAME OPTIMIZATION:\n' + '• 1m: 2-3 (must capture rapid micro-movements)\n' + '• 5m: 3 (default, balanced)\n' + '• 1h: 3-5 (can afford more smoothing)\n' + '• 4h: 5-7 (focus on major inflections only)\n\n' + 'MARKET ADAPTATION:\n' + '• High volatility (NQ, crypto): 2-3 (react faster)\n' + '• Moderate volatility (ES, stocks): 3-4\n' + '• Low volatility (bonds, FX majors): 4-5 (filter noise)\n\n' + 'DANGER ZONE: Setting to 1 makes signals extremely noisy. ' + 'Setting above 7 delays ignition detection significantly.')
+rsiOfADXLen = input.int(14, 'RSI of ADX Length', minval = 5, maxval = 30, group = grpCurvature, tooltip = 'Period for RSI calculation applied to ADX values (displayed as RSI² in dashboard).\n\n' + 'CONCEPT:\n' + 'Applies RSI momentum oscillator to ADX itself, creating a \'meta-momentum\' indicator. ' + 'Identifies when ADX is overbought/oversold relative to its own recent behavior.\n\n' + 'INTERPRETATION:\n' + '• RSI² > 70: ADX is elevated, potential exhaustion ahead\n' + '• RSI² < 30: ADX is suppressed, prime for ignition\n' + '• RSI² 40-60: Neutral, no extreme conditions\n\n' + 'TIMEFRAME SETTINGS:\n' + '• 1m/5m: 10-14 (shorter memory, faster cycles)\n' + '• 1h: 14 (default)\n' + '• 4h: 14-21 (longer context, major cycles)\n\n' + 'TRADING STRATEGY:\n' + 'Combine with phase detection: IGNITION signals when RSI² < 30 have highest probability. ' + 'Be cautious entering trends when RSI² > 70 - exhaustion may be imminent.')
+grpZScore = '📊 Z-Score Settings'
+enableZScore = input.bool(true, 'Enable Z-Score Normalization', group = grpZScore, tooltip = 'Toggle Z-Score normalization for curvature calculations.\n\n' + 'STRONGLY RECOMMENDED: Leave this ENABLED for 99% of use cases.\n\n' + 'WHY IT MATTERS:\n' + 'Z-Score converts raw acceleration values into standard deviations from mean. ' + 'This makes thresholds universal - a 2.0σ spike on NQ equals 2.0σ on EUR/USD in significance.\n\n' + 'WITH Z-SCORE (Enabled):\n' + '+ Works across all instruments without recalibration\n' + '+ Adapts to changing volatility regimes automatically\n' + '+ Signal thresholds have consistent meaning\n' + '+ Multi-instrument strategies use same settings\n\n' + 'WITHOUT Z-SCORE (Disabled):\n' + '+ Raw acceleration values (advanced users only)\n' + '- Requires manual threshold calibration per instrument\n' + '- No volatility adaptation\n' + '- Signals inconsistent across different market conditions\n\n' + 'WHEN TO DISABLE:\n' + 'Only for advanced research or if you prefer raw mathematical values. ' + 'You\'ll need to adjust ignition/exhaustion thresholds manually for each instrument.')
+zScoreLen = input.int(50, 'Z-Score Lookback', minval = 20, maxval = 200, group = grpZScore, tooltip = 'Lookback period for Z-Score mean and standard deviation calculation.\n\n' + 'CONCEPT:\n' + 'Determines how much historical context is used to normalize current acceleration. ' + 'Longer lookback = more stable normalization, shorter = adapts faster to regime changes.\n\n' + 'TIMEFRAME RECOMMENDATIONS:\n' + '• 1m: 30-40 bars (≈30-40 minutes of context)\n' + '• 5m: 50 bars (≈4 hours of context, default)\n' + '• 1h: 50-75 bars (≈2-3 days of context)\n' + '• 4h: 75-100 bars (≈2 weeks of context)\n\n' + 'SHORTER LOOKBACK (20-40):\n' + '+ Adapts quickly to volatility regime changes\n' + '+ Better for instruments with frequent market character shifts\n' + '- May be too sensitive, generating false signals\n\n' + 'LONGER LOOKBACK (75-150):\n' + '+ More stable thresholds, filters noise\n' + '+ Better for slow-moving, consistent instruments\n' + '- Slow to adapt when market character changes dramatically\n\n' + 'SWEET SPOT: 50 works well across most scenarios. Increase for 4h charts, decrease for 1m scalping.')
+zThreshold = input.float(2.0, 'Signal Threshold (σ)', minval = 0.5, maxval = 4.0, step = 0.1, group = grpZScore, tooltip = 'Z-Score threshold for curvature spike detection (standard deviations from mean).\n\n' + 'STATISTICAL CONTEXT:\n' + '• 1.0σ: ~68% confidence (frequent, lower significance)\n' + '• 1.5σ: ~86% confidence (balanced)\n' + '• 2.0σ: ~95% confidence (high significance, default)\n' + '• 2.5σ: ~99% confidence (rare, extreme events)\n' + '• 3.0σ: ~99.7% confidence (very rare, highest conviction)\n\n' + 'TIMEFRAME TUNING:\n' + '• 1m: 2.0-2.5σ (need high threshold to filter noise)\n' + '• 5m: 1.5-2.0σ (balanced, default at 2.0)\n' + '• 1h: 1.5σ (can use lower threshold, less noise)\n' + '• 4h: 1.0-1.5σ (signals rare, don\'t want to miss)\n\n' + 'TRADING STYLE:\n' + '• Scalper: 2.0-2.5σ (quality over quantity)\n' + '• Day Trader: 1.5-2.0σ (balanced)\n' + '• Swing Trader: 1.0-1.5σ (catch all significant moves)\n\n' + 'NOTE: This affects curvature spike signals (circles on ADX line). ' + 'Does NOT affect primary ignition/exhaustion signals, which use separate thresholds.')
+grpSignals = '🎯 Signal Detection'
+enableSignals = input.bool(true, 'Enable Signals', group = grpSignals, tooltip = 'Master toggle for all signal generation.\n\n' + 'WHEN ENABLED:\n' + 'All signal types active: Ignition, Exhaustion, Acceleration, Divergence.\n' + 'Shapes appear on main chart, dots on ADX line, signal lines created.\n\n' + 'WHEN DISABLED:\n' + '• No signals generated (clean chart for pure ADX analysis)\n' + '• Dashboard continues to display phase, momentum, and statistics\n' + '• Vortex Bands and ADX line still plot\n' + '• Useful for: education, presentation, or when using indicator purely for bias/confirmation\n\n' + 'RECOMMENDATION:\n' + 'Keep enabled for active trading. Disable only when:\n' + '• Studying ADX behavior without signal distraction\n' + '• Using indicator solely for higher timeframe bias\n' + '• Presenting analysis without showing entry/exit signals')
+minBarsBetweenSignals = input.int(8, 'Min Bars Between Signals', minval = 3, maxval = 20, group = grpSignals, tooltip = 'SPAM FILTER: Minimum bars required between primary signals (Ignition/Exhaustion/Acceleration).\n\n' + 'WHY THIS EXISTS:\n' + 'Without filtering, rapid phase oscillations can produce signal spam, leading to overtrading ' + 'and false entries. This creates a \'cooldown period\' after each signal.\n\n' + 'TIMEFRAME RECOMMENDATIONS:\n' + '• 1m: 5-8 bars (5-8 minutes between signals)\n' + '• 5m: 8-10 bars (40-50 minutes, default at 8)\n' + '• 1h: 8-12 bars (8-12 hours minimum)\n' + '• 4h: 3-5 bars (12-20 hours, signals naturally rare)\n\n' + 'TRADING IMPACT:\n' + 'LOWER (3-5): More signals, more opportunities\n' + '+ Good for scalping\n' + '+ Won\'t miss quick re-entries\n' + '- Risk of overtrading\n' + '- May catch false phase transitions\n\n' + 'HIGHER (12-15): Fewer signals, higher quality\n' + '+ Reduced overtrading\n' + '+ Each signal more significant\n' + '- May miss legitimate secondary entries\n' + '- Less flexibility in fast markets\n\n' + 'NOTE: Divergence signals NOT affected by this filter (they use separate logic).')
+enableKillZones = input.bool(true, 'Show Kill Zone Labels', group = grpSignals, tooltip = 'Toggle floating labels for Ignition and Exhaustion zones.\n\n' + 'WHAT ARE KILL ZONES?\n' + 'Kill Zones are HIGH PROBABILITY areas where specific market conditions align:\n\n' + '⚡ IGNITION ZONE (appears below price):\n' + '• ADX < 20 (low trend strength)\n' + '• Positive velocity (ADX rising)\n' + '• Acceleration > 0.75σ (curvature building)\n' + '= Market transitioning from dormant to trending\n\n' + '🔥 EXHAUSTION ZONE (appears above price):\n' + '• ADX > 32 (elevated trend strength)\n' + '• Negative acceleration < -0.75σ (rapid deceleration)\n' + '= Trend losing momentum, reversal/pullback likely\n\n' + 'VISUAL BEHAVIOR:\n' + '• Labels appear when zone conditions met\n' + '• Follow price action in real-time\n' + '• Disappear when conditions no longer valid\n' + '• Semi-transparent bubble style for visibility\n\n' + 'TRADING STRATEGY:\n' + '• Ignition Zone: Prepare for long/short entry, tighten focus\n' + '• Exhaustion Zone: Take profits, avoid new entries\n\n' + 'DISABLE when: Chart becomes too cluttered, or you prefer dashboard-only monitoring.')
+ignitionThreshold = input.float(1.5, 'Ignition Threshold (σ)', minval = 0.5, maxval = 3.0, step = 0.1, group = grpSignals, tooltip = 'Z-Score threshold for IGNITION phase detection (trend beginning).\n\n' + 'WHAT IT CONTROLS:\n' + 'When curvature (acceleration) exceeds this threshold while ADX is LOW, ' + 'the indicator detects transition from DORMANT to IGNITION phase.\n\n' + 'THRESHOLD LEVELS:\n' + '• 1.0σ: Very sensitive, catches early moves but more false positives\n' + '• 1.5σ: Balanced (default), good quality/quantity ratio\n' + '• 2.0σ: Conservative, waits for strong confirmation\n' + '• 2.5σ+: Ultra-selective, only extreme ignitions\n\n' + 'TIMEFRAME TUNING:\n' + '• 1m: 1.5-2.0σ (need conviction in noisy environment)\n' + '• 5m: 1.5σ (default sweet spot)\n' + '• 1h: 1.0-1.5σ (can afford to be more sensitive)\n' + '• 4h: 1.0σ (signals rare, don\'t want to miss major trend births)\n\n' + 'MARKET TYPES:\n' + '• Choppy/ranging: 2.0σ+ (avoid false breakouts)\n' + '• Trending markets: 1.0-1.5σ (catch moves early)\n' + '• High volatility: 1.5-2.0σ (filter noise)\n\n' + 'STRATEGY IMPACT:\n' + 'Lower threshold = More entries, earlier entries, more losers\n' + 'Higher threshold = Fewer entries, later entries, higher win rate\n\n' + 'RECOMMENDATION: Start at 1.5σ. If too many false ignitions, increase to 2.0σ. ' + 'If missing major trend starts, decrease to 1.0σ.')
+exhaustionThreshold = input.float(1.5, 'Exhaustion Threshold (σ)', minval = 0.5, maxval = 3.0, step = 0.1, group = grpSignals, tooltip = 'Z-Score threshold for EXHAUSTION phase detection (trend weakening).\n\n' + 'WHAT IT CONTROLS:\n' + 'When curvature drops BELOW negative threshold while ADX is HIGH, ' + 'the indicator detects transition to EXHAUSTION phase - trend losing steam.\n\n' + 'THRESHOLD LEVELS:\n' + '• 1.0σ: Early warning, exit at first signs of weakness\n' + '• 1.5σ: Balanced (default), waits for clear deceleration\n' + '• 2.0σ: Conservative, only exits on severe exhaustion\n' + '• 2.5σ+: Ultra-conservative, may stay in trades too long\n\n' + 'TIMEFRAME TUNING:\n' + '• 1m: 1.5-2.0σ (avoid exiting on normal volatility)\n' + '• 5m: 1.5σ (default)\n' + '• 1h: 1.0-1.5σ (can exit earlier on larger TF)\n' + '• 4h: 1.0σ (early exit preserves more profit)\n\n' + 'TRADING STYLE:\n' + '• Scalpers: 1.5-2.0σ (don\'t exit prematurely on quick pullbacks)\n' + '• Day Traders: 1.5σ (balanced)\n' + '• Swing Traders: 1.0-1.5σ (protect profits early)\n\n' + 'ASYMMETRIC TUNING:\n' + 'Many traders use HIGHER exhaustion threshold than ignition:\n' + '• Ignition 1.0σ (get in early)\n' + '• Exhaustion 2.0σ (stay in longer)\n' + '= Aggressive entries, patient exits\n\n' + 'RECOMMENDATION: Match to your risk tolerance. Aggressive traders use 1.0σ, ' + 'conservative traders use 2.0σ. Default 1.5σ balances profit-taking with avoiding premature exits.')
+lowADXThreshold = input.float(20.0, 'Low ADX Level', minval = 10.0, maxval = 30.0, group = grpSignals, tooltip = 'ADX level defining boundary between DORMANT and trending phases.\n\n' + 'CLASSIC ADX THEORY:\n' + '• ADX < 20: No trend, choppy range-bound\n' + '• ADX 20-25: Weak trend developing\n' + '• ADX 25-40: Moderate to strong trend\n' + '• ADX > 40: Very strong trend\n\n' + 'THIS SETTING CONTROLS:\n' + '• DORMANT phase upper boundary\n' + '• IGNITION zone activation (must be below this level)\n' + '• Minimum ADX for ACCELERATION/MATURE phases\n\n' + 'ADJUSTMENT GUIDELINES:\n' + '• 15-18: More aggressive, consider trends forming earlier\n' + '• 20: Standard (default), textbook ADX interpretation\n' + '• 22-25: Conservative, require stronger confirmation\n\n' + 'INSTRUMENT VARIATIONS:\n' + '• Crypto (BTC/ETH): 18-20 (naturally trending)\n' + '• Index Futures (ES/NQ): 20 (balanced)\n' + '• Forex Majors (EUR/USD): 20-22 (can be range-y)\n' + '• Stocks: 20 (standard)\n\n' + 'TIMEFRAME IMPACT:\n' + '• Lower timeframes (1m/5m): Consider 18-20\n' + '• Higher timeframes (1h/4h): Stick with 20\n\n' + 'WARNING: Setting too low (< 15) causes premature ignition signals. ' + 'Setting too high (> 25) misses early trend opportunities.')
+highADXThreshold = input.float(40.0, 'High ADX Level', minval = 30.0, maxval = 60.0, group = grpSignals, tooltip = 'ADX level defining boundary between trending and MATURE/EXHAUSTION phases.\n\n' + 'CLASSIC ADX THEORY:\n' + 'ADX > 40 indicates VERY STRONG trend - but also potential exhaustion risk.\n\n' + 'THIS SETTING CONTROLS:\n' + '• MATURE phase entry boundary\n' + '• EXHAUSTION zone activation (must be above this level * 0.8)\n' + '• Profit-taking consideration zone\n\n' + 'ADJUSTMENT GUIDELINES:\n' + '• 35-38: Earlier exhaustion warnings, book profits sooner\n' + '• 40: Standard (default), classic threshold\n' + '• 45-50: Patient profit-taking, ride trends longer\n\n' + 'INSTRUMENT VARIATIONS:\n' + '• High volatility (NQ, crypto): 35-40 (trends can exhaust faster)\n' + '• Moderate volatility (ES, stocks): 40 (balanced)\n' + '• Low volatility (bonds, FX): 40-45 (trends develop slower)\n\n' + 'TIMEFRAME CONSIDERATIONS:\n' + '• 1m/5m: 35-40 (quick exhaustion cycles)\n' + '• 1h: 40 (default)\n' + '• 4h: 40-45 (major trends can sustain high ADX longer)\n\n' + 'TRADING STRATEGY:\n' + 'When ADX reaches this level:\n' + '• Tighten trailing stops\n' + '• Take partial profits\n' + '• Avoid new entries in trend direction\n' + '• Watch for exhaustion signals\n\n' + 'INTERACTION: Works with exhaustionThreshold. Both conditions must align:\n' + '• ADX > highADXThreshold * 0.8 (numerical level)\n' + '• Curvature < -exhaustionThreshold (deceleration)')
+confirmBars = input.int(2, 'Confirmation Bars', minval = 1, maxval = 5, group = grpSignals, tooltip = 'Number of consecutive bars required to confirm phase transition.\n\n' + 'WHY CONFIRMATION MATTERS:\n' + 'Prevents whipsaw signals when ADX briefly touches phase boundaries. ' + 'Requires phase conditions to persist for multiple bars before triggering signal.\n\n' + 'SETTINGS:\n' + '• 1 bar: Instant signals, no confirmation (not recommended)\n' + '• 2 bars: Light confirmation (default), good balance\n' + '• 3-4 bars: Strong confirmation, reduces false signals\n' + '• 5 bars: Ultra-conservative, may miss fast-moving opportunities\n\n' + 'TIMEFRAME RECOMMENDATIONS:\n' + '• 1m: 1-2 bars (can\'t afford to wait, moves fast)\n' + '• 5m: 2 bars (default sweet spot)\n' + '• 1h: 2-3 bars (more confirmation worthwhile)\n' + '• 4h: 2 bars (signals already rare)\n\n' + 'MARKET CONDITIONS:\n' + '• Choppy markets: 3-4 bars (filter noise)\n' + '• Trending markets: 2 bars (don\'t miss moves)\n' + '• High volatility: 2-3 bars (wait for stability)\n\n' + 'TRADE-OFF:\n' + 'More confirmation = Fewer false signals BUT later entries\n' + 'Less confirmation = Earlier entries BUT more whipsaws\n\n' + 'RECOMMENDATION: Start with 2. If experiencing too many false phase changes, increase to 3. ' + 'Only use 1 if you\'re a very fast scalper and willing to accept noise.')
+showDotsOnADX = input.bool(true, 'Show Signal Dots on ADX Line', group = grpSignals, tooltip = 'Toggle signal markers on the ADX line in the lower pane.\n\n' + 'WHAT IT SHOWS:\n' + 'When enabled, plots colored circles and crosses directly on the ADX line:\n\n' + '• CIRCLES: Primary signals (Ignition/Exhaustion/Acceleration)\n' + '  - Color matches signal type\n' + '  - Size: 4 pixels\n' + '  - Position: Exactly on ADX value when signal fired\n\n' + '• CROSSES: Divergence signals\n' + '  - Bullish divergence: Purple/pink cross\n' + '  - Bearish divergence: Pink/purple cross\n' + '  - Size: 3 pixels\n\n' + 'BENEFITS:\n' + '+ Quick visual correlation between ADX level and signals\n' + '+ See if ignitions fire at consistent ADX levels\n' + '+ Identify your instrument\'s typical ignition/exhaustion zones\n' + '+ Useful for education and pattern recognition\n\n' + 'DRAWBACKS:\n' + '- Can clutter lower pane if many signals fire\n' + '- May overlap with Vortex Bands in crowded areas\n\n' + 'RECOMMENDATION: Keep enabled for analysis. Disable if lower pane too busy.')
+// ─────────────────────────────────────────────────────────────────────────────
+// 📏 SIGNAL LINES SETTINGS
+// ─────────────────────────────────────────────────────────────────────────────
+grpLines = '📏 Signal Lines'
+showSignalLines = input.bool(true, 'Show Signal Lines', group = grpLines, tooltip = 'Toggle horizontal signal lines at entry prices with automatic SL/TP levels.\n\n' + 'WHAT THIS CREATES:\n' + 'When any signal fires, draws a complete trade management system:\n' + '• Colored entry line at signal price\n' + '• Red stop loss line (SL)\n' + '• Green take profit lines (TP1, TP2, TP3)\n' + '• Text label showing signal type and status\n\n' + 'LINE BEHAVIOR:\n' + '• Lines extend forward from signal bar\n' + '• Track hits: TP lines dim when reached (✓ markers)\n' + '• Auto-delete when: SL hit, TP3 hit, expired, or price breaks back through entry\n' + '• Max 20 active lines (prevents overload)\n\n' + 'VISUAL TRACKING:\n' + '• Win: Green ✓ marker on chart\n' + '• Loss: Red ✗ marker on chart\n' + '• In-progress: Lines remain until resolved\n\n' + 'USE CASES:\n' + '+ Visual trade planning ("where\'s my stop?")\n' + '+ Performance tracking across visible chart\n' + '+ Learning signal quality patterns\n' + '+ Backtesting signal effectiveness visually\n\n' + 'DISABLE when:\n' + '- Chart too cluttered\n' + '- Using custom trade management\n' + '- Focused only on bias/direction, not exact levels\n\n' + 'NOTE: Lines are visual only - they don\'t execute trades automatically.')
+lineMaxBars = input.int(50, 'Max Line Length (bars)', minval = 10, maxval = 200, group = grpLines, tooltip = 'Maximum bars a signal line persists before expiration.\n\n' + 'WHAT IT CONTROLS:\n' + 'If a signal line isn\'t resolved (SL/TP hit) within this many bars, ' + 'it\'s automatically deleted as \'stale\' and no win/loss is recorded.\n\n' + 'TIMEFRAME GUIDELINES:\n' + '• 1m: 30-50 bars (30-50 minutes max hold)\n' + '• 5m: 50 bars (default, ~4 hours max)\n' + '• 1h: 50-100 bars (2-4 days max)\n' + '• 4h: 20-50 bars (3-8 days max)\n\n' + 'CONSIDERATIONS:\n' + 'SHORTER (20-30 bars):\n' + '+ Keeps chart clean\n' + '+ Focuses on recent/active signals\n' + '- May expire before slow trends reach targets\n' + '- Undercounts true performance\n\n' + 'LONGER (100-150 bars):\n' + '+ Gives trades time to develop\n' + '+ More accurate performance tracking\n' + '- Chart becomes cluttered with old lines\n' + '- Lines from ancient signals linger\n\n' + 'TRADING STYLE:\n' + '• Scalping: 20-30 (quick in/out)\n' + '• Day Trading: 50 (default)\n' + '• Swing Trading: 100-150 (patient targets)\n\n' + 'RECOMMENDATION: Match to your typical hold time. If trades usually resolve in 20 bars, ' + 'set to 30-40 for safety margin. If you swing trade, set to 100+.')
+lineStyle = input.string('Dashed', 'Line Style', options = ['Solid', 'Dashed', 'Dotted'], group = grpLines, tooltip = 'Visual style for entry signal lines.\n\n' + '• SOLID: Continuous line, most prominent\n' + '• DASHED: Broken line (default), clear but not overwhelming\n' + '• DOTTED: Subtle dots, minimal visual weight\n\n' + 'RECOMMENDATIONS:\n' + '• Cluttered charts: Use Dotted for subtlety\n' + '• Clear charts: Use Solid for maximum visibility\n' + '• Default: Dashed provides good balance\n\n' + 'NOTE: Only affects ENTRY lines. SL/TP lines always use dotted style for differentiation.')
+lineWidth = input.int(1, 'Line Width', minval = 1, maxval = 4, group = grpLines, tooltip = 'Thickness of entry signal lines.\n\n' + '• 1: Thin (default), subtle, professional\n' + '• 2: Medium, good visibility without dominating\n' + '• 3: Thick, highly visible\n' + '• 4: Very thick, maximum prominence\n\n' + 'DISPLAY CONSIDERATIONS:\n' + '• Small screens/mobile: 1-2 (avoid clutter)\n' + '• Large monitors: 2-3 (better visibility)\n' + '• Presentations/streaming: 3-4 (audience can see clearly)\n\n' + 'NOTE: Only affects ENTRY lines. SL/TP lines always width=1 to stay subtle.')
+showLineLabels = input.bool(true, 'Show Line Labels', group = grpLines, tooltip = 'Toggle text labels at the end of signal lines.\n\n' + 'WHEN ENABLED:\n' + 'Each signal line gets a label showing:\n' + '• Signal type (⚡IGN, 🔥EXH, 🚀ACC, 🔄DIV)\n' + '• TP status (✓ or ✓✓ when targets hit)\n' + '• Position: Just beyond line endpoint\n\n' + 'LABEL EXAMPLES:\n' + '• "⚡IGN" - Fresh ignition signal\n' + '• "⚡IGN ✓" - Ignition signal, TP1 reached\n' + '• "⚡IGN ✓✓" - Ignition signal, TP2 reached\n' + '• "🔥EXH" - Exhaustion signal\n\n' + 'BENEFITS:\n' + '+ Easy identification of signal types\n' + '+ Track partial profit-taking progress\n' + '+ Quick reference without checking source bar\n\n' + 'DRAWBACKS:\n' + '- Text can clutter price action area\n' + '- May overlap with other labels\n\n' + 'RECOMMENDATION: Keep enabled unless chart becomes too busy. ' + 'Labels are small and positioned to minimize interference.')
+labelTransparency = input.int(85, 'Label Background Transparency', minval = 0, maxval = 100, group = grpLines, tooltip = 'Transparency level for signal line label backgrounds.\n\n' + 'SCALE:\n' + '• 0: Fully opaque (solid background)\n' + '• 50: Semi-transparent\n' + '• 85: Mostly transparent (default)\n' + '• 100: Completely transparent (text only, no background)\n\n' + 'RECOMMENDATIONS:\n' + '• Clean charts: 85-95 (subtle, professional)\n' + '• Busy charts: 70-80 (more visible)\n' + '• High contrast needs: 50-60 (backgrounds stand out)\n' + '• Minimalist: 100 (just colored text)\n\n' + 'PURPOSE:\n' + 'Label backgrounds prevent text from blending into price action. ' + 'Higher transparency keeps chart clean while maintaining readability.\n\n' + 'NOTE: Text color is always fully opaque (matches signal color). ' + 'This setting only affects the white background behind the text.')
+lineSLMultiplier = input.float(1.5, 'Stop Loss (xATR)', minval = 0.5, maxval = 5.0, step = 0.1, group = grpLines, tooltip = 'Stop loss distance as a multiplier of 14-period ATR (Average True Range).\n\n' + 'CALCULATION:\n' + 'SL Distance = ATR(14) × This Multiplier\n' + '• Long: SL = Entry - (ATR × Multiplier)\n' + '• Short: SL = Entry + (ATR × Multiplier)\n\n' + 'MULTIPLIER GUIDELINES:\n' + '• 0.5-1.0: Tight stops, scalping\n' + '  + Minimize loss on false signals\n' + '  + Better risk/reward ratio\n' + '  - High stop-out rate\n' + '  - Doesn\'t give trade room to breathe\n\n' + '• 1.0-2.0: Moderate stops, day trading (default 1.5)\n' + '  + Balance protection and flexibility\n' + '  + Works across most instruments/timeframes\n' + '  - May be too tight in volatile instruments\n\n' + '• 2.0-3.0: Wide stops, swing trading\n' + '  + Survives normal volatility\n' + '  + Good for trending instruments\n' + '  - Larger position size reduction required\n' + '  - Lower R:R on paper (but higher win rate)\n\n' + '• 3.0+: Very wide, position trading\n' + '  + Rarely stopped out\n' + '  - Substantial capital at risk\n\n' + 'TIMEFRAME TUNING:\n' + '• 1m: 1.0-1.5 (tight, quick exits)\n' + '• 5m: 1.5 (default)\n' + '• 1h: 1.5-2.0\n' + '• 4h: 2.0-3.0 (give room for retracements)\n\n' + 'INSTRUMENT VARIATIONS:\n' + '• Low volatility (ES): 1.0-1.5\n' + '• Medium volatility (NQ): 1.5-2.0\n' + '• High volatility (crypto): 2.0-3.0\n\n' + 'PRO TIP: ATR-based stops adapt to volatility automatically. ' + 'During high volatility, stops widen naturally. During low volatility, they tighten.')
+lineTP1Multiplier = input.float(1.0, 'Take Profit 1 (xATR)', minval = 0.5, maxval = 5.0, step = 0.1, group = grpLines, tooltip = 'First take profit target as a multiplier of 14-period ATR.\n\n' + 'PURPOSE:\n' + 'TP1 is your QUICK PROFIT target - designed to:\n' + '• Reduce risk by taking partial profits early\n' + '• Move stop to breakeven after TP1 hit\n' + '• Ensure \'some win\' on every signal\n\n' + 'CALCULATION:\n' + 'TP1 Distance = ATR(14) × This Multiplier\n' + '• Long: TP1 = Entry + (ATR × Multiplier)\n' + '• Short: TP1 = Entry - (ATR × Multiplier)\n\n' + 'STANDARD APPROACH:\n' + 'TP1 = 1.0 ATR (default)\n' + '• With SL at 1.5 ATR, this gives 1:1.5 risk/reward to first target\n' + '• Close 50% of position here\n' + '• Move stop to breakeven\n' + '• Let remaining 50% run to TP2/TP3\n\n' + 'MULTIPLIER SELECTION:\n' + '• 0.5-0.75: Very quick profits, scalping\n' + '  + Lock in gains fast\n' + '  + High hit rate\n' + '  - Small profits\n' + '  - May exit before move develops\n\n' + '• 1.0: Balanced (default)\n' + '  + Good hit rate (~70%+)\n' + '  + Meaningful profit\n' + '  + Allows trend to develop for TP2/TP3\n\n' + '• 1.5-2.0: Patient first target\n' + '  + Larger initial profit\n' + '  - Lower hit rate\n' + '  - Risk of missing TP1 on smaller moves\n\n' + 'TIMEFRAME RECOMMENDATIONS:\n' + '• 1m: 0.75-1.0 (quick in/out)\n' + '• 5m: 1.0 (default)\n' + '• 1h: 1.0-1.5\n' + '• 4h: 1.5-2.0 (give trend room)\n\n' + 'RELATIONSHIP TO OTHER TARGETS:\n' + 'Typical ratio: TP1 : TP2 : TP3 = 1.0 : 2.0 : 3.0\n' + 'This creates:\n' + '• 50% off at 1R\n' + '• 30% off at 2R\n' + '• 20% runner to 3R\n\n' + 'PRO TIP: TP1 should be easily achievable (70%+ hit rate). ' + 'If your TP1 rarely hits, you\'re being too greedy - lower the multiplier.')
+lineTP2Multiplier = input.float(2.0, 'Take Profit 2 (xATR)', minval = 1.0, maxval = 10.0, step = 0.1, group = grpLines, tooltip = 'Second take profit target as a multiplier of 14-period ATR.\n\n' + 'PURPOSE:\n' + 'TP2 is your PRIMARY PROFIT target - the main goal for most trades:\n' + '• Substantial profit capture\n' + '• Balance between realism and ambition\n' + '• Where 30-40% of position typically exits\n\n' + 'CALCULATION:\n' + 'TP2 Distance = ATR(14) × This Multiplier\n' + '• Long: TP2 = Entry + (ATR × Multiplier)\n' + '• Short: TP2 = Entry - (ATR × Multiplier)\n\n' + 'STANDARD APPROACH:\n' + 'TP2 = 2.0 ATR (default)\n' + '• With SL at 1.5 ATR, gives 1.33:1 risk/reward to TP2\n' + '• Close 30-40% here (after already taking 50% at TP1)\n' + '• Trail stop for remaining position to TP3\n\n' + 'MULTIPLIER SELECTION:\n' + '• 1.0-1.5: Conservative (essentially same as TP1)\n' + '  + Very high hit rate\n' + '  + Quick full exits\n' + '  - Leaves money on table in strong trends\n' + '  - Not recommended (just use TP1)\n\n' + '• 1.5-2.5: Moderate targets\n' + '  + Good balance of realism and profit\n' + '  + 50-60% hit rate typical\n' + '  + Works well for day trading\n\n' + '• 2.5-4.0: Aggressive targets  \n' + '  + Captures strong trend moves\n' + '  + Better for swing trading\n' + '  - Lower hit rate (30-40%)\n' + '  - Requires patience\n\n' + '• 4.0+: Very ambitious\n' + '  + Only in major trends\n' + '  - Most trades won\'t reach\n\n' + 'TIMEFRAME RECOMMENDATIONS:\n' + '• 1m: 1.5-2.0 (moves are limited)\n' + '• 5m: 2.0 (default, balanced)\n' + '• 1h: 2.0-3.0 (more runway)\n' + '• 4h: 3.0-5.0 (major swings)\n\n' + 'INSTRUMENT VARIATIONS:\n' + '• Low volatility (ES): 1.5-2.0\n' + '• Medium volatility (NQ): 2.0-2.5\n' + '• High volatility (crypto): 2.5-4.0\n\n' + 'OPTIMIZATION:\n' + 'Use the Optimizer Engine to backtest different multipliers. ' + 'Target 40-60% TP2 hit rate for optimal balance.')
+lineTP3Multiplier = input.float(3.0, 'Final Take Profit (xATR)', minval = 1.5, maxval = 15.0, step = 0.1, group = grpLines, tooltip = 'Third and final take profit target as a multiplier of 14-period ATR.\n\n' + 'PURPOSE:\n' + 'TP3 is your RUNNER target - the \'home run\' exit:\n' + '• Captures exceptional trend moves\n' + '• Allows small portion to maximize in strong trends\n' + '• Final exit point before signal line expires\n' + '• Typically only 10-20% of original position\n\n' + 'CALCULATION:\n' + 'TP3 Distance = ATR(14) × This Multiplier\n' + '• Long: TP3 = Entry + (ATR × Multiplier)\n' + '• Short: TP3 = Entry - (ATR × Multiplier)\n\n' + 'STANDARD APPROACH:\n' + 'TP3 = 3.0 ATR (default)\n' + '• With SL at 1.5 ATR, gives 2:1 risk/reward to final target\n' + '• Only 10-20% of position reaches here\n' + '• But when it hits, contributes significantly to overall P&L\n\n' + 'MULTIPLIER SELECTION:\n' + '• 2.0-3.0: Moderate runners\n' + '  + Realistic in day trading scenarios\n' + '  + 20-30% hit rate\n' + '  + Best for 1m/5m timeframes\n\n' + '• 3.0-5.0: Standard runners (default zone)\n' + '  + Good for swing moves\n' + '  + 10-20% hit rate\n' + '  + Best for 1h/4h timeframes\n\n' + '• 5.0-8.0: Ambitious runners\n' + '  + Only in major trending markets\n' + '  + 5-10% hit rate\n' + '  + Crypto, high volatility scenarios\n\n' + '• 8.0+: Extreme runners\n' + '  + Rarely hits (< 5%)\n' + '  + But captures once-in-a-week monster moves\n' + '  + 4h timeframe, strong trending instruments\n\n' + 'TIMEFRAME RECOMMENDATIONS:\n' + '• 1m: 2.0-3.0 (limited move potential)\n' + '• 5m: 3.0 (default)\n' + '• 1h: 4.0-6.0 (significant swing potential)\n' + '• 4h: 6.0-10.0 (major trend captures)\n\n' + 'PHILOSOPHY:\n' + 'TP3 is about letting winners run while protecting profits already banked. ' + 'Since you\'ve already exited 80-90% of position, this small remainder can be aggressive.\n\n' + 'TRAILING STRATEGY:\n' + 'After TP2 hit, consider:\n' + '• Trailing stop at TP1 level (protect profit)\n' + '• OR trail using ADX exhaustion signals\n' + '• OR manual trail based on price structure\n\n' + 'The signal line will close automatically if TP3 hits OR if max bars exceeded.')
+showSLTPLines = input.bool(true, 'Show SL/TP Lines', group = grpLines, tooltip = 'Toggle visibility of Stop Loss and Take Profit lines.\n\n' + 'WHEN ENABLED:\n' + 'Shows dotted lines at calculated SL/TP levels:\n' + '• Red line: Stop Loss\n' + '• Green lines (3): Take Profit 1, 2, and 3\n' + '  - TP1: Most opaque (60% transparency)\n' + '  - TP2: Medium opacity (40% transparency)  \n' + '  - TP3: Least opaque (0% transparency)\n\n' + 'VISUAL FEEDBACK:\n' + 'When a TP is hit, its line becomes very faint (90% transparency) ' + 'to show it\'s been achieved while keeping it visible for reference.\n\n' + 'BENEFITS:\n' + '+ Clear risk/reward visualization BEFORE entering\n' + '+ Set mental price levels for trade management\n' + '+ Plan position sizing based on stop distance\n' + '+ Track multiple trades simultaneously\n\n' + 'DRAWBACKS:\n' + '- Can clutter chart significantly (4 extra lines per signal)\n' + '- May create visual noise with many active signals\n\n' + 'WHEN TO DISABLE:\n' + '• You manage trades with separate order entry tools\n' + '• Chart becomes too cluttered (20 signals = 80 extra lines)\n' + '• You only want entry levels, not full management\n' + '• Using signal lines purely for backtesting/analysis\n\n' + 'NOTE: Entry lines always show regardless of this setting. ' + 'This only controls the SL/TP lines.')
+slLineColor = input.color(#FF0000, 'SL Line Color', group = grpLines, tooltip = 'Color for Stop Loss lines.\n\n' + 'DEFAULT: Red (#FF0000)\n' + 'Standard color association: Red = danger/stop/exit\n\n' + 'CUSTOMIZATION:\n' + 'You can change this to match your personal color scheme or ' + 'to differentiate from other indicators/tools on your chart.\n\n' + 'VISIBILITY TIPS:\n' + '• Light backgrounds: Use darker shades (#CC0000)\n' + '• Dark backgrounds: Use brighter reds (default #FF0000)\n' + '• Color blindness: Consider orange (#FF6600) instead of red\n\n' + 'This color applies to ALL stop loss lines from all signals.')
+tpLineColor = input.color(#00FF00, 'TP Line Color', group = grpLines, tooltip = 'Color for Take Profit lines.\n\n' + 'DEFAULT: Green (#00FF00)\n' + 'Standard color association: Green = profit/target/success\n\n' + 'CUSTOMIZATION:\n' + 'You can change this to match your personal color scheme or ' + 'to differentiate from other indicators/tools on your chart.\n\n' + 'TRANSPARENCY BEHAVIOR:\n' + 'This is the BASE color. The indicator automatically creates:\n' + '• TP1: This color at 60% transparency (faintest)\n' + '• TP2: This color at 40% transparency (medium)\n' + '• TP3: This color at 0% transparency (brightest)\n\n' + 'VISIBILITY TIPS:\n' + '• Light backgrounds: Use darker greens (#00CC00)\n' + '• Dark backgrounds: Use brighter greens (default #00FF00)\n' + '• Color blindness: Consider blue (#0088FF) instead of green\n\n' + 'This color applies to ALL take profit lines from all signals.')
+grpPhase = '🌙 Trend Phase'
+enablePhases = input.bool(true, 'Enable Phase Detection', group = grpPhase, tooltip = 'Toggle the six-phase trend lifecycle detection system.\n\n' + 'PHASE SYSTEM:\n' + 'When enabled, continuously monitors and classifies market into one of six phases:\n\n' + '💤 DORMANT: No trend, range-bound (ADX < 20)\n' + '⚡ IGNITION: Trend beginning (acceleration spike while ADX low)\n' + '🚀 ACCELERATION: Trend building (ADX 20-40, positive momentum)\n' + '🏔 MATURE: Trend established (ADX > 40, flat velocity)\n' + '🔥 EXHAUSTION: Trend weakening (ADX high, negative acceleration)\n' + '📉 DECLINE: Trend fading (ADX falling back down)\n\n' + 'WHEN ENABLED:\n' + '+ Phase displayed in dashboard with color coding\n' + '+ Phase icon shows current state visually\n' + '+ Vortex Bands change color based on phase\n' + '+ Primary signals (Ignition/Exhaustion/Acceleration) generated\n' + '+ Confirmation bars applied before phase transitions\n\n' + 'WHEN DISABLED:\n' + '- No phase classification\n' + '- No primary signals (Ignition/Exhaustion/Acceleration disabled)\n' + '- Dashboard shows generic information only\n' + '- Vortex Bands use generic coloring\n' + '- Divergence signals still work (independent system)\n\n' + 'USE CASES FOR DISABLING:\n' + '• Focus purely on divergence trading\n' + '• Simplify indicator to ADX + Vortex Bands only\n' + '• Educational purposes (teach basic ADX first)\n' + '• Reduce computational load (minimal impact though)\n\n' + 'RECOMMENDATION: Keep ENABLED. Phase detection is the core innovation ' + 'of this suite and powers the highest-quality signals.')
+grpDivergence = '🔄 Divergence'
+enableDivergence = input.bool(true, 'Enable Divergence', group = grpDivergence, tooltip = 'Toggle divergence detection between price and ADX.\n\n' + 'DIVERGENCE THEORY:\n' + 'Divergences occur when price and ADX move in opposite directions:\n\n' + '• BULLISH DIVERGENCE (Purple/Pink X marker):\n' + '  - Price making lower lows (falling)\n' + '  - ADX making higher lows (rising)\n' + '  = Trend strength building despite price weakness\n' + '  = Potential reversal UP or trend continuation after pullback\n\n' + '• BEARISH DIVERGENCE (Pink X marker):\n' + '  - Price making higher highs (rising)\n' + '  - ADX making lower highs (falling)\n' + '  = Trend strength fading despite price strength\n' + '  = Potential reversal DOWN or trend exhaustion\n\n' + 'WHEN ENABLED:\n' + '+ X markers on price chart (small size)\n' + '+ X markers on ADX line (if showDotsOnADX enabled)\n' + '+ Signal lines created with 🔄DIV label\n' + '+ Dashboard shows divergence status\n\n' + 'WHEN DISABLED:\n' + '- No divergence detection or signals\n' + '- Simpler chart, focus on phase signals only\n\n' + 'TRADING APPLICATIONS:\n' + '• Counter-trend entries (reversal plays)\n' + '• Trend exhaustion confirmation\n' + '• Add to positions on trend pullbacks (bullish div in uptrend)\n' + '• Early exit warnings (bearish div near tops)\n\n' + 'BEST TIMEFRAMES:\n' + '• 5m: Scalping divergence plays\n' + '• 1h: Swing divergence signals (most reliable)\n' + '• 4h: Major reversal warnings\n\n' + 'CAUTION:\n' + 'Divergences are REVERSAL signals - they work AGAINST current trend. ' + 'Use carefully and combine with higher timeframe confirmation.')
+divLookback = input.int(14, 'Lookback', minval = 5, maxval = 50, group = grpDivergence, tooltip = 'Period for comparing price vs. ADX slope to detect divergences.\n\n' + 'WHAT IT CONTROLS:\n' + 'Compares current bar to N bars ago:\n' + '• If price slope and ADX slope diverge significantly = divergence signal\n' + '• Longer lookback = identifies bigger, more significant divergences\n' + '• Shorter lookback = catches quicker, smaller divergences\n\n' + 'TIMEFRAME RECOMMENDATIONS:\n' + '• 1m: 10-14 (quick divergences, rapid reversals)\n' + '• 5m: 14 (default, balanced)\n' + '• 1h: 14-21 (longer lookback for meaningful divergences)\n' + '• 4h: 21-30 (major divergence patterns)\n\n' + 'LOOKBACK EFFECTS:\n' + 'SHORTER (5-10):\n' + '+ Catches quick divergences\n' + '+ More signals\n' + '+ Good for scalping\n' + '- Many false positives\n' + '- May trigger on normal volatility\n\n' + 'MEDIUM (14-21): Default Range\n' + '+ Balanced quality/quantity\n' + '+ Works across most timeframes\n' + '+ Established standard in TA\n\n' + 'LONGER (30-50):\n' + '+ Only major, significant divergences\n' + '+ Higher quality signals\n' + '+ Better for swing trading\n' + '- Miss short-term opportunities\n' + '- Very few signals\n\n' + 'RELATIONSHIP TO SENSITIVITY:\n' + 'Lookback and Sensitivity work together:\n' + '• Long lookback + high sensitivity = very rare signals\n' + '• Short lookback + low sensitivity = many signals\n' + '• Default (14, 1.5) = balanced approach')
+divSensitivity = input.float(1.5, 'Sensitivity', minval = 0.5, maxval = 3.0, step = 0.1, group = grpDivergence, tooltip = 'Normalized slope threshold for divergence detection (in standard deviations).\n\n' + 'HOW IT WORKS:\n' + 'Both price and ADX slopes are normalized (Z-Score) then compared. ' + 'For divergence signal:\n' + '• Price slope must exceed +/-1.5σ (default)\n' + '• ADX slope must exceed opposite direction by 1.5σ\n' + '• Higher value = more extreme divergence required\n\n' + 'SENSITIVITY LEVELS:\n' + '• 0.5-1.0: Very sensitive\n' + '  + Many divergence signals\n' + '  + Catch subtle divergences\n' + '  - High false positive rate\n' + '  - Signal spam in choppy markets\n\n' + '• 1.0-1.5: Moderate (default 1.5)\n' + '  + Balanced signal quality\n' + '  + Filters noise effectively\n' + '  + Good hit rate on divergences\n\n' + '• 1.5-2.5: Conservative\n' + '  + Only strong, clear divergences\n' + '  + Very high quality signals\n' + '  - May miss valid but subtle divergences\n' + '  - Few signals\n\n' + '• 2.5+: Ultra-conservative\n' + '  + Extremely rare signals\n' + '  + Only major reversals/exhaustions\n' + '  - Too few to trade effectively\n\n' + 'TIMEFRAME TUNING:\n' + '• 1m: 2.0-2.5 (noise is extreme)\n' + '• 5m: 1.5-2.0 (default at 1.5)\n' + '• 1h: 1.0-1.5 (cleaner data)\n' + '• 4h: 1.0 (divergences rare but meaningful)\n\n' + 'MARKET ADAPTATION:\n' + '• Trending markets: 1.0-1.5 (divergences matter)\n' + '• Choppy markets: 2.0+ (avoid false signals)\n' + '• High volatility: 2.0+ (filter noise)\n\n' + 'OPTIMIZATION TIP:\n' + 'If getting too many divergence signals, increase this. ' + 'If missing obvious divergences visually, decrease this. ' + 'The \'sweet spot\' varies by instrument - backtest to find yours.')
+grpVortex = '🌀 QUANTUM VORTEX BANDS™'
+showVortex = input.bool(true, 'Show Vortex Bands', group = grpVortex, tooltip = 'Toggle the Quantum Vortex Bands in the lower pane.\n\n' + 'WHAT ARE VORTEX BANDS?\n' + 'Dynamic support/resistance zones for ADX itself, creating a \'channel\' ' + 'that adapts to both volatility and curvature (acceleration).\n\n' + 'COMPOSITION:\n' + '• Central Basis: 21-period EMA of ADX\n' + '• 6 Bands: 3 above and 3 below basis\n' + '• Band Width: ADX standard deviation × sensitivity × volatility multiplier\n' + '• Fill Colors: Change based on trend phase and direction\n\n' + 'WHEN ENABLED:\n' + '+ Visual context for ADX extremes\n' + '+ Phase-colored fills show trend health\n' + '+ Expansion/contraction indicates volatility changes\n' + '+ Helps identify when ADX is \'overbought/oversold\'\n\n' + 'WHEN DISABLED:\n' + '- Cleaner lower pane (just ADX line)\n' + '- Focus purely on ADX value and signals\n' + '- Reduced visual complexity\n\n' + 'INTERPRETATION:\n' + '• ADX at upper bands: Strong momentum, potential exhaustion ahead\n' + '• ADX at lower bands: Weak trend, potential ignition setup\n' + '• ADX in middle: Normal behavior\n' + '• Band expansion: Volatility/acceleration increasing\n' + '• Band contraction: Consolidation, low volatility\n\n' + 'BEST PRACTICES:\n' + '• Use bands to contextualize ADX levels\n' + '• When ADX touches upper band + exhaustion signal = high conviction exit\n' + '• When ADX at lower band + ignition signal = high conviction entry\n' + '• Band color gives quick phase recognition\n\n' + 'RECOMMENDATION: Keep enabled for complete picture. Vortex Bands add ' + 'significant value without cluttering - they\'re subtle yet informative.')
+vortexMode = input.string('Triple Layer', 'Band Mode', options = ['Triple Layer', 'Fractal Cloud', 'Momentum Tunnel', 'Phase Spectrum'], group = grpVortex, tooltip = 'Select Vortex Band geometry mode (affects band spacing and visual style).\n\n' + '🔷 TRIPLE LAYER (Default - Recommended)\n' + 'Balanced band configuration with three distinct zones:\n' + '• Outer bands: 2.0× standard width\n' + '• Middle bands: 1.2× standard width\n' + '• Inner bands: 0.5× standard width\n' + 'Best for: General purpose, all instruments, all timeframes\n' + 'Visual: Clear separation between zones, easy interpretation\n\n' + '🔷 FRACTAL CLOUD\n' + 'Wide outer bands with tight core:\n' + '• Outer bands: 2.5× (widest)\n' + '• Middle bands: 1.5×\n' + '• Inner bands: 0.5× (tight core)\n' + 'Best for: High volatility instruments (NQ futures, crypto, small caps)\n' + 'Visual: \'Cloud-like\' outer envelope, emphasizes extreme movements\n' + 'Use when: ADX frequently spikes to extremes\n\n' + '🔷 MOMENTUM TUNNEL\n' + 'Narrow focus with thick center lines:\n' + '• Outer bands: 1.8×\n' + '• Middle bands: 0.6× (thin)\n' + '• Inner bands: 0.15× (VERY thick - linewidth 4)\n' + 'Best for: Scalping (1m/5m), tight ADX ranges, precision trading\n' + 'Visual: Bold center \'tunnel\', subtle outer bands\n' + 'Use when: You want to focus on ADX staying within tight range\n\n' + '🔷 PHASE SPECTRUM\n' + 'Balanced configuration similar to Triple Layer but optimized for color:\n' + '• Slightly tighter bands overall (1.5× outer vs 2.0×)\n' + '• Emphasizes phase-based color changes\n' + '• Cleaner visual for presentations/streams\n' + 'Best for: Learning, teaching, visual phase identification\n' + 'Visual: Elegant, professional, phase colors prominent\n\n' + 'SELECTION GUIDE:\n' + '• New users: Start with Triple Layer\n' + '• ES/SPY traders: Triple Layer or Phase Spectrum\n' + '• NQ/Crypto traders: Fractal Cloud\n' + '• 1m/5m scalpers: Momentum Tunnel\n' + '• Swing traders (1h/4h): Triple Layer or Phase Spectrum\n' + '• Streamers/educators: Phase Spectrum\n\n' + 'NOTE: All modes adapt width based on volatility multiplier setting. ' + 'The mode only affects the GEOMETRY (spacing ratios), not the adaptive behavior.')
+vortexSensitivity = input.float(1.5, 'Band Width Multiplier', minval = 0.5, maxval = 4.0, step = 0.1, group = grpVortex, tooltip = 'Master multiplier for ALL Vortex Band widths. Higher = wider bands.\n\n' + 'WHAT IT CONTROLS:\n' + 'Base band width = ADX StdDev × Curvature Influence × THIS MULTIPLIER\n' + 'Then each band uses its mode-specific spacing ratio.\n\n' + 'MULTIPLIER LEVELS:\n' + '• 0.5-1.0: Narrow bands\n' + '  + Tight zones, more sensitive to ADX movements\n' + '  + ADX frequently touches/exceeds bands\n' + '  + Good for: Low volatility instruments, tight ranging ADX\n' + '  - May be too sensitive\n\n' + '• 1.0-2.0: Moderate bands (default 1.5)\n' + '  + Balanced width across most scenarios\n' + '  + ADX reaches extremes meaningfully but not constantly\n' + '  + Good for: Standard trading, most instruments/timeframes\n\n' + '• 2.0-3.0: Wide bands\n' + '  + Generous zones, less sensitive\n' + '  + ADX rarely touches outer bands\n' + '  + Good for: High volatility, crypto, when you want bands as guides only\n\n' + '• 3.0+: Very wide bands\n' + '  + Bands become more decorative than functional\n' + '  + ADX almost never reaches outer bands\n' + '  - May be too wide to be useful\n\n' + 'TIMEFRAME TUNING:\n' + '• 1m: 1.0-1.5 (tighter, ADX moves quickly)\n' + '• 5m: 1.5 (default)\n' + '• 1h: 1.5-2.0 (can afford wider bands)\n' + '• 4h: 2.0-2.5 (longer timeframe, give more room)\n\n' + 'INSTRUMENT TUNING:\n' + '• Low volatility (Bonds, Major FX): 1.0-1.5\n' + '• Medium volatility (ES, SPY, Large Cap Stocks): 1.5\n' + '• High volatility (NQ, Tech Stocks): 1.5-2.0\n' + '• Very high volatility (Crypto, Small Caps): 2.0-3.0\n\n' + 'ADAPTIVE BEHAVIOR:\n' + 'Bands automatically adapt to:\n' + '1. ADX volatility (via standard deviation)\n' + '2. Curvature state (acceleration increases width)\n' + '3. This multiplier (your manual control)\n\n' + 'OPTIMIZATION:\n' + 'Ideal setting: ADX should touch upper band ~10% of time in strong trends, ' + 'and touch lower band ~10% of time in dormant periods. If constantly exceeding, increase. ' + 'If never reaching, decrease.')
+showVortexGlow = input.bool(true, 'Show Glow Effect', group = grpVortex, tooltip = 'Toggle subtle glow effect on center vortex bands.\n\n' + 'WHAT IT DOES:\n' + 'Plots an additional wide, highly transparent line (linewidth 10, 88% transparent) ' + 'along the inner bands (band3/band4) to create a soft \'glow\' effect.\n\n' + 'WHEN ENABLED:\n' + '+ Adds depth and dimension to bands\n' + '+ Creates more professional, polished appearance\n' + '+ Subtle visual emphasis on center zone\n' + '+ Matches modern indicator aesthetics\n\n' + 'WHEN DISABLED:\n' + '- Sharp, clean bands with no glow\n' + '- Slightly less visual weight in lower pane\n' + '- More \'classic\' indicator appearance\n\n' + 'PERFORMANCE:\n' + 'Minimal impact - just one additional plot with high transparency.\n\n' + 'RECOMMENDATION:\n' + 'Keep enabled for aesthetics. Disable if:\n' + '• You prefer minimalist sharp lines\n' + '• Lower pane feels too \'heavy\' visually\n' + '• You want to reduce any plot overhead (negligible though)')
+vortexTransparency = input.int(85, 'Fill Transparency', minval = 70, maxval = 95, group = grpVortex, tooltip = 'Transparency level for Vortex Band fills (the colored zones between bands).\n\n' + 'SCALE:\n' + '• 70: More opaque, fills are prominent\n' + '• 85: Default, subtle yet visible\n' + '• 95: Very transparent, almost invisible\n\n' + 'TRANSPARENCY EFFECTS:\n' + 'LOWER (70-80): More visible fills\n' + '+ Band zones clearly distinguished\n' + '+ Phase colors prominent\n' + '+ Good for presentations, education\n' + '- Can overwhelm lower pane\n' + '- May distract from ADX line itself\n\n' + 'MEDIUM (80-90): Balanced (default 85)\n' + '+ Visible but not overwhelming\n' + '+ Professional appearance\n' + '+ ADX line remains focal point\n\n' + 'HIGHER (90-95): Very subtle\n' + '+ Minimalist aesthetic\n' + '+ ADX line and signals dominate\n' + '+ Bands provide context without distraction\n' + '- Phase colors barely visible\n' + '- May be too subtle to be useful\n\n' + 'COLOR SYSTEM:\n' + 'Fills use phase-adaptive colors:\n' + '• Bull phases (IGNITION/ACCELERATION/MATURE): Variations of bullColor\n' + '• Bear phases (EXHAUSTION/DECLINE): Variations of bearColor\n' + '• DORMANT: neutralColor\n' + 'This transparency applies uniformly to all phase fills.\n\n' + 'DISPLAY CONSIDERATIONS:\n' + '• Dark theme: 85-90 (avoid too bright)\n' + '• Light theme: 80-85 (need more opacity for visibility)\n' + '• Streaming/presenting: 75-80 (audience needs to see)\n\n' + 'RECOMMENDATION: Default 85 works well for most scenarios. Adjust by ±5 based on preference.')
+grpOpt = '🧪 Optimizer Engine'
+optMode = input.bool(false, 'Enable Optimizer', group = grpOpt, tooltip = 'Toggle the built-in backtesting optimizer engine.\n\n' + '⚠️ IMPORTANT: This is a SIMULATION tool, not a live trading engine.\n\n' + 'WHAT IT DOES:\n' + 'When enabled, runs a simplified backtest across ALL visible chart data:\n' + '• Enters on strong ignition signals (igniting OR curvature spike)\n' + '• Exits on: SL hit, TP hit, or opposite exhaustion signal\n' + '• Tracks: Win rate, profit factor, total trades, expectancy\n' + '• Calculates stability score (ROBUST/STABLE/FRAGILE/OVERFIT)\n\n' + 'WHEN ENABLED:\n' + '+ Dashboard shows Optimizer section with backtest metrics\n' + '+ Can test different TP/SL multipliers quickly\n' + '+ Visual feedback on signal quality\n' + '+ Stability rating guides live trading decisions\n\n' + 'WHEN DISABLED:\n' + '- No backtest runs (saves computation)\n' + '- Dashboard hides Optimizer section\n' + '- Cleaner dashboard for live trading\n\n' + 'HOW TO USE:\n' + '1. Load historical data (500+ bars minimum)\n' + '2. Enable Optimizer\n' + '3. Adjust TP/SL multipliers below\n' + '4. Check dashboard for Win Rate, Profit Factor, Stability\n' + '5. Iterate until reaching ROBUST or STABLE rating\n' + '6. Use those settings for live trading\n\n' + 'LIMITATIONS:\n' + '❗ Simplified Logic: Uses basic entry/exit rules, not full strategy\n' + '❗ No Slippage: Assumes perfect fills at exact prices\n' + '❗ No Commissions: Doesn\'t factor in fees\n' + '❗ No Position Sizing: Trades fixed 1-unit size\n' + '❗ Hindsight Bias: Can see future price action during calculation\n\n' + 'WHAT TO LOOK FOR:\n' + '• Win Rate: Target 50-60%\n' + '• Profit Factor: Target 1.5+ (ROBUST requires 1.5+)\n' + '• Total Trades: Minimum 20 for statistical relevance\n' + '• Stability: ROBUST or STABLE before going live\n\n' + 'TIMEFRAME REQUIREMENTS:\n' + '• 1m: 500+ bars (8+ hours of data)\n' + '• 5m: 500+ bars (2+ days)\n' + '• 1h: 500+ bars (3+ weeks)\n' + '• 4h: 500+ bars (3+ months)\n\n' + 'WARNING:\n' + 'This is NOT a replacement for proper backtesting with platforms like TradingView\'s ' + 'Strategy Tester. Use this for QUICK parameter optimization only. Always validate with ' + 'comprehensive backtesting before risking real capital.\n\n' + 'RECOMMENDATION: Enable during setup/optimization phase. Disable during live trading ' + 'to reduce dashboard clutter and computation.')
+optTP = input.float(2.0, 'TP (xATR)', minval = 0.5, maxval = 10.0, step = 0.1, group = grpOpt, tooltip = 'Take Profit multiplier for Optimizer backtesting (ATR-based).\n\n' + 'NOTE: Only active when \'Enable Optimizer\' is ON.\n\n' + 'WHAT IT CONTROLS:\n' + 'TP Distance = ATR(14) × This Multiplier\n' + 'The optimizer enters trades on strong signals and exits at:\n' + '• This TP level (profit)\n' + '• SL level (loss)\n' + '• Opposite signal (discretionary exit)\n\n' + 'MULTIPLIER TESTING:\n' + 'Use this to find optimal TP for your instrument/timeframe:\n\n' + '• Start at 2.0 (default)\n' + '• Check Win Rate and Profit Factor\n' + '• If Win Rate < 50%: Lower TP (try 1.5)\n' + '• If Win Rate > 65%: Raise TP (try 2.5 or 3.0)\n' + '• Goal: 50-60% Win Rate with Profit Factor > 1.5\n\n' + 'REALISTIC TARGETS:\n' + '• 1m timeframe: 1.5-2.0 ATR (quick moves)\n' + '• 5m timeframe: 2.0-2.5 ATR (balanced)\n' + '• 1h timeframe: 2.5-4.0 ATR (swing potential)\n' + '• 4h timeframe: 4.0-6.0 ATR (major trends)\n\n' + 'RELATIONSHIP TO SL:\n' + 'Maintain at minimum 1:1 risk/reward:\n' + '• If SL = 1.5 ATR, TP should be ≥ 1.5 ATR\n' + '• Recommended ratio: 1.5:2.0 (SL:TP) = 1.33 R:R\n\n' + 'OPTIMIZATION WORKFLOW:\n' + '1. Set TP conservatively (1.5)\n' + '2. Note win rate\n' + '3. Increase TP gradually (1.6, 1.7, 1.8...)\n' + '4. Stop when Profit Factor peaks\n' + '5. That\'s your optimal TP for visible data\n\n' + 'NOTE: This affects OPTIMIZER ONLY. Your Signal Lines use separate TP1/TP2/TP3 multipliers.')
+optSL = input.float(1.5, 'SL (xATR)', minval = 0.5, maxval = 10.0, step = 0.1, group = grpOpt, tooltip = 'Stop Loss multiplier for Optimizer backtesting (ATR-based).\n\n' + 'NOTE: Only active when \'Enable Optimizer\' is ON.\n\n' + 'WHAT IT CONTROLS:\n' + 'SL Distance = ATR(14) × This Multiplier\n' + 'The optimizer\'s simulated trades are stopped out if price moves against position by this amount.\n\n' + 'MULTIPLIER TESTING:\n' + 'Use this to find optimal SL for your instrument/timeframe:\n\n' + '• Start at 1.5 (default)\n' + '• Check Win Rate\n' + '• If Win Rate < 40%: SL too tight, widen to 2.0\n' + '• If Win Rate > 70%: SL too wide, tighten to 1.0-1.2\n' + '• Goal: Balanced win rate with acceptable max loss\n\n' + 'REALISTIC STOPS:\n' + '• 1m timeframe: 1.0-1.5 ATR (tight, quick exits)\n' + '• 5m timeframe: 1.5 ATR (default, balanced)\n' + '• 1h timeframe: 1.5-2.0 ATR (room for retracements)\n' + '• 4h timeframe: 2.0-3.0 ATR (major swing room)\n\n' + 'VOLATILITY ADAPTATION:\n' + '• Low volatility instruments: 1.0-1.5 ATR\n' + '• Medium volatility: 1.5-2.0 ATR\n' + '• High volatility (NQ, crypto): 2.0-3.0 ATR\n\n' + 'RELATIONSHIP TO TP:\n' + 'Risk/Reward Ratio = TP / SL\n' + '• SL 1.5 / TP 2.0 = 1.33 R:R (good)\n' + '• SL 1.5 / TP 3.0 = 2.0 R:R (excellent)\n' + '• SL 2.0 / TP 2.0 = 1.0 R:R (break-even at 50% WR)\n\n' + 'OPTIMIZATION IMPACT:\n' + 'Tighter stops:\n' + '+ Lower maximum loss per trade\n' + '+ Faster loss recognition\n' + '- Lower win rate (stopped out more)\n' + '- May not give trade room to work\n\n' + 'Wider stops:\n' + '+ Higher win rate (fewer stop-outs)\n' + '+ Trades have room to develop\n' + '- Larger losses when wrong\n' + '- Ties up more capital per trade\n\n' + 'STABILITY IMPACT:\n' + 'The Stability Score considers stop size:\n' + '• Too tight = FRAGILE (high variance)\n' + '• Too wide = lower efficiency\n' + '• Sweet spot = ROBUST rating\n\n' + 'NOTE: This affects OPTIMIZER ONLY. Your Signal Lines use separate lineSLMultiplier.')
+grpPanel = '📋 Dashboard Control'
+showInfoPanel = input.bool(true, 'Enable Dashboard', group = grpPanel, tooltip = 'Toggle the comprehensive HUD/dashboard display.\n\n' + 'WHEN ENABLED:\n' + 'Shows a table in the corner (position selectable) displaying:\n\n' + 'SECTION 1 - MARKET:\n' + '• ADX value + strength classification (EXTREME/STRONG/MODERATE/WEAK/NONE)\n' + '• Directional bias (Bulls vs Bears) + DI spread\n\n' + 'SECTION 2 - MOMENTUM:\n' + '• VEL: ADX velocity + directional label\n' + '• CURV: Curvature Z-Score + status (SPIKE/DROP/NORMAL)\n' + '• RSI²: RSI of ADX + overbought/oversold status\n\n' + 'SECTION 3 - PHASE:\n' + '• Current confirmed phase with icon\n' + '• Confirmation bar counter\n' + '• Current signal type + strength percentage\n\n' + 'SECTION 4 - STATUS:\n' + '• Active Kill Zone (IGNITION/EXHAUSTION/NONE)\n' + '• Divergence status (BULL/BEAR/NONE)\n' + '• Active signal lines count (X/20)\n\n' + 'SECTION 5 - OPTIMIZER (if enabled):\n' + '• Win Rate percentage + trade count\n' + '• Profit Factor + stability rating\n\n' + 'BENEFITS:\n' + '+ Comprehensive real-time market state\n' + '+ No need to check lower pane constantly\n' + '+ All critical metrics in one glance\n' + '+ Color-coded for quick interpretation\n' + '+ Professional HUD appearance\n\n' + 'WHEN DISABLED:\n' + '- Clean chart, no dashboard\n' + '- Must check lower pane and chart for all info\n' + '- Good for: presentations, screenshots, minimalist setups\n\n' + 'PERFORMANCE:\n' + 'Dashboard updates only on last bar - minimal computational impact.\n\n' + 'CUSTOMIZATION:\n' + '• Position: Use \'Panel Position\' setting\n' + '• Size: Use \'Panel Size\' setting\n' + '• Theme: Colors adapt to selected color theme\n\n' + 'RECOMMENDATION: Keep enabled for active trading. The at-a-glance information ' + 'significantly improves decision-making speed and market awareness.')
+panelPosition = input.string('Top Right', 'Panel Position', options = ['Top Right', 'Top Left', 'Bottom Right', 'Bottom Left'], group = grpPanel, tooltip = 'Select where the dashboard appears on your chart.\n\n' + 'OPTIONS:\n' + '• TOP RIGHT: Default, doesn\'t overlap with TradingView\'s default position for other indicators\n' + '• TOP LEFT: Good if you have other indicators on right\n' + '• BOTTOM RIGHT: Keeps top area clear for price action\n' + '• BOTTOM LEFT: Keeps both top and right clear\n\n' + 'SELECTION GUIDE:\n\n' + 'Choose TOP RIGHT if:\n' + '+ Standard setup, most indicators use left side\n' + '+ Want dashboard near TradingView\'s default controls\n' + '+ Trading on large monitor (plenty of space)\n\n' + 'Choose TOP LEFT if:\n' + '+ You have volume profile or other right-side indicators\n' + '+ Multiple monitors (dashboard on secondary display edge)\n' + '+ Left side of chart has more free space\n\n' + 'Choose BOTTOM RIGHT if:\n' + '+ Want maximum visibility of current price action at top\n' + '+ Trading very recent price (right edge of chart)\n' + '+ Lower pane (ADX) is on right side of split screen\n\n' + 'Choose BOTTOM LEFT if:\n' + '+ Maximum clear space at top and right (price action priority)\n' + '+ Using dashboard as secondary reference only\n' + '+ Trading on small screen (avoid overlap with price)\n\n' + 'GENERAL TIPS:\n' + '• Place where it won\'t cover active price action\n' + '• Consider your eye scanning patterns (most scan top-right naturally)\n' + '• On multi-monitor setups, place on monitor edge for peripheral vision\n' + '• Streaming: Top-right is most viewer-friendly\n\n' + 'NOTE: Dashboard is semi-transparent and will show price bars underneath, ' + 'but text becomes harder to read if candlesticks are directly behind it.')
+panelSize = input.string('Normal', 'Panel Size', options = ['Compact', 'Normal', 'Extended'], group = grpPanel, tooltip = 'Select dashboard size (affects text size and row spacing).\n\n' + 'SIZE OPTIONS:\n\n' + '📦 COMPACT\n' + '• Smallest footprint\n' + '• Text size: Tiny\n' + '• Best for: Small screens, mobile devices, minimalist setups\n' + '• Fits most info in least space\n' + '• Trade-off: Can be hard to read on large monitors\n' + '• Use when: Screen real estate is critical\n\n' + '📦 NORMAL (Default)\n' + '• Balanced size\n' + '• Text size: Small (headers normal)\n' + '• Best for: Standard desktop trading (1080p, 1440p)\n' + '• Good readability without consuming too much space\n' + '• Trade-off: Balanced - no major drawbacks\n' + '• Use when: Most scenarios - this is the sweet spot\n\n' + '📦 EXTENDED\n' + '• Largest, most readable\n' + '• Text size: Normal (headers large)\n' + '• Best for: Large monitors (4K), presentations, streaming, vision accessibility\n' + '• Maximum readability\n' + '• Trade-off: Takes significant chart space\n' + '• Use when: Plenty of screen space, or audience needs to see dashboard\n\n' + 'SELECTION GUIDE:\n\n' + 'Choose COMPACT if:\n' + '+ Small screen (laptop, single 1080p monitor)\n' + '+ Mobile device trading\n' + '+ Prefer clean chart, minimal overlay\n' + '+ Good eyesight, don\'t need large text\n\n' + 'Choose NORMAL if:\n' + '+ Standard desktop setup (most traders)\n' + '+ 24"-27" monitor at typical viewing distance\n' + '+ Want balance of info density and readability\n' + '+ Default choice - works for 80% of use cases\n\n' + 'Choose EXTENDED if:\n' + '+ Large monitor (32"+, 4K resolution)\n' + '+ Streaming or presenting to audience\n' + '+ Viewing distance is far (wall-mounted monitor)\n' + '+ Accessibility needs (larger text for easier reading)\n' + '+ Plenty of screen real estate\n\n' + 'DYNAMIC SIZING:\n' + 'The dashboard automatically adjusts:\n' + '• Header row: Larger in Extended, smaller in Compact\n' + '• Data cells: Scale proportionally\n' + '• Section dividers: Consistent across all sizes\n' + '• Spacing: Tighter in Compact, looser in Extended\n\n' + 'NOTE: Dashboard content is identical across sizes - only visual scale changes.')
+grpTheme = '🎨 Color Theme'
+colorTheme = input.string('Neon Tokyo', 'Select Theme', options = ['Neon Tokyo', 'Ocean Depths', 'Forest Canopy', 'Arctic Aurora', 'Sunset Blaze', 'Quantum Purple', 'Classic Terminal'], group = grpTheme)
+// Theme Colors
+bullColor = switch colorTheme
+    'Neon Tokyo' => #00FFAA
+    'Ocean Depths' => #00CED1
+    'Forest Canopy' => #32CD32
+    'Arctic Aurora' => #00FF7F
+    'Sunset Blaze' => #FFD700
+    'Quantum Purple' => #00FF88
+    'Classic Terminal' => #00FF00
+    => #00FFAA
+bearColor = switch colorTheme
+    'Neon Tokyo' => #FF0055
+    'Ocean Depths' => #FF6B6B
+    'Forest Canopy' => #CD5C5C
+    'Arctic Aurora' => #FF4500
+    'Sunset Blaze' => #FF4136
+    'Quantum Purple' => #FF0066
+    'Classic Terminal' => #FF0000
+    => #FF0055
+neutralColor = switch colorTheme
+    'Neon Tokyo' => #8899AA
+    'Ocean Depths' => #708090
+    'Forest Canopy' => #8B8B7A
+    'Arctic Aurora' => #B0C4DE
+    'Sunset Blaze' => #AAAAAA
+    'Quantum Purple' => #9988CC
+    'Classic Terminal' => #888888
+    => #8899AA
+accentColor1 = switch colorTheme
+    'Neon Tokyo' => #00DDFF
+    'Ocean Depths' => #40E0D0
+    'Forest Canopy' => #98FB98
+    'Arctic Aurora' => #7FFFD4
+    'Sunset Blaze' => #FFA07A
+    'Quantum Purple' => #00CCFF
+    'Classic Terminal' => #00FFFF
+    => #00DDFF
+accentColor2 = switch colorTheme
+    'Neon Tokyo' => #FF00FF
+    'Ocean Depths' => #9370DB
+    'Forest Canopy' => #DEB887
+    'Arctic Aurora' => #9932CC
+    'Sunset Blaze' => #FF6347
+    'Quantum Purple' => #AA00FF
+    'Classic Terminal' => #FFFF00
+    => #FF00FF
+accentColor3 = switch colorTheme
+    'Neon Tokyo' => #FFFF00
+    'Ocean Depths' => #FF8C00
+    'Forest Canopy' => #FFD700
+    'Arctic Aurora' => #00BFFF
+    'Sunset Blaze' => #FFD700
+    'Quantum Purple' => #FFCC00
+    'Classic Terminal' => #FF00FF
+    => #FFFF00
+ignitionBullColor = switch colorTheme
+    'Neon Tokyo' => #00FF88
+    'Ocean Depths' => #00FFD4
+    'Forest Canopy' => #7FFF00
+    'Arctic Aurora' => #00FFCC
+    'Sunset Blaze' => #FFFF00
+    'Quantum Purple' => #00FF66
+    'Classic Terminal' => #00FF00
+    => #00FF88
+ignitionBearColor = switch colorTheme
+    'Neon Tokyo' => #FF0055
+    'Ocean Depths' => #FF6B6B
+    'Forest Canopy' => #CD5C5C
+    'Arctic Aurora' => #FF4500
+    'Sunset Blaze' => #FF4136
+    'Quantum Purple' => #FF0066
+    'Classic Terminal' => #FF0000
+    => #FF0055
+exhaustionBullColor = switch colorTheme
+    'Neon Tokyo' => #FF6600
+    'Ocean Depths' => #FF7744
+    'Forest Canopy' => #FF8800
+    'Arctic Aurora' => #FF5500
+    'Sunset Blaze' => #FF4400
+    'Quantum Purple' => #FF5500
+    'Classic Terminal' => #FF8800
+    => #FF6600
+exhaustionBearColor = switch colorTheme
+    'Neon Tokyo' => #FF3300
+    'Ocean Depths' => #FF4422
+    'Forest Canopy' => #FF5500
+    'Arctic Aurora' => #FF2200
+    'Sunset Blaze' => #FF1100
+    'Quantum Purple' => #FF2200
+    'Classic Terminal' => #FF5500
+    => #FF3300
+accelBullColor = switch colorTheme
+    'Neon Tokyo' => #00DDFF
+    'Ocean Depths' => #00BFFF
+    'Forest Canopy' => #87CEEB
+    'Arctic Aurora' => #00D4FF
+    'Sunset Blaze' => #87CEFA
+    'Quantum Purple' => #00CCFF
+    'Classic Terminal' => #00FFFF
+    => #00DDFF
+accelBearColor = switch colorTheme
+    'Neon Tokyo' => #0088DD
+    'Ocean Depths' => #0077CC
+    'Forest Canopy' => #4682B4
+    'Arctic Aurora' => #0088CC
+    'Sunset Blaze' => #4682B4
+    'Quantum Purple' => #0077DD
+    'Classic Terminal' => #00DDDD
+    => #0088DD
+spikeBullColor = switch colorTheme
+    'Neon Tokyo' => #00FFFF
+    'Ocean Depths' => #40E0D0
+    'Forest Canopy' => #AFEEEE
+    'Arctic Aurora' => #00E5EE
+    'Sunset Blaze' => #FFD700
+    'Quantum Purple' => #00EEFF
+    'Classic Terminal' => #00FFFF
+    => #00FFFF
+spikeBearColor = switch colorTheme
+    'Neon Tokyo' => #FF00FF
+    'Ocean Depths' => #DA70D6
+    'Forest Canopy' => #DDA0DD
+    'Arctic Aurora' => #EE00EE
+    'Sunset Blaze' => #FF69B4
+    'Quantum Purple' => #DD00FF
+    'Classic Terminal' => #FF00FF
+    => #FF00FF
+divBullColor = switch colorTheme
+    'Neon Tokyo' => #AA00FF
+    'Ocean Depths' => #9370DB
+    'Forest Canopy' => #BA55D3
+    'Arctic Aurora' => #9932CC
+    'Sunset Blaze' => #DA70D6
+    'Quantum Purple' => #BB00FF
+    'Classic Terminal' => #AA00AA
+    => #AA00FF
+divBearColor = switch colorTheme
+    'Neon Tokyo' => #FF1493
+    'Ocean Depths' => #FF69B4
+    'Forest Canopy' => #DB7093
+    'Arctic Aurora' => #FF00AA
+    'Sunset Blaze' => #FF1493
+    'Quantum Purple' => #FF00BB
+    'Classic Terminal' => #FF00AA
+    => #FF1493
+bgColor = switch colorTheme
+    'Neon Tokyo' => #0A0A14
+    'Ocean Depths' => #0C1929
+    'Forest Canopy' => #1A1F16
+    'Arctic Aurora' => #0D1B2A
+    'Sunset Blaze' => #1A1209
+    'Quantum Purple' => #0D0A1A
+    'Classic Terminal' => #000000
+    => #0A0A14
+frameColor = switch colorTheme
+    'Neon Tokyo' => #00DDFF
+    'Ocean Depths' => #1E90FF
+    'Forest Canopy' => #6B8E23
+    'Arctic Aurora' => #7B68EE
+    'Sunset Blaze' => #FF8C00
+    'Quantum Purple' => #8844FF
+    'Classic Terminal' => #333333
+    => #00DDFF
+    // ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+    // 📐 CORE ADX CALCULATIONS
+    // ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+f_smooth(src, len, type) =>
+    switch type
+        'RMA' => ta.rma(src, len)
+        'EMA' => ta.ema(src, len)
+        'SMA' => ta.sma(src, len)
+        'WMA' => ta.wma(src, len)
+        => ta.rma(src, len)
+trueRange = math.max(math.max(high - low, math.abs(high - close[1])), math.abs(low - close[1]))
+upMove = high - high[1]
+downMove = low[1] - low
+plusDM = upMove > downMove and upMove > 0 ? upMove : 0.0
+minusDM = downMove > upMove and downMove > 0 ? downMove : 0.0
+smoothTR = f_smooth(trueRange, diLen, smoothType)
+smoothPlusDM = f_smooth(plusDM, diLen, smoothType)
+smoothMinusDM = f_smooth(minusDM, diLen, smoothType)
+plusDI = smoothTR != 0 ? 100 * smoothPlusDM / smoothTR : 0.0
+minusDI = smoothTR != 0 ? 100 * smoothMinusDM / smoothTR : 0.0
+dx = plusDI + minusDI != 0 ? 100 * math.abs(plusDI - minusDI) / (plusDI + minusDI) : 0.0
+adx = f_smooth(dx, adxLen, smoothType)
+atr14 = ta.atr(14)
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 📈 CURVATURE & META CALCULATIONS
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+adxVelocity = adx - adx[1]
+adxVelocitySmooth = f_smooth(adxVelocity, curvatureSmooth, 'EMA')
+adxAcceleration = adx - 2 * adx[1] + adx[2]
+adxAccelerationSmooth = f_smooth(adxAcceleration, curvatureSmooth, 'EMA')
+rsiOfADX = ta.rsi(adx, rsiOfADXLen)
+adxHigh = ta.highest(adx, 5)
+adxLow = ta.lowest(adx, 5)
+adxTR = math.max(adxHigh - adxLow, math.max(math.abs(adxHigh - adx[1]), math.abs(adxLow - adx[1])))
+adxUpMove = adxHigh - adxHigh[1]
+adxDownMove = adxLow[1] - adxLow
+adxPlusDM = adxUpMove > adxDownMove and adxUpMove > 0 ? adxUpMove : 0.0
+adxMinusDM = adxDownMove > adxUpMove and adxDownMove > 0 ? adxDownMove : 0.0
+smoothADXTR = ta.rma(adxTR, 7)
+smoothADXPlusDM = ta.rma(adxPlusDM, 7)
+smoothADXMinusDM = ta.rma(adxMinusDM, 7)
+adxPlusDI = smoothADXTR != 0 ? 100 * smoothADXPlusDM / smoothADXTR : 0.0
+adxMinusDI = smoothADXTR != 0 ? 100 * smoothADXMinusDM / smoothADXTR : 0.0
+adxDX = adxPlusDI + adxMinusDI != 0 ? 100 * math.abs(adxPlusDI - adxMinusDI) / (adxPlusDI + adxMinusDI) : 0.0
+metaADX = ta.rma(adxDX, 7)
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 📊 Z-SCORE NORMALIZATION
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+adxMean = ta.sma(adx, zScoreLen)
+adxStdev = ta.stdev(adx, zScoreLen)
+adxZScore = adxStdev != 0 ? (adx - adxMean) / adxStdev : 0.0
+velMean = ta.sma(adxVelocitySmooth, zScoreLen)
+velStdev = ta.stdev(adxVelocitySmooth, zScoreLen)
+velocityZScore = velStdev != 0 ? (adxVelocitySmooth - velMean) / velStdev : 0.0
+accelMean = ta.sma(adxAccelerationSmooth, zScoreLen)
+accelStdev = ta.stdev(adxAccelerationSmooth, zScoreLen)
+curvatureZScore = accelStdev != 0 ? (adxAccelerationSmooth - accelMean) / accelStdev : 0.0
+compositeCurvature = enableZScore ? (curvatureZScore + velocityZScore * 0.5) / 1.5 : adxAccelerationSmooth
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 🔄 DIVERGENCE DETECTION
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+priceSlope = (close - close[divLookback]) / divLookback
+adxSlope = (adx - adx[divLookback]) / divLookback
+priceStdevDiv = ta.stdev(close - close[1], divLookback)
+adxStdevDiv = ta.stdev(adx - adx[1], divLookback)
+normPriceSlope = priceStdevDiv != 0 ? priceSlope / priceStdevDiv : 0.0
+normADXSlope = adxStdevDiv != 0 ? adxSlope / adxStdevDiv : 0.0
+bullishDivergence = enableDivergence and normPriceSlope < -divSensitivity and normADXSlope > divSensitivity
+bearishDivergence = enableDivergence and normPriceSlope > divSensitivity and normADXSlope < -divSensitivity
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 🌙 TREND PHASE DETECTION
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+var string PHASE_DORMANT = 'DORMANT'
+var string PHASE_IGNITION = 'IGNITION'
+var string PHASE_ACCELERATION = 'ACCELERATION'
+var string PHASE_MATURE = 'MATURE'
+var string PHASE_EXHAUSTION = 'EXHAUSTION'
+var string PHASE_DECLINE = 'DECLINE'
+f_detectPhase() =>
+    string phase = PHASE_DORMANT
+    if adx < lowADXThreshold and math.abs(adxVelocitySmooth) < 1.0
+        phase := PHASE_DORMANT
+        phase
+    else if adx < 25 and adxVelocitySmooth > 0 and curvatureZScore > ignitionThreshold
+        phase := PHASE_IGNITION
+        phase
+    else if adx >= lowADXThreshold and adx < highADXThreshold and adxVelocitySmooth > 0.5 and adxAccelerationSmooth > 0
+        phase := PHASE_ACCELERATION
+        phase
+    else if adx >= highADXThreshold and adxVelocitySmooth >= 0 and adxAccelerationSmooth <= 0
+        phase := PHASE_MATURE
+        phase
+    else if adx >= highADXThreshold and curvatureZScore < -exhaustionThreshold
+        phase := PHASE_EXHAUSTION
+        phase
+    else if adxVelocitySmooth < -0.5 and adx > lowADXThreshold
+        phase := PHASE_DECLINE
+        phase
+    phase
+currentPhase = f_detectPhase()
+var string confirmedPhase = PHASE_DORMANT
+var int phaseCounter = 0
+if currentPhase == currentPhase[1]
+    phaseCounter := phaseCounter + 1
+    phaseCounter
+else
+    phaseCounter := 1
+    phaseCounter
+if phaseCounter >= confirmBars
+    confirmedPhase := currentPhase
+    confirmedPhase
+phaseChanged = confirmedPhase != confirmedPhase[1]
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 🎯 SIGNAL DETECTION
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+var int lastSignalBar = 0
+barsSinceLastSignal = bar_index - lastSignalBar
+allowNewSignal = barsSinceLastSignal >= minBarsBetweenSignals
+trendIgniting = confirmedPhase == PHASE_IGNITION and confirmedPhase[1] != PHASE_IGNITION
+trendExhausting = confirmedPhase == PHASE_EXHAUSTION and confirmedPhase[1] != PHASE_EXHAUSTION
+trendAccelerating = confirmedPhase == PHASE_ACCELERATION and confirmedPhase[1] == PHASE_IGNITION
+curvatureSpikeUp = curvatureZScore > zThreshold and curvatureZScore[1] <= zThreshold
+curvatureSpikeDown = curvatureZScore < -zThreshold and curvatureZScore[1] >= -zThreshold
+inIgnitionZone = adx < lowADXThreshold and adxVelocitySmooth > 0 and curvatureZScore > ignitionThreshold * 0.5
+inExhaustionZone = adx > highADXThreshold * 0.8 and curvatureZScore < -exhaustionThreshold * 0.5
+bullishBias = plusDI > minusDI
+bearishBias = minusDI > plusDI
+signalStrength = (trendIgniting ? 30.0 : 0.0) + (trendExhausting ? 30.0 : 0.0) + (curvatureSpikeUp or curvatureSpikeDown ? 20.0 : 0.0) + (math.abs(curvatureZScore) > zThreshold ? 10.0 : 0.0)
+ignBullSignal = enableSignals and allowNewSignal and trendIgniting and bullishBias
+ignBearSignal = enableSignals and allowNewSignal and trendIgniting and bearishBias
+exhBullSignal = enableSignals and allowNewSignal and trendExhausting and bullishBias
+exhBearSignal = enableSignals and allowNewSignal and trendExhausting and bearishBias
+accBullSignal = enableSignals and allowNewSignal and trendAccelerating and bullishBias
+accBearSignal = enableSignals and allowNewSignal and trendAccelerating and bearishBias
+if ignBullSignal or ignBearSignal or exhBullSignal or exhBearSignal or accBullSignal or accBearSignal
+    lastSignalBar := bar_index
+    lastSignalBar
+divBullSignal = enableDivergence and bullishDivergence
+divBearSignal = enableDivergence and bearishDivergence
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 🎯 KILL ZONE LABELS
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+var label ignitionZoneLabel = na
+var label exhaustionZoneLabel = na
+var bool inIgnZone = false
+var bool inExhZone = false
+if enableKillZones
+    if inIgnitionZone and not inIgnZone
+        inIgnZone := true
+        ignitionZoneLabel := label.new(bar_index, low, '⚡ IGNITION ZONE', color = color.new(color.white, 100), textcolor = ignitionBullColor, style = label.style_label_up, size = size.normal, xloc = xloc.bar_index, force_overlay = true)
+        ignitionZoneLabel
+    else if not inIgnitionZone and inIgnZone
+        inIgnZone := false
+        if not na(ignitionZoneLabel)
+            label.delete(ignitionZoneLabel)
+    if inExhaustionZone and not inExhZone
+        inExhZone := true
+        exhaustionZoneLabel := label.new(bar_index, high, '🔥 EXHAUSTION ZONE', color = color.new(color.white, 100), textcolor = exhaustionBullColor, style = label.style_label_down, size = size.normal, xloc = xloc.bar_index, force_overlay = true)
+        exhaustionZoneLabel
+    else if not inExhaustionZone and inExhZone
+        inExhZone := false
+        if not na(exhaustionZoneLabel)
+            label.delete(exhaustionZoneLabel)
+    if inIgnZone and not na(ignitionZoneLabel)
+        label.set_x(ignitionZoneLabel, bar_index)
+        label.set_y(ignitionZoneLabel, low)
+    if inExhZone and not na(exhaustionZoneLabel)
+        label.set_x(exhaustionZoneLabel, bar_index)
+        label.set_y(exhaustionZoneLabel, high)
+        // ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+        // 📏 SIGNAL LINE MANAGEMENT
+        // ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+f_getLineStyle() =>
+    switch lineStyle
+        'Solid' => line.style_solid
+        'Dashed' => line.style_dashed
+        'Dotted' => line.style_dotted
+        => line.style_dashed
+type SignalLineData
+	line entryLine
+	line slLine
+	line tp1Line
+	line tp2Line
+	line tp3Line
+	label lbl
+	int birthBar
+	float entryPrice
+	float slPrice
+	float tp1Price
+	float tp2Price
+	float tp3Price
+	bool isLong
+	string signalType
+	color signalColor
+	bool tp1Hit
+	bool tp2Hit
+	bool isComplete
+var array<SignalLineData> activeSignals = array.new<SignalLineData>()
+var int completedBullWin = 0
+var int completedBullLoss = 0
+var int completedBearWin = 0
+var int completedBearLoss = 0
+var array<int> indicesToRemove = array.new<int>()
+f_createSignalLines(float price, bool isLong, string sigType, color sigColor) =>
+    if showSignalLines and array.size(activeSignals) < 20
+        atrVal = atr14
+        slPrice = isLong ? price - atrVal * lineSLMultiplier : price + atrVal * lineSLMultiplier
+        tp1Price = isLong ? price + atrVal * lineTP1Multiplier : price - atrVal * lineTP1Multiplier
+        tp2Price = isLong ? price + atrVal * lineTP2Multiplier : price - atrVal * lineTP2Multiplier
+        tp3Price = isLong ? price + atrVal * lineTP3Multiplier : price - atrVal * lineTP3Multiplier
+        lstyle = f_getLineStyle()
+        entryLn = line.new(bar_index, price, bar_index + lineMaxBars, price, color = sigColor, width = lineWidth, style = lstyle, force_overlay = true)
+        slLn = showSLTPLines ? line.new(bar_index, slPrice, bar_index + lineMaxBars, slPrice, color = slLineColor, width = 1, style = line.style_dotted, force_overlay = true) : na
+        tp1Ln = showSLTPLines ? line.new(bar_index, tp1Price, bar_index + lineMaxBars, tp1Price, color = color.new(tpLineColor, 60), width = 1, style = line.style_dotted, force_overlay = true) : na
+        tp2Ln = showSLTPLines ? line.new(bar_index, tp2Price, bar_index + lineMaxBars, tp2Price, color = color.new(tpLineColor, 40), width = 1, style = line.style_dotted, force_overlay = true) : na
+        tp3Ln = showSLTPLines ? line.new(bar_index, tp3Price, bar_index + lineMaxBars, tp3Price, color = tpLineColor, width = 1, style = line.style_dotted, force_overlay = true) : na
+        lbl = showLineLabels ? label.new(bar_index + lineMaxBars + 2, price, sigType, color = color.new(color.white, labelTransparency), textcolor = sigColor, style = label.style_label_left, size = size.tiny, force_overlay = true) : na
+        sigData = SignalLineData.new(entryLn, slLn, tp1Ln, tp2Ln, tp3Ln, lbl, bar_index, price, slPrice, tp1Price, tp2Price, tp3Price, isLong, sigType, sigColor, false, false, false)
+        array.push(activeSignals, sigData)
+    true
+    // ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+    // 📏 SIGNAL LINE PROCESSING 
+    // ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+array.clear(indicesToRemove)
+if array.size(activeSignals) > 0
+    for i = 0 to array.size(activeSignals) - 1 by 1
+        sig = array.get(activeSignals, i)
+        age = bar_index - sig.birthBar
+        expired = age > lineMaxBars
+        if sig.isLong
+            if high >= sig.tp1Price and not sig.tp1Hit
+                sig.tp1Hit := true
+                sig.tp1Hit
+            if high >= sig.tp2Price and not sig.tp2Hit
+                sig.tp2Hit := true
+                sig.tp2Hit
+        else
+            if low <= sig.tp1Price and not sig.tp1Hit
+                sig.tp1Hit := true
+                sig.tp1Hit
+            if low <= sig.tp2Price and not sig.tp2Hit
+                sig.tp2Hit := true
+                sig.tp2Hit
+        slHit = sig.isLong ? low <= sig.slPrice : high >= sig.slPrice
+        finalTPHit = sig.isLong ? high >= sig.tp3Price : low <= sig.tp3Price
+        priceBreak = sig.isLong ? close < sig.entryPrice and close[1] >= sig.entryPrice : close > sig.entryPrice and close[1] <= sig.entryPrice
+        shouldClose = expired or slHit or finalTPHit or priceBreak and age > 3
+        if shouldClose
+            isWin = finalTPHit or sig.tp2Hit or sig.tp1Hit and not slHit
+            if sig.isLong
+                if isWin
+                    completedBullWin := bar_index
+                    completedBullWin
+                else
+                    completedBullLoss := bar_index
+                    completedBullLoss
+            else
+                if isWin
+                    completedBearWin := bar_index
+                    completedBearWin
+                else
+                    completedBearLoss := bar_index
+                    completedBearLoss
+            line.delete(sig.entryLine)
+            if not na(sig.slLine)
+                line.delete(sig.slLine)
+            if not na(sig.tp1Line)
+                line.delete(sig.tp1Line)
+            if not na(sig.tp2Line)
+                line.delete(sig.tp2Line)
+            if not na(sig.tp3Line)
+                line.delete(sig.tp3Line)
+            if not na(sig.lbl)
+                label.delete(sig.lbl)
+            array.push(indicesToRemove, i)
+        else
+            extendBars = math.min(lineMaxBars - age, 20)
+            newX2 = bar_index + extendBars
+            line.set_x2(sig.entryLine, newX2)
+            if not na(sig.slLine)
+                line.set_x2(sig.slLine, newX2)
+            if not na(sig.tp1Line)
+                line.set_x2(sig.tp1Line, newX2)
+                if sig.tp1Hit
+                    line.set_color(sig.tp1Line, color.new(tpLineColor, 90))
+            if not na(sig.tp2Line)
+                line.set_x2(sig.tp2Line, newX2)
+                if sig.tp2Hit
+                    line.set_color(sig.tp2Line, color.new(tpLineColor, 90))
+            if not na(sig.tp3Line)
+                line.set_x2(sig.tp3Line, newX2)
+            if not na(sig.lbl)
+                label.set_x(sig.lbl, newX2 + 2)
+                tpStatus = sig.tp2Hit ? ' ✓✓' : sig.tp1Hit ? ' ✓' : ''
+                label.set_text(sig.lbl, sig.signalType + tpStatus)
+if array.size(indicesToRemove) > 0
+    for i = array.size(indicesToRemove) - 1 to 0 by 1
+        idx = array.get(indicesToRemove, i)
+        if idx < array.size(activeSignals)
+            array.remove(activeSignals, idx)
+if ignBullSignal
+    f_createSignalLines(close, true, '⚡IGN', ignitionBullColor)
+if ignBearSignal
+    f_createSignalLines(close, false, '⚡IGN', ignitionBearColor)
+if exhBullSignal
+    f_createSignalLines(close, true, '🔥EXH', exhaustionBullColor)
+if exhBearSignal
+    f_createSignalLines(close, false, '🔥EXH', exhaustionBearColor)
+if accBullSignal
+    f_createSignalLines(close, true, '🚀ACC', accelBullColor)
+if accBearSignal
+    f_createSignalLines(close, false, '🚀ACC', accelBearColor)
+if divBullSignal
+    f_createSignalLines(close, true, '🔄DIV', divBullColor)
+if divBearSignal
+    f_createSignalLines(close, false, '🔄DIV', divBearColor)
+    // ═════════════════════════════════════════════════════════════════════════════
+    // MAIN CHART SHAPES
+    // ═════════════════════════════════════════════════════════════════════════════
+plotshape(ignBullSignal, title = '▲ IGNITION', style = shape.triangleup, location = location.belowbar, color = color.new(ignitionBullColor, 0), size = size.tiny, force_overlay = true)
+plotshape(ignBearSignal, title = '▼ IGNITION', style = shape.triangledown, location = location.abovebar, color = color.new(ignitionBearColor, 0), size = size.tiny, force_overlay = true)
+plotshape(exhBullSignal, title = '▲ EXHAUSTION', style = shape.triangleup, location = location.belowbar, color = color.new(exhaustionBullColor, 0), size = size.tiny, force_overlay = true)
+plotshape(exhBearSignal, title = '▼ EXHAUSTION', style = shape.triangledown, location = location.abovebar, color = color.new(exhaustionBearColor, 0), size = size.tiny, force_overlay = true)
+plotshape(accBullSignal, title = '🚀 ACCELERATION', style = shape.triangleup, location = location.belowbar, color = color.new(accelBullColor, 0), size = size.tiny, force_overlay = true)
+plotshape(accBearSignal, title = '🚀 ACCELERATION', style = shape.triangledown, location = location.abovebar, color = color.new(accelBearColor, 0), size = size.tiny, force_overlay = true)
+plotshape(divBullSignal, title = '◇ DIVERGENCE ↑', style = shape.xcross, location = location.belowbar, color = divBullColor, size = size.tiny, force_overlay = true)
+plotshape(divBearSignal, title = '◇ DIVERGENCE ↓', style = shape.xcross, location = location.abovebar, color = divBearColor, size = size.tiny, force_overlay = true)
+completedBullWinShape = bar_index == completedBullWin and completedBullWin > 0
+completedBullLossShape = bar_index == completedBullLoss and completedBullLoss > 0
+completedBearWinShape = bar_index == completedBearWin and completedBearWin > 0
+completedBearLossShape = bar_index == completedBearLoss and completedBearLoss > 0
+plotshape(completedBullWinShape, title = '✓ Win', style = shape.labelup, location = location.belowbar, color = color.new(color.white, 100), text = '✓', textcolor = #00FF00, size = size.tiny, force_overlay = true)
+plotshape(completedBullLossShape, title = '✗ Loss', style = shape.labelup, location = location.belowbar, color = color.new(color.white, 100), text = '✗', textcolor = #FF0000, size = size.tiny, force_overlay = true)
+plotshape(completedBearWinShape, title = '✓ Win', style = shape.labeldown, location = location.abovebar, color = color.new(color.white, 100), text = '✓', textcolor = #00FF00, size = size.tiny, force_overlay = true)
+plotshape(completedBearLossShape, title = '✗ Loss', style = shape.labeldown, location = location.abovebar, color = color.new(color.white, 100), text = '✗', textcolor = #FF0000, size = size.tiny, force_overlay = true)
+// ═════════════════════════════════════════════════════════════════════════════
+// LOWER PANE (ADX LINE) SIGNALS
+// ═════════════════════════════════════════════════════════════════════════════
+var color circleColor = na
+var float circleValue = na
+var color crossColor = na
+var float crossValue = na
+if showDotsOnADX
+    if ignBullSignal
+        circleColor := ignitionBullColor
+        circleValue := adx
+        circleValue
+    else if ignBearSignal
+        circleColor := ignitionBearColor
+        circleValue := adx
+        circleValue
+    else if exhBullSignal
+        circleColor := exhaustionBullColor
+        circleValue := adx
+        circleValue
+    else if exhBearSignal
+        circleColor := exhaustionBearColor
+        circleValue := adx
+        circleValue
+    else if accBullSignal
+        circleColor := accelBullColor
+        circleValue := adx
+        circleValue
+    else if accBearSignal
+        circleColor := accelBearColor
+        circleValue := adx
+        circleValue
+    else if curvatureSpikeUp
+        circleColor := spikeBullColor
+        circleValue := adx
+        circleValue
+    else if curvatureSpikeDown
+        circleColor := spikeBearColor
+        circleValue := adx
+        circleValue
+    else
+        circleValue := na
+        circleColor := na
+        circleColor
+    if bullishDivergence
+        crossColor := divBullColor
+        crossValue := adx
+        crossValue
+    else if bearishDivergence
+        crossColor := divBearColor
+        crossValue := adx
+        crossValue
+    else
+        crossValue := na
+        crossColor := na
+        crossColor
+else
+    circleValue := na
+    crossValue := na
+    crossValue
+plot(circleValue, 'Signal Circles', color = circleColor, style = plot.style_circles, linewidth = 4)
+plot(crossValue, 'Signal Crosses', color = crossColor, style = plot.style_cross, linewidth = 3)
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 🧪 OPTIMIZER ENGINE
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+var float optEntryPrice = na
+var bool optInTrade = false
+var bool optIsLong = false
+var int btTotalTrades = 0
+var int btWins = 0
+var float btGrossProfit = 0.0
+var float btGrossLoss = 0.0
+strongBuySignal = enableSignals and (trendIgniting or curvatureSpikeUp) and bullishBias
+strongSellSignal = enableSignals and (trendIgniting or curvatureSpikeUp) and bearishBias
+exitSignal = trendExhausting or curvatureSpikeDown
+if optMode
+    if optInTrade
+        slPrice = optIsLong ? optEntryPrice - atr14 * optSL : optEntryPrice + atr14 * optSL
+        tpPrice = optIsLong ? optEntryPrice + atr14 * optTP : optEntryPrice - atr14 * optTP
+        hitSL = optIsLong ? low <= slPrice : high >= slPrice
+        hitTP = optIsLong ? high >= tpPrice : low <= tpPrice
+        shouldExit = optIsLong ? exitSignal and bearishBias : exitSignal and bullishBias
+        if hitSL or hitTP or shouldExit
+            exitP = hitTP ? tpPrice : hitSL ? slPrice : close
+            pnl = optIsLong ? exitP - optEntryPrice : optEntryPrice - exitP
+            btTotalTrades := btTotalTrades + 1
+            if pnl > 0
+                btWins := btWins + 1
+                btGrossProfit := btGrossProfit + pnl
+                btGrossProfit
+            else
+                btGrossLoss := btGrossLoss + math.abs(pnl)
+                btGrossLoss
+            optInTrade := false
+            optEntryPrice := na
+            optEntryPrice
+    if not optInTrade
+        if strongBuySignal
+            optInTrade := true
+            optIsLong := true
+            optEntryPrice := close
+            optEntryPrice
+        else if strongSellSignal
+            optInTrade := true
+            optIsLong := false
+            optEntryPrice := close
+            optEntryPrice
+btWinRate = btTotalTrades > 0 ? btWins / btTotalTrades * 100 : 0.0
+btProfitFactor = btGrossLoss > 0 ? btGrossProfit / btGrossLoss : btGrossProfit > 0 ? 99.9 : 0.0
+btExpectancy = btTotalTrades > 0 ? (btGrossProfit - btGrossLoss) / btTotalTrades : 0.0
+stabilityPoints = 0
+stabilityPoints := stabilityPoints + (btWinRate >= 55 ? 25 : btWinRate >= 50 ? 15 : btWinRate >= 45 ? 5 : 0)
+stabilityPoints := stabilityPoints + (btExpectancy > 0.5 ? 25 : btExpectancy > 0.1 ? 15 : btExpectancy > 0 ? 5 : 0)
+stabilityPoints := stabilityPoints + (btTotalTrades >= 30 ? 25 : btTotalTrades >= 20 ? 15 : btTotalTrades >= 10 ? 5 : 0)
+stabilityPoints := stabilityPoints + (btProfitFactor >= 1.5 ? 25 : btProfitFactor >= 1.2 ? 15 : btProfitFactor >= 1.0 ? 5 : 0)
+robustText = stabilityPoints >= 80 ? 'ROBUST' : stabilityPoints >= 60 ? 'STABLE' : stabilityPoints >= 40 ? 'FRAGILE' : 'OVERFIT'
+robustCol = stabilityPoints >= 80 ? bullColor : stabilityPoints >= 60 ? accentColor1 : stabilityPoints >= 40 ? accentColor3 : bearColor
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 🌀 QUANTUM ADX BANDS (Lower Pane)
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+phaseColor = switch confirmedPhase
+    PHASE_DORMANT => neutralColor
+    PHASE_IGNITION => ignitionBullColor
+    PHASE_ACCELERATION => bullColor
+    PHASE_MATURE => accentColor3
+    PHASE_EXHAUSTION => exhaustionBullColor
+    PHASE_DECLINE => bearColor
+    => neutralColor
+curvatureInfluence = 1.0 + math.abs(curvatureZScore) / 4.0
+adxInfluence = adx / 50
+volatilityMultiplier = curvatureInfluence * (0.5 + adxInfluence * 0.5)
+basis = ta.ema(adx, 21)
+adx_volatility = ta.stdev(adx, 20)
+baseWidth = adx_volatility * vortexSensitivity * volatilityMultiplier
+trendUp = adx > basis
+bullPhaseColor = switch confirmedPhase
+    PHASE_IGNITION => color.new(ignitionBullColor, vortexTransparency)
+    PHASE_ACCELERATION => color.new(bullColor, vortexTransparency - 5)
+    PHASE_MATURE => color.new(accentColor3, vortexTransparency)
+    => color.new(bullColor, vortexTransparency + 5)
+bearPhaseColor = switch confirmedPhase
+    PHASE_EXHAUSTION => color.new(exhaustionBullColor, vortexTransparency)
+    PHASE_DECLINE => color.new(bearColor, vortexTransparency - 5)
+    => color.new(bearColor, vortexTransparency + 5)
+band1_val = switch vortexMode
+    'Triple Layer' => basis + baseWidth * 2.0
+    'Fractal Cloud' => basis + adx_volatility * vortexSensitivity * 2.5
+    'Momentum Tunnel' => basis + baseWidth * 1.8
+    'Phase Spectrum' => basis + adx_volatility * vortexSensitivity * 1.5
+    => basis + baseWidth * 2.0
+band2_val = switch vortexMode
+    'Triple Layer' => basis + baseWidth * 1.2
+    'Fractal Cloud' => basis + adx_volatility * vortexSensitivity * 1.5
+    'Momentum Tunnel' => basis + baseWidth * 0.6
+    'Phase Spectrum' => basis + adx_volatility * vortexSensitivity * 1.0
+    => basis + baseWidth * 1.2
+band3_val = switch vortexMode
+    'Triple Layer' => basis + baseWidth * 0.5
+    'Fractal Cloud' => basis + adx_volatility * vortexSensitivity * 0.5
+    'Momentum Tunnel' => basis + baseWidth * 0.15
+    'Phase Spectrum' => basis + adx_volatility * vortexSensitivity * 0.5
+    => basis + baseWidth * 0.5
+band4_val = switch vortexMode
+    'Triple Layer' => basis - baseWidth * 0.5
+    'Fractal Cloud' => basis - adx_volatility * vortexSensitivity * 0.5
+    'Momentum Tunnel' => basis - baseWidth * 0.15
+    'Phase Spectrum' => basis - adx_volatility * vortexSensitivity * 0.5
+    => basis - baseWidth * 0.5
+band5_val = switch vortexMode
+    'Triple Layer' => basis - baseWidth * 1.2
+    'Fractal Cloud' => basis - adx_volatility * vortexSensitivity * 1.5
+    'Momentum Tunnel' => basis - baseWidth * 0.6
+    'Phase Spectrum' => basis - adx_volatility * vortexSensitivity * 1.0
+    => basis - baseWidth * 1.2
+band6_val = switch vortexMode
+    'Triple Layer' => basis - baseWidth * 2.0
+    'Fractal Cloud' => basis - adx_volatility * vortexSensitivity * 2.5
+    'Momentum Tunnel' => basis - baseWidth * 1.8
+    'Phase Spectrum' => basis - adx_volatility * vortexSensitivity * 1.5
+    => basis - baseWidth * 2.0
+p1 = plot(showVortex ? band1_val : na, 'Band 1', color = color.new(phaseColor, 70), linewidth = 1)
+p2 = plot(showVortex ? band2_val : na, 'Band 2', color = color.new(phaseColor, 50), linewidth = math.max(1, vortexMode == 'Momentum Tunnel' ? 1 : 2))
+p3 = plot(showVortex ? band3_val : na, 'Band 3', color = vortexMode == 'Momentum Tunnel' ? color.new(phaseColor, 20) : phaseColor, linewidth = math.max(1, vortexMode == 'Momentum Tunnel' ? 4 : 2))
+p4 = plot(showVortex ? band4_val : na, 'Band 4', color = vortexMode == 'Momentum Tunnel' ? color.new(phaseColor, 20) : phaseColor, linewidth = math.max(1, vortexMode == 'Momentum Tunnel' ? 4 : 2))
+p5 = plot(showVortex ? band5_val : na, 'Band 5', color = color.new(phaseColor, 50), linewidth = math.max(1, vortexMode == 'Momentum Tunnel' ? 1 : 2))
+p6 = plot(showVortex ? band6_val : na, 'Band 6', color = color.new(phaseColor, 70), linewidth = 1)
+plot(showVortex and showVortexGlow ? band3_val : na, 'Glow', color = color.new(phaseColor, 88), linewidth = 10)
+fill(p1, p2, color = showVortex ? trendUp ? bullPhaseColor : bearPhaseColor : na)
+fill(p2, p3, color = showVortex ? trendUp ? color.new(bullColor, vortexTransparency - 10) : color.new(bearColor, vortexTransparency - 10) : na)
+fill(p3, p4, color = showVortex ? trendUp ? color.new(bullColor, vortexTransparency + 2) : color.new(bearColor, vortexTransparency + 2) : na)
+fill(p4, p5, color = showVortex ? trendUp ? color.new(bullColor, vortexTransparency - 10) : color.new(bearColor, vortexTransparency - 10) : na)
+fill(p5, p6, color = showVortex ? trendUp ? bullPhaseColor : bearPhaseColor : na)
+adxPlotColor = adx >= highADXThreshold ? bullColor : adx >= lowADXThreshold ? accentColor3 : bearColor
+plot(adx, 'ADX', color = adxPlotColor, linewidth = 3)
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 📋 DASHBOARD
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+tablePos = switch panelPosition
+    'Top Right' => position.top_right
+    'Top Left' => position.top_left
+    'Bottom Right' => position.bottom_right
+    'Bottom Left' => position.bottom_left
+    => position.top_right
+var table hud = table.new(tablePos, 3, 20, bgcolor = color.new(bgColor, 5), border_width = 0, frame_width = 2, frame_color = color.new(frameColor, 40))
+if showInfoPanel and barstate.islast
+    sz = panelSize == 'Compact' ? size.tiny : panelSize == 'Extended' ? size.normal : size.small
+    szS = panelSize == 'Extended' ? size.normal : size.small
+    szH = panelSize == 'Extended' ? size.large : panelSize == 'Normal' ? size.normal : size.small
+    table.cell(hud, 0, 0, 'ADX² CURVATURE', bgcolor = color.new(frameColor, 70), text_color = color.white, text_size = szH)
+    table.cell(hud, 1, 0, 'SUITE', bgcolor = color.new(frameColor, 70), text_color = accentColor3, text_size = szH)
+    table.cell(hud, 2, 0, '◈', bgcolor = color.new(frameColor, 70), text_color = accentColor1, text_size = szH)
+    table.cell(hud, 0, 1, '━━━━━━━━━━━━', text_color = color.new(bullColor, 70), text_size = sz)
+    table.cell(hud, 1, 1, 'MARKET', text_color = bullColor, text_size = sz)
+    table.cell(hud, 2, 1, '━━━━━━━━━━━━', text_color = color.new(bullColor, 70), text_size = sz)
+    adxStrength = adx >= 50 ? 'EXTREME' : adx >= 40 ? 'STRONG' : adx >= 25 ? 'MODERATE' : adx >= 20 ? 'WEAK' : 'NONE'
+    adxStrColor = adx >= 40 ? bullColor : adx >= 25 ? accentColor3 : adx >= 20 ? neutralColor : bearColor
+    table.cell(hud, 0, 2, 'ADX', text_color = neutralColor, text_size = sz)
+    table.cell(hud, 1, 2, str.tostring(adx, '#.#'), text_color = phaseColor, text_size = szH)
+    table.cell(hud, 2, 2, adxStrength, text_color = adxStrColor, text_size = sz)
+    diWinner = plusDI > minusDI ? '▲ BULLS' : '▼ BEARS'
+    diWinCol = plusDI > minusDI ? bullColor : bearColor
+    diSpread = math.abs(plusDI - minusDI)
+    table.cell(hud, 0, 3, 'BIAS', text_color = neutralColor, text_size = sz)
+    table.cell(hud, 1, 3, diWinner, text_color = diWinCol, text_size = szS)
+    table.cell(hud, 2, 3, str.tostring(diSpread, '#.#'), text_color = diWinCol, text_size = sz)
+    table.cell(hud, 0, 4, '━━━━━━━━━━━━', text_color = color.new(accentColor2, 70), text_size = sz)
+    table.cell(hud, 1, 4, 'MOMENTUM', text_color = accentColor2, text_size = sz)
+    table.cell(hud, 2, 4, '━━━━━━━━━━━━', text_color = color.new(accentColor2, 70), text_size = sz)
+    velLabel = adxVelocitySmooth > 1 ? '⇑ RISING' : adxVelocitySmooth < -1 ? '⇓ FALLING' : '⇔ FLAT'
+    velCol = adxVelocitySmooth > 0 ? bullColor : bearColor
+    table.cell(hud, 0, 5, 'VEL', text_color = neutralColor, text_size = sz)
+    table.cell(hud, 1, 5, str.tostring(adxVelocitySmooth, '#.##'), text_color = velCol, text_size = szS)
+    table.cell(hud, 2, 5, velLabel, text_color = velCol, text_size = sz)
+    curvLabel = curvatureZScore > zThreshold ? '⚡ SPIKE' : curvatureZScore < -zThreshold ? '🔻 DROP' : '━ NORMAL'
+    curvCol = curvatureZScore > ignitionThreshold ? ignitionBullColor : curvatureZScore < -exhaustionThreshold ? exhaustionBullColor : neutralColor
+    table.cell(hud, 0, 6, 'CURV', text_color = neutralColor, text_size = sz)
+    table.cell(hud, 1, 6, str.tostring(curvatureZScore, '#.##') + 'σ', text_color = curvCol, text_size = szS)
+    table.cell(hud, 2, 6, curvLabel, text_color = curvCol, text_size = sz)
+    rsiLabel = rsiOfADX > 70 ? 'OB' : rsiOfADX < 30 ? 'OS' : '━'
+    rsiCol = rsiOfADX > 70 ? exhaustionBullColor : rsiOfADX < 30 ? ignitionBullColor : neutralColor
+    table.cell(hud, 0, 7, 'RSI²', text_color = neutralColor, text_size = sz)
+    table.cell(hud, 1, 7, str.tostring(rsiOfADX, '#.#'), text_color = rsiCol, text_size = szS)
+    table.cell(hud, 2, 7, rsiLabel, text_color = rsiCol, text_size = sz)
+    table.cell(hud, 0, 8, '━━━━━━━━━━━━', text_color = color.new(accentColor3, 70), text_size = sz)
+    table.cell(hud, 1, 8, 'PHASE', text_color = accentColor3, text_size = sz)
+    table.cell(hud, 2, 8, '━━━━━━━━━━━━', text_color = color.new(accentColor3, 70), text_size = sz)
+    string phaseIcon = switch confirmedPhase
+        PHASE_DORMANT => '💤'
+        PHASE_IGNITION => '⚡'
+        PHASE_ACCELERATION => '🚀'
+        PHASE_MATURE => '🏔'
+        PHASE_EXHAUSTION => '🔥'
+        PHASE_DECLINE => '📉'
+        => '━'
+    table.cell(hud, 0, 9, phaseIcon, text_color = phaseColor, text_size = szH)
+    table.cell(hud, 1, 9, confirmedPhase, text_color = phaseColor, text_size = szS)
+    table.cell(hud, 2, 9, str.tostring(phaseCounter) + 'bars', text_color = frameColor, text_size = sz)
+    sigIcon = trendIgniting ? '⚡' : trendExhausting ? '🔥' : trendAccelerating ? '🚀' : '○'
+    sigText = trendIgniting ? 'IGNITION' : trendExhausting ? 'EXHAUSTION' : trendAccelerating ? 'ACCEL' : 'WAIT'
+    sigCol = trendIgniting ? ignitionBullColor : trendExhausting ? exhaustionBullColor : trendAccelerating ? bullColor : neutralColor
+    table.cell(hud, 0, 10, 'SIG', text_color = neutralColor, text_size = sz)
+    table.cell(hud, 1, 10, sigText, text_color = sigCol, text_size = sz)
+    table.cell(hud, 2, 10, str.tostring(signalStrength, '#') + '%', text_color = signalStrength > 50 ? accentColor3 : neutralColor, text_size = sz)
+    table.cell(hud, 0, 11, '━━━━━━━━━━━━', text_color = color.new(frameColor, 70), text_size = sz)
+    table.cell(hud, 1, 11, 'STATUS', text_color = frameColor, text_size = sz)
+    table.cell(hud, 2, 11, '━━━━━━━━━━━━', text_color = color.new(frameColor, 70), text_size = sz)
+    zoneTxt = inIgnZone ? '⚡ IGN' : inExhZone ? '🔥 EXH' : '○ NONE'
+    zoneCol = inIgnZone ? ignitionBullColor : inExhZone ? exhaustionBullColor : neutralColor
+    table.cell(hud, 0, 12, 'ZONE', text_color = neutralColor, text_size = sz)
+    table.cell(hud, 1, 12, zoneTxt, text_color = zoneCol, text_size = sz)
+    table.cell(hud, 2, 12, '', text_size = sz)
+    divTxt = bullishDivergence ? '▲ BULL' : bearishDivergence ? '▼ BEAR' : '○ NONE'
+    divCol = bullishDivergence ? divBullColor : bearishDivergence ? divBearColor : neutralColor
+    table.cell(hud, 0, 13, 'DIV', text_color = neutralColor, text_size = sz)
+    table.cell(hud, 1, 13, divTxt, text_color = divCol, text_size = sz)
+    table.cell(hud, 2, 13, '', text_size = sz)
+    activeLineCount = array.size(activeSignals)
+    table.cell(hud, 0, 14, 'LINES', text_color = neutralColor, text_size = sz)
+    table.cell(hud, 1, 14, str.tostring(activeLineCount) + '/20', text_color = frameColor, text_size = sz)
+    table.cell(hud, 2, 14, '', text_size = sz)
+    if optMode
+        table.cell(hud, 0, 15, '━━━━━━━━━━━━', text_color = color.new(accentColor3, 70), text_size = sz)
+        table.cell(hud, 1, 15, 'OPTIMIZER', text_color = accentColor3, text_size = sz)
+        table.cell(hud, 2, 15, '━━━━━━━━━━━━', text_color = color.new(accentColor3, 70), text_size = sz)
+        wrCol = btWinRate >= 55 ? bullColor : btWinRate >= 45 ? accentColor3 : bearColor
+        table.cell(hud, 0, 16, 'WR', text_color = neutralColor, text_size = sz)
+        table.cell(hud, 1, 16, str.tostring(btWinRate, '#.#') + '%', text_color = wrCol, text_size = szS)
+        table.cell(hud, 2, 16, str.tostring(btTotalTrades), text_color = frameColor, text_size = sz)
+        pfCol = btProfitFactor >= 1.5 ? bullColor : btProfitFactor >= 1.0 ? accentColor3 : bearColor
+        table.cell(hud, 0, 17, 'PF', text_color = neutralColor, text_size = sz)
+        table.cell(hud, 1, 17, str.tostring(btProfitFactor, '#.##'), text_color = pfCol, text_size = szS)
+        table.cell(hud, 2, 17, robustText, text_color = robustCol, text_size = sz)
+    table.cell(hud, 0, 18, '', text_size = sz)
+    table.cell(hud, 1, 18, '⚡ Dskyz (DAFE) Trading Systems ⚡', text_color = color.new(frameColor, 50), text_size = sz)
+    table.cell(hud, 2, 18, '', text_size = sz)
+    // ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+    // 🔔 ALERTS
+    // ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+alertcondition(trendIgniting and bullishBias, '⚡ Trend Ignition LONG', 'ADX² Suite: Trend IGNITING - Bullish Bias!')
+alertcondition(trendIgniting and bearishBias, '⚡ Trend Ignition SHORT', 'ADX² Suite: Trend IGNITING - Bearish Bias!')
+alertcondition(trendExhausting, '🔥 Trend Exhaustion', 'ADX² Suite: Trend EXHAUSTING!')
+alertcondition(curvatureSpikeUp, '📈 Curvature Spike Up', 'ADX² Suite: Curvature spiking UP!')
+alertcondition(curvatureSpikeDown, '📉 Curvature Spike Down', 'ADX² Suite: Curvature spiking DOWN!')
+alertcondition(bullishDivergence, '🔄 Bullish Divergence', 'ADX² Suite: Bullish divergence!')
+alertcondition(bearishDivergence, '🔄 Bearish Divergence', 'ADX² Suite: Bearish divergence!')
+// ╔═══════════════════════════════════════════════════════════════════════════╗
+// ║                    ADX² CURVATURE SUITE - THEORY GUIDE                    ║
+// ╚═══════════════════════════════════════════════════════════════════════════╝
+//
+// Traditional ADX analysis focuses on the magnitude of trend strength.
+// The ADX² Suite introduces CURVATURE ANALYSIS - examining the rate of change
+// (velocity) and acceleration of ADX to detect trend ignition BEFORE the crowd.
+//
+// Key Innovation: Just as price action analysis uses momentum and acceleration,
+// we apply the same physics principles to ADX itself:
+//
+//   • ADX VALUE = Current trend strength (magnitude)
+//   • VELOCITY = Rate of change in ADX (1st derivative)
+//   • ACCELERATION = Change in velocity (2nd derivative / curvature)
+//
+// Why This Matters:
+//   When ADX acceleration spikes WHILE ADX is still low, it signals trend
+//   ignition - the market is transitioning from consolidation to trending.
+//   This gives you early entry opportunities before ADX reaches traditional
+//   "trend confirmation" levels (25+).
+//
+// ┌─────────────────────────────────────────────────────────────────────────┐
+// │ 2. Z-SCORE NORMALIZATION                                                │
+// └─────────────────────────────────────────────────────────────────────────┘
+//
+// Raw ADX acceleration values vary wildly across instruments and volatility
+// regimes. Z-Score normalization solves this by converting values to standard
+// deviations from the mean:
+//
+//   Z-Score = (Current Value - Mean) / Standard Deviation
+//
+// Benefits:
+//   • Universal thresholds work across all instruments
+//   • Adapts to changing volatility automatically
+//   • 2.0σ spike is equally significant on NQ, ES, or crypto
+//   • Eliminates need for instrument-specific calibration
+//
+// Interpretation:
+//   +2.0σ = Extreme positive acceleration (ignition signal)
+//   -2.0σ = Extreme negative acceleration (exhaustion signal)
+//   0.0σ  = Average behavior (no significant change)
+//
+// ┌─────────────────────────────────────────────────────────────────────────┐
+// │ 3. SIX-PHASE TREND LIFECYCLE                                            │
+// └─────────────────────────────────────────────────────────────────────────┘
+//
+// The ADX² Suite models trends as a lifecycle with six distinct phases:
+//
+//   💤 DORMANT (ADX < 20, low velocity)
+//      • No clear trend
+//      • Choppy, range-bound price action
+//      • Wait for ignition signal before entering
+//
+//   ⚡ IGNITION (ADX < 25, high acceleration)
+//      • Trend beginning to form
+//      • ADX accelerating rapidly from low levels
+//      • HIGHEST PROBABILITY ENTRY ZONE
+//      • Best risk/reward as stops are tight
+//
+//   🚀 ACCELERATION (ADX 20-40, positive velocity & acceleration)
+//      • Trend gaining strength
+//      • Momentum building
+//      • Secondary entry opportunities
+//      • Add to existing positions
+//
+//   🏔 MATURE (ADX > 40, velocity flat, acceleration negative)
+//      • Strong established trend
+//      • ADX high but no longer accelerating
+//      • Caution: potential exhaustion ahead
+//      • Consider taking partial profits
+//
+//   🔥 EXHAUSTION (ADX > 40, negative acceleration spike)
+//      • Trend losing steam
+//      • High probability of reversal or deep pullback
+//      • EXIT SIGNAL for trend-following positions
+//      • Potential counter-trend opportunity
+//
+//   📉 DECLINE (ADX falling, negative velocity)
+//      • Trend weakening
+//      • Return to range-bound conditions
+//      • Avoid new entries
+//      • Prepare for next dormant phase
+//
+// ┌─────────────────────────────────────────────────────────────────────────┐
+// │ 4. KILL ZONES - HIGH PROBABILITY AREAS                                  │
+// └─────────────────────────────────────────────────────────────────────────┘
+//
+// ⚡ IGNITION ZONE
+//   Conditions: ADX < 20 + Positive Velocity + Acceleration > 0.75σ
+//   
+//   What It Means:
+//   Price is transitioning from consolidation to trending. The market is
+//   "waking up" from dormancy. This is where institutional orders begin
+//   accumulating, creating the foundation for a new trend.
+//
+//   Trading Strategy:
+//   • Prepare for entry on next confirmed signal
+//   • Tight stops (market still consolidating)
+//   • Position for trend-following opportunity
+//   • High risk/reward ratio (3:1 or better)
+//
+// 🔥 EXHAUSTION ZONE  
+//   Conditions: ADX > 32 + Negative Acceleration < -0.75σ
+//   
+//   What It Means:
+//   Trend is overextended and losing momentum. While ADX remains high,
+//   the rate of change is decelerating sharply - similar to a car
+//   slamming on brakes while still moving fast.
+//
+//   Trading Strategy:
+//   • Exit trend-following positions
+//   • Take profits on swing trades
+//   • Avoid new entries in trend direction
+//   • Watch for reversal or deep retracement
+//
+// ┌─────────────────────────────────────────────────────────────────────────┐
+// │ 5. SIGNAL HIERARCHY                                                     │
+// └─────────────────────────────────────────────────────────────────────────┘
+//
+// PRIMARY SIGNALS (Triangles on chart)
+//
+//   ⚡ IGNITION SIGNALS
+//      Strength: 30 points
+//      Requirements: Phase transition to IGNITION + DI bias
+//      Best For: Trend initiation entries
+//      Timeframes: Most reliable on 5m, 1h, 4h
+//
+//   🚀 ACCELERATION SIGNALS  
+//      Strength: 20 points
+//      Requirements: ACCELERATION phase following IGNITION
+//      Best For: Adding to positions, swing entries
+//      Timeframes: All timeframes, especially 1h+
+//
+//   🔥 EXHAUSTION SIGNALS
+//      Strength: 30 points
+//      Requirements: Phase transition to EXHAUSTION + DI bias
+//      Best For: Profit-taking, exits, counter-trend
+//      Timeframes: Most significant on 1h, 4h
+//
+// SECONDARY SIGNALS (X markers on chart)
+//
+//   🔄 DIVERGENCE SIGNALS
+//      Bullish: Price falling while ADX rising (trend strengthening into weakness)
+//      Bearish: Price rising while ADX falling (trend weakening into strength)
+//      Best For: Reversal anticipation, counter-trend trades
+//      Timeframes: 5m for scalps, 1h+ for swings
+//
+// ┌─────────────────────────────────────────────────────────────────────────┐
+// │ 6. QUANTUM VORTEX BANDS™                                                │
+// └─────────────────────────────────────────────────────────────────────────┘
+//
+// The Vortex Bands provide dynamic support/resistance zones for ADX itself,
+// adapting to both curvature (acceleration) and volatility.
+//
+// Band Modes:
+//
+//   TRIPLE LAYER (Default)
+//   • Balanced bands with 3 zones above and below basis
+//   • Width adapts to ADX volatility and curvature
+//   • Best for: General purpose, all timeframes
+//
+//   FRACTAL CLOUD
+//   • Wider outer bands, tighter inner core
+//   • Emphasizes extreme movements
+//   • Best for: High volatility instruments (crypto, NQ)
+//
+//   MOMENTUM TUNNEL
+//   • Narrow, focused bands
+//   • Thick inner bands for precision
+//   • Best for: Lower timeframes (1m, 5m), scalping
+//
+//   PHASE SPECTRUM
+//   • Balanced but slightly tighter than Triple Layer
+//   • Color-coded by trend phase
+//   • Best for: Visual phase identification, swing trading
+//
+// Interpretation:
+//   • ADX touching upper bands = Strong momentum
+//   • ADX in center zone = Normal behavior
+//   • Band expansions = Increased volatility/acceleration
+//   • Band contractions = Consolidation ahead
+//
+// ┌─────────────────────────────────────────────────────────────────────────┐
+// │ 7. TIMEFRAME OPTIMIZATION                                               │
+// └─────────────────────────────────────────────────────────────────────────┘
+//
+// 1-MINUTE TIMEFRAME (Scalping)
+//   ADX Length: 10-14 (faster response)
+//   Z-Score Lookback: 30-40 (shorter adaptation)
+//   Signal Threshold: 2.0-2.5σ (more selective)
+//   Min Bars Between: 5-8 (prevent over-trading)
+//   Best Signals: Ignition + Acceleration
+//   Notes: Expect more noise, focus on major ignitions only
+//
+// 5-MINUTE TIMEFRAME (Day Trading)
+//   ADX Length: 14 (default)
+//   Z-Score Lookback: 50 (balanced)
+//   Signal Threshold: 1.5-2.0σ (moderate)
+//   Min Bars Between: 8-10
+//   Best Signals: All signal types
+//   Notes: Sweet spot for intraday momentum trading
+//
+// 1-HOUR TIMEFRAME (Swing/Position)
+//   ADX Length: 14-21 (smoother)
+//   Z-Score Lookback: 50-75 (longer context)
+//   Signal Threshold: 1.5σ (more signals)
+//   Min Bars Between: 8-12
+//   Best Signals: Ignition + Exhaustion + Divergence
+//   Notes: More reliable, fewer false signals
+//
+// 4-HOUR TIMEFRAME (Position/Investment)
+//   ADX Length: 14-21
+//   Z-Score Lookback: 75-100 (long-term context)
+//   Signal Threshold: 1.0-1.5σ (sensitive)
+//   Min Bars Between: 3-5 (signals are rare)
+//   Best Signals: Ignition + Exhaustion (major cycle changes)
+//   Notes: Highly reliable, use for position sizing and bias
+//
+// ┌─────────────────────────────────────────────────────────────────────────┐
+// │ 8. MULTI-TIMEFRAME CONFLUENCE                                           │
+// └─────────────────────────────────────────────────────────────────────────┘
+//
+// Highest Probability Setups (3-Timeframe Alignment):
+//
+//   EXAMPLE: Trading NQ Futures
+//   
+//   4H Chart: IGNITION signal fired 3 bars ago (bullish bias established)
+//   1H Chart: Currently in ACCELERATION phase (trend building)
+//   5M Chart: Fresh IGNITION signal just fired (entry trigger)
+//   
+//   Action: Enter LONG on 5m IGNITION with:
+//   • Stop: Below 5m signal line (tight)
+//   • Target 1: 1H MATURE phase (TP1)
+//   • Target 2: 4H EXHAUSTION signal (TP2)
+//   • Risk/Reward: 5:1 or better
+//
+// Key Principles:
+//   • Higher timeframe provides BIAS
+//   • Lower timeframe provides ENTRY
+//   • Exit on exhaustion signals OR higher TF phase change
+//   • Never counter-trade higher timeframe ignition
+//
+// ┌─────────────────────────────────────────────────────────────────────────┐
+// │ 9. RISK MANAGEMENT WITH SIGNAL LINES                                    │
+// └─────────────────────────────────────────────────────────────────────────┘
+//
+// The Signal Line System provides automatic SL/TP management:
+//
+// ENTRY LINE (Colored)
+//   • Marks exact signal trigger price
+//   • Tracks win/loss with ✓/✗ markers
+//   • Expires after max bars or price break
+//
+// STOP LOSS LINE (Red, dotted)
+//   • Placed at Entry ± (ATR × SL Multiplier)
+//   • Default: 1.5 ATR (balanced)
+//   • Scalping: 0.75-1.0 ATR (tight)
+//   • Swing: 2.0-3.0 ATR (wider)
+//
+// TAKE PROFIT LINES (Green, varying opacity)
+//   TP1: 1.0 ATR (quick profit, 50% off)
+//   TP2: 2.0 ATR (primary target, 30% off)
+//   TP3: 3.0 ATR (runner, let it ride)
+//
+// Position Management:
+//   1. Enter full position at signal
+//   2. Move stop to breakeven at TP1
+//   3. Take 50% profit at TP1
+//   4. Take 30% profit at TP2
+//   5. Trail stop for final 20% until TP3 or exhaustion signal
+//
+// ┌─────────────────────────────────────────────────────────────────────────┐
+// │ 10. ADVANCED: OPTIMIZER ENGINE                                          │
+// └─────────────────────────────────────────────────────────────────────────┘
+//
+// The Optimizer Engine backtests signals across the visible chart:
+//
+// Metrics Tracked:
+//   • Win Rate (target: 50%+)
+//   • Profit Factor (target: 1.5+)
+//   • Total Trades (minimum: 20 for statistical relevance)
+//   • Expectancy (average profit per trade)
+//
+// Stability Scoring:
+//   ROBUST (80+ points): Settings optimized, ready for live trading
+//   STABLE (60-79): Good performance, minor tweaking may help
+//   FRAGILE (40-59): Inconsistent, needs parameter adjustment
+//   OVERFIT (<40): Poor performance, major changes required
+//
+// How To Use:
+//   1. Enable Optimizer in settings
+//   2. Load historical data (500+ bars minimum)
+//   3. Adjust TP/SL multipliers
+//   4. Check dashboard for stability rating
+//   5. Aim for ROBUST or STABLE before live trading
+//
+// Warning: Optimizer uses simplified entry/exit logic. Always verify
+// signals manually before risking real capital.
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+//                                    DskyzInvestments
+//                              "Detect Trend Ignition Before the Crowd"
+//                                  "Trade Smarter, Not Harder"
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════

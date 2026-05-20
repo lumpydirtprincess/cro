@@ -1,0 +1,74 @@
+{
+  "manifest_version": 3,
+  "name": "TradingView AI Analysis & Pine Script Assistant",
+  "version": "0.1.0",
+  "description": "AI-powered chart analysis and Pine Script coding assistant for TradingView",
+  "author": "Your Name",
+
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting"
+  ],
+
+  "host_permissions": [
+    "https://www.tradingview.com/*",
+    "https://tradingview.com/*",
+    "https://api.anthropic.com/*"
+  ],
+
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
+
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.tradingview.com/*",
+        "https://tradingview.com/*"
+      ],
+      "js": [
+        "core/utils/logger.js",
+        "core/utils/tradingview-dom.js",
+        "core/storage.js",
+        "core/indicator-library.js",
+        "core/signal-rules.js",
+        "content/chart-analyzer/indicator-extractor.js",
+        "content/chart-analyzer/timeframe-switcher.js",
+        "content/chart-analyzer/signal-generator.js",
+        "content/chart-analyzer/analysis-display.js",
+        "content/chart-analyzer/chart-analyzer.js",
+        "content/editor-assistant/editor-detector.js",
+        "content/editor-assistant/code-extractor.js",
+        "content/editor-assistant/ai-client.js",
+        "content/editor-assistant/code-injector.js",
+        "content/editor-assistant/brainstorming-engine.js",
+        "content/editor-assistant/editor-assistant.js",
+        "content/content-main.js"
+      ],
+      "css": [
+        "ui/chart-panel/panel.css",
+        "ui/editor-sidebar/sidebar.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "action": {
+    "default_popup": "ui/popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+
+  "web_accessible_resources": []
+}
+

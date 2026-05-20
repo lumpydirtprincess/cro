@@ -1,0 +1,19 @@
+// The MIT License (MIT)
+// © mihakralj
+//@version=6
+
+// 
+// Category: core
+// Auto-converted to TradingView v6 Library
+//
+library("", "v1.0.0", overlay=false)
+
+
+export typprice(float h, float l, float c) =>
+    (h + l + c) / 3.0
+
+
+result = typprice(high, low, close)
+
+// plot(result, "TypPrice", color.new(color.green, 0), 2)  // Disabled in library
+

@@ -1,0 +1,197 @@
+//@version=6
+indicator("Reverse Wave Trend %J", shorttitle="RevWT-J", overlay=true)
+
+// === INPUTS ===
+// Wave Trend Parameters
+wt_channel_length = input.int(10, title="WT Channel Length", minval=1, maxval=50, group="Wave Trend")
+wt_average_length = input.int(21, title="WT Average Length", minval=1, maxval=50, group="Wave Trend")
+
+// %J Parameters
+j_multiplier_fast = input.float(3.0, title="Fast Multiplier", minval=0.1, maxval=10.0, step=0.1, group="%J Parameters")
+j_multiplier_slow = input.float(2.0, title="Slow Multiplier", minval=0.1, maxval=10.0, step=0.1, group="%J Parameters")
+
+// Target Settings
+target_wt_j = input.float(60.0, title="Target WT %J", minval=-100, maxval=100, step=5.0, group="Targets")
+show_oversold_target = input.bool(true, title="Show Oversold Target (-60)", group="Targets")
+show_overbought_target = input.bool(true, title="Show Overbought Target (+60)", group="Targets")
+
+// Display Options
+show_price_levels = input.bool(true, title="Show Required Price Levels", group="Display")
+show_current_wt_j = input.bool(true, title="Show Current WT %J Value", group="Display")
+
+// === WAVE TREND CALCULATION ===
+ap = hlc3
+esa = ta.ema(ap, wt_channel_length)
+d = ta.ema(math.abs(ap - esa), wt_channel_length)
+ci = (ap - esa) / (0.015 * d)
+wt1 = ta.ema(ci, wt_average_length)
+wt2 = ta.sma(wt1, 4)
+
+// Current WT %J
+current_wt_j = j_multiplier_fast * wt1 - j_multiplier_slow * wt2
+
+// === REVERSE CALCULATION ===
+// To find required price for target WT %J, we need to work backwards through the calculation
+// This is complex because of the EMA smoothing, so we'll use approximation
+
+// Get recent price range for context
+price_range_bars = 20
+recent_high = ta.highest(high, price_range_bars)
+recent_low = ta.lowest(low, price_range_bars)
+price_range = recent_high - recent_low
+
+// Estimate what CI (Channel Index) we need for target WT %J
+// Since wt1 ≈ ema(ci) and wt2 ≈ sma(wt1), we can approximate:
+// target_wt_j ≈ j_multiplier_fast * target_ci - j_multiplier_slow * ema(target_ci)
+// This is a simplification, but gives us a working approximation
+
+estimate_required_ci(target_j) =>
+    // Simplified: assume wt2 ≈ wt1 * 0.8 (rough approximation)
+    // target_j = j_multiplier_fast * wt1 - j_multiplier_slow * (wt1 * 0.8)
+    // target_j = wt1 * (j_multiplier_fast - j_multiplier_slow * 0.8)
+    smoothing_factor = 0.8
+    effective_multiplier = j_multiplier_fast - j_multiplier_slow * smoothing_factor
+    target_wt1 = effective_multiplier != 0 ? target_j / effective_multiplier : 0
+    target_wt1
+
+// Calculate required CI for different targets
+required_ci_target = estimate_required_ci(target_wt_j)
+required_ci_overbought = estimate_required_ci(60.0)
+required_ci_oversold = estimate_required_ci(-60.0)
+
+// Convert CI back to required price
+// ci = (ap - esa) / (0.015 * d)
+// So: ap = esa + ci * (0.015 * d)
+current_d = d
+current_esa = esa
+
+calc_required_price(required_ci) =>
+    if current_d > 0
+        required_ap = current_esa + required_ci * (0.015 * current_d)
+        required_ap
+    else
+        close
+
+required_price_target = calc_required_price(required_ci_target)
+required_price_overbought = calc_required_price(required_ci_overbought)
+required_price_oversold = calc_required_price(required_ci_oversold)
+
+// Check feasibility (within reasonable range)
+is_target_feasible = required_price_target >= recent_low * 0.95 and required_price_target <= recent_high * 1.05
+is_overbought_feasible = required_price_overbought >= recent_low * 0.95 and required_price_overbought <= recent_high * 1.05
+is_oversold_feasible = required_price_oversold >= recent_low * 0.95 and required_price_oversold <= recent_high * 1.05
+
+// === PLOTTING ===
+// Current price
+plot(close, title="Current Price", color=color.white, linewidth=1)
+
+// Required price levels
+plot(show_price_levels ? required_price_target : na, 
+     title="Required Price for Target", 
+     color=is_target_feasible ? color.orange : color.red, 
+     linewidth=2, style=plot.style_circles)
+
+plot(show_price_levels and show_overbought_target ? required_price_overbought : na, 
+     title="Price for Overbought (+60)", 
+     color=is_overbought_feasible ? color.red : color.maroon, 
+     linewidth=1, style=plot.style_cross)
+
+plot(show_price_levels and show_oversold_target ? required_price_oversold : na, 
+     title="Price for Oversold (-60)", 
+     color=is_oversold_feasible ? color.green : color.olive, 
+     linewidth=1, style=plot.style_cross)
+
+// Price range context
+plot(recent_high, title="Recent High", color=color.gray, linewidth=1, style=plot.style_stepline, alpha=50)
+plot(recent_low, title="Recent Low", color=color.gray, linewidth=1, style=plot.style_stepline, alpha=50)
+
+// Background coloring
+bgcolor(is_target_feasible ? color.new(color.blue, 95) : color.new(color.red, 98))
+
+// === LABELS AND INFO ===
+if barstate.islast and show_price_levels
+    // Main target label
+    label.new(bar_index, required_price_target,
+              text="Target: " + str.tostring(target_wt_j, "#.#") + 
+                   "\nNeed: " + str.tostring(required_price_target, format.mintick) +
+                   "\nCurrent: " + str.tostring(close, format.mintick) +
+                   "\nWT %J: " + str.tostring(current_wt_j, "#.##"),
+              style=label.style_label_left,
+              color=is_target_feasible ? color.orange : color.red,
+              textcolor=color.white,
+              size=size.normal)
+    
+    // Overbought/Oversold labels
+    if show_overbought_target
+        label.new(bar_index + 2, required_price_overbought,
+                  text="OB: " + str.tostring(required_price_overbought, format.mintick),
+                  style=label.style_label_left,
+                  color=color.red,
+                  textcolor=color.white,
+                  size=size.small)
+    
+    if show_oversold_target
+        label.new(bar_index + 4, required_price_oversold,
+                  text="OS: " + str.tostring(required_price_oversold, format.mintick),
+                  style=label.style_label_left,
+                  color=color.green,
+                  textcolor=color.white,
+                  size=size.small)
+
+// === INFORMATION TABLE ===
+if barstate.islast
+    var table info_table = table.new(position.bottom_right, 3, 6, bgcolor=color.white, border_width=1)
+    
+    // Headers
+    table.cell(info_table, 0, 0, "Target", text_color=color.black, bgcolor=color.gray)
+    table.cell(info_table, 1, 0, "Required Price", text_color=color.black, bgcolor=color.gray)
+    table.cell(info_table, 2, 0, "Feasible?", text_color=color.black, bgcolor=color.gray)
+    
+    // Current situation
+    table.cell(info_table, 0, 1, "Current WT %J", text_color=color.black)
+    table.cell(info_table, 1, 1, str.tostring(current_wt_j, "#.##"), text_color=color.black)
+    table.cell(info_table, 2, 1, "N/A", text_color=color.black)
+    
+    // Target
+    table.cell(info_table, 0, 2, "Target " + str.tostring(target_wt_j, "#.#"), text_color=color.black)
+    table.cell(info_table, 1, 2, str.tostring(required_price_target, format.mintick), text_color=color.black)
+    table.cell(info_table, 2, 2, is_target_feasible ? "✓" : "✗", 
+               text_color=is_target_feasible ? color.green : color.red)
+    
+    // Overbought
+    table.cell(info_table, 0, 3, "Overbought +60", text_color=color.black)
+    table.cell(info_table, 1, 3, str.tostring(required_price_overbought, format.mintick), text_color=color.black)
+    table.cell(info_table, 2, 3, is_overbought_feasible ? "✓" : "✗", 
+               text_color=is_overbought_feasible ? color.green : color.red)
+    
+    // Oversold
+    table.cell(info_table, 0, 4, "Oversold -60", text_color=color.black)
+    table.cell(info_table, 1, 4, str.tostring(required_price_oversold, format.mintick), text_color=color.black)
+    table.cell(info_table, 2, 4, is_oversold_feasible ? "✓" : "✗", 
+               text_color=is_oversold_feasible ? color.green : color.red)
+    
+    // Distance to target
+    price_distance = math.abs(close - required_price_target)
+    table.cell(info_table, 0, 5, "Distance to Target", text_color=color.black)
+    table.cell(info_table, 1, 5, str.tostring(price_distance, format.mintick), text_color=color.black)
+    table.cell(info_table, 2, 5, "", text_color=color.black)
+
+// === ALERTS ===
+// Alert when price approaches required levels
+close_to_target = math.abs(close - required_price_target) < price_range * 0.02
+alertcondition(close_to_target and is_target_feasible, 
+               title="Approaching Target Price", 
+               message="Price approaching level for WT %J target: " + str.tostring(target_wt_j))
+
+// Alert when WT %J reaches target
+target_reached = math.abs(current_wt_j - target_wt_j) < 2.0
+alertcondition(target_reached, 
+               title="WT %J Target Reached", 
+               message="Wave Trend %J reached target: " + str.tostring(target_wt_j) + 
+                      " (Current: " + str.tostring(current_wt_j, "#.##") + ")")
+
+// Extreme level alerts
+wt_j_extreme_high = current_wt_j > 80
+wt_j_extreme_low = current_wt_j < -80
+alertcondition(wt_j_extreme_high, title="WT %J Extreme High", message="Wave Trend %J above 80: " + str.tostring(current_wt_j, "#.##"))
+alertcondition(wt_j_extreme_low, title="WT %J Extreme Low", message="Wave Trend %J below -80: " + str.tostring(current_wt_j, "#.##"))

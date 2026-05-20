@@ -1,0 +1,186 @@
+//@version=6
+//@dnatradez 
+
+//import Gentleman-Goat/TradingToolsLibrary/1 as ttl
+import TradingView/ta/10
+
+indicator('hmCCI', 'HMACCI', true)
+
+_src = input.source(close)
+length = input.int(28, 'len')
+
+// ====== HMA SECTION ======
+src_hull = input(close, 'HMA Source', group = 'HMA Settings')
+
+// MA1 Settings
+ma1_mode = input.string('Hma', 'MA1 Type', ['Hma', 'Thma', 'Ehma', 'Rmahma'], group = 'MA1 Settings')
+length_hull1 = input.float(25.0, 'MA1 Length', group = 'MA1 Settings')
+lengthMult1 = input.float(2.0, 'MA1 Length Multiplier', 0.01, 50, 0.01, group = 'MA1 Settings')
+cur1 = input.int(0, 'MA1 Current Bar Offset', group = 'MA1 Settings')
+hist1 = input.int(2, 'MA1 History Bars', group = 'MA1 Settings')
+
+MA1up1 = input.color(#009dff, 'MA1 Up Top', inline = 'ma1up', group = 'MA1 Settings')
+MA1up2 = input.color(color.rgb(0, 255, 234), 'MA1 Up Bottom', inline = 'ma1up', group = 'MA1 Settings')
+MA1dwn1 = input.color(#ffffff, 'MA1 Down Top', inline = 'ma1dwn', group = 'MA1 Settings')
+MA1dwn2 = input.color(#960000, 'MA1 Down Bottom', inline = 'ma1dwn', group = 'MA1 Settings')
+ma1_line_up = input.color(color.new(#f66669, 0), 'MA1 Line Up Color', group = 'MA1 Settings')
+ma1_line_down = input.color(color.new(#6966f6, 0), 'MA1 Line Down Color', group = 'MA1 Settings')
+
+// MA2 Settings
+ma2_enabled = input.bool(false, 'Enable MA2?', group = 'MA2 Settings')
+ma2_mode = input.string('Thma', 'MA2 Type', ['Hma', 'Thma', 'Ehma'], group = 'MA2 Settings')
+length_hull2 = input.float(27.5, 'MA2 Length', group = 'MA2 Settings')
+lengthMult2 = input.float(2.0, 'MA2 Length Multiplier', 0.01, 50, 0.01, group = 'MA2 Settings')
+cur2 = input.int(0, 'MA2 Current Bar Offset', group = 'MA2 Settings')
+hist2 = input.int(2, 'MA2 History Bars', group = 'MA2 Settings')
+
+MA2up1 = input.color(#38617a, 'MA2 Up Top', inline = 'ma2up', group = 'MA2 Settings')
+MA2up2 = input.color(#814681, 'MA2 Up Bottom', inline = 'ma2up', group = 'MA2 Settings')
+MA2dwn1 = input.color(#4892b7, 'MA2 Down Top', inline = 'ma2dwn', group = 'MA2 Settings')
+MA2dwn2 = input.color(#288db8, 'MA2 Down Bottom', inline = 'ma2dwn', group = 'MA2 Settings')
+neutral_color2 = input.color(color.rgb(180, 157, 255), 'MA2 Neutral', group = 'MA2 Settings')
+ma2_line_up = input.color(color.new(#69f666, 0), 'MA2 Line Up Color', group = 'MA2 Settings')
+ma2_line_down = input.color(color.new(#f6d966, 0), 'MA2 Line Down Color', group = 'MA2 Settings')
+
+// MA3 Settings
+ma3_enabled = input.bool(false, 'Enable MA3?', group = 'MA3 Settings')
+ma3_mode = input.string('Ehma', 'MA3 Type', ['Hma', 'Thma', 'Ehma'], group = 'MA3 Settings')
+length_hull3 = input.float(55, 'MA3 Length', minval = 1, group = 'MA3 Settings')
+lengthMult3 = input.float(4.0, 'MA3 Length Multiplier', 0.01, 50, 0.01, group = 'MA3 Settings')
+cur3 = input.int(0, 'MA3 Current Bar Offset', group = 'MA3 Settings')
+hist3 = input.int(2, 'MA3 History Bars', group = 'MA3 Settings')
+
+MA3up1 = input.color(#38617a, 'MA3 Up Top', inline = 'ma3up', group = 'MA3 Settings')
+MA3up2 = input.color(#814681, 'MA3 Up Bottom', inline = 'ma3up', group = 'MA3 Settings')
+MA3dwn1 = input.color(#4892b7, 'MA3 Down Top', inline = 'ma3dwn', group = 'MA3 Settings')
+MA3dwn2 = input.color(#288db8, 'MA3 Down Bottom', inline = 'ma3dwn', group = 'MA3 Settings')
+neutral_color3 = input.color(color.rgb(180, 157, 255), 'MA3 Neutral', group = 'MA3 Settings')
+ma3_line_up = input.color(color.new(#ff9966, 0), 'MA3 Line Up Color', group = 'MA3 Settings')
+ma3_line_down = input.color(color.new(#66ffcc, 0), 'MA3 Line Down Color', group = 'MA3 Settings')
+
+// Fill Transparency
+fill_transparency = input.int(0, 'Fill Transparency', 0, 100, 20, group = 'Visual Settings')
+
+// ====== HMA FUNCTIONS ======
+HMA(_src, _length) =>
+    ta.wma(2 * ta.wma(_src, _length / 2) - ta.wma(_src, _length), math.round(math.sqrt(_length)))
+
+EHMA(_src, _length) =>
+    ta.ema(2 * ta.ema(_src, _length / 2) - ta.ema(_src, _length), math.round(math.sqrt(_length)))
+
+THMA(_src, _length) =>
+    ta.wma(ta.wma(_src, _length / 3) * 3 - ta.wma(_src, _length / 2) - ta.wma(_src, _length), _length)
+
+thma3(_src, _length) =>
+    ta.wma(ta.wma(_src, _length / 3) * 3 - ta.wma(_src, _length / 2) - ta.wma(_src, _length), _length)
+thma4(_src, _length) =>
+    ta.wma(ta.wma(_src, _length / 4) * 4 - ta.wma(_src, _length / 3) - ta.wma(_src, _length / 2) - ta.wma(_src, _length), _length)
+thma5(_src, _length) =>
+    ta.wma(ta.wma(_src, _length / 5) * 5 - ta.wma(_src, _length / 4) - ta.wma(_src, _length / 3) - ta.wma(_src, _length / 2) - ta.wma(_src, _length), _length)
+thma6(_src, _length) =>
+    ta.wma(ta.wma(_src, _length / 6) * 6 - ta.wma(_src, _length / 5) - ta.wma(_src, _length / 4) - ta.wma(_src, _length / 3) - ta.wma(_src, _length / 2) - ta.wma(_src, _length), _length)
+
+hma3(_src, _length)=>
+    p = length/2
+    ta.wma(ta.wma(close,p/3)*3 - ta.wma(close,p/2) - ta.wma(close,p),p)
+
+hma4(_src, _length)=>
+    p = length/2
+    ta.wma(ta.wma(close,p/4)*4 - ta.wma(close,p/3) - ta.wma(close,p/2) - ta.wma(close,p),p)
+
+HMA4th(_src,_length) => ta.wma(4 * ta.wma(source, length / 4) - 6 * ta.wma(source, length / 4 * 2) + 4 * ta.wma(source, length / 4 * 3) - ta.wma(source, length), rndin(math.sqrt(length)))    
+
+hma4th(_src,_length) => ta.wma(4 * ta.wma(source, length / 4) - 6 * ta.wma(source, length / 4 * 2) + 4 * ta.wma(source, length / 4 * 3) - ta.wma(source, length), rndin(math.sqrt(length)))
+
+hma5th(_src,_length) => ta.wma(5 * ta.wma(source, length / 5) - 10 * ta.wma(source, length / 5 * 2) + 10 * ta.wma(source, length / 5 * 3) - 5 * ta.wma(source, length / 5 * 4) + ta.wma(source, length), rndin(math.sqrt(length)))
+hma6th(_src,_length) => ta.wma(6 * ta.wma(source, length / 6) - 15 * ta.wma(source, length / 6 * 2) + 20 * ta.wma(source, length / 6 * 3) - 15 * ta.wma(source, length / 6 * 4) + 6 * ta.wma(source, length / 6 * 5) - ta.wma(source, length), rndin(math.sqrt(length)))
+
+RMAHMA(_src, _length) =>
+    ta.rma(ta.rma(_src, _length / 3) * 3 - ta.rma(_src, _length / 2) - ta.rma(_src, _length), _length)
+
+// Clean Switch Functions for each HMA
+get_ma1(src, len) =>
+    switch ma1_mode
+        'Hma' => HMA(src, len)
+        'Thma' => THMA(src, len / 2)
+        'Ehma' => EHMA(src, len)
+        'Rmahma' => RMAHMA(src, len/2)
+
+get_ma2(src, len) =>
+    switch ma2_mode
+        'Hma' => HMA(src, len)
+        'Thma' => THMA(src, len / 2)
+        'Ehma' => EHMA(src, len)
+
+get_ma3(src, len) =>
+    switch ma3_mode
+        'Hma' => HMA(src, len)
+        'Thma' => THMA(src, len / 2)
+        'Ehma' => EHMA(src, len)
+
+// ====== CALCULATIONS ======
+ma1 = get_ma1(src_hull, int(length_hull1 * lengthMult1))
+ma2 = ma2_enabled ? get_ma2(src_hull, int(length_hull2 * lengthMult2)) : na
+ma3 = ma3_enabled ? get_ma3(src_hull, int(length_hull3 * lengthMult3)) : na
+
+// Current and historical values
+fh1 = ma1[cur1]
+sh1 = fh1[hist1]
+
+fh2 = ma2[cur2]
+sh2 = fh2[hist2]
+
+fh3 = ma3[cur3]
+sh3 = fh3[hist3]
+
+// Double gradient calculations for MA1
+grad1_up_top = color.from_gradient(fh1, low, high, MA1up1, MA1up2)
+grad1_up_bot = color.from_gradient(sh1, low, high, MA1up1, MA1up2)
+fill1_up = color.from_gradient(fh1, sh1, fh1, grad1_up_top, grad1_up_bot)
+
+grad1_dwn_top = color.from_gradient(fh1, low, high, MA1dwn1, MA1dwn2)
+grad1_dwn_bot = color.from_gradient(sh1, low, high, MA1dwn1, MA1dwn2)
+fill1_dwn = color.from_gradient(fh1, sh1, fh1, grad1_dwn_top, grad1_dwn_bot)
+
+grady1 = fh1 > fh1[1] ? fill1_up : fill1_dwn
+ol1 = fh1 > fh1[1] ? ma1_line_up : ma1_line_down
+
+// Double gradient calculations for MA2
+grad2_up_top = color.from_gradient(fh2, low, high, MA2up1, MA2up2)
+grad2_up_bot = color.from_gradient(sh2, low, high, MA2up1, MA2up2)
+fill2_up = color.from_gradient(fh2, sh2, fh2, grad2_up_top, grad2_up_bot)
+
+grad2_dwn_top = color.from_gradient(fh2, low, high, MA2dwn1, MA2dwn2)
+grad2_dwn_bot = color.from_gradient(sh2, low, high, MA2dwn1, MA2dwn2)
+fill2_dwn = color.from_gradient(fh2, sh2, fh2, grad2_dwn_top, grad2_dwn_bot)
+
+grady2 = fh2 > fh2[1] ? fill2_up : fill2_dwn
+ol2 = fh2 > fh2[1] ? ma2_line_up : ma2_line_down
+
+// Double gradient calculations for MA3
+grad3_up_top = color.from_gradient(fh3, low, high, MA3up1, MA3up2)
+grad3_up_bot = color.from_gradient(sh3, low, high, MA3up1, MA3up2)
+fill3_up = color.from_gradient(fh3, sh3, fh3, grad3_up_top, grad3_up_bot)
+
+grad3_dwn_top = color.from_gradient(fh3, low, high, MA3dwn1, MA3dwn2)
+grad3_dwn_bot = color.from_gradient(sh3, low, high, MA3dwn1, MA3dwn2)
+fill3_dwn = color.from_gradient(fh3, sh3, fh3, grad3_dwn_top, grad3_dwn_bot)
+
+grady3 = fh3 > fh3[1] ? fill3_up : fill3_dwn
+ol3 = fh3 > fh3[1] ? ma3_line_up : ma3_line_down
+band = input.bool(false, 'show band')
+// ====== PLOTS ======
+// MA1 Plots
+Fi1 = plot(fh1, title = 'MHULL1', color = ol1, linewidth = 2, force_overlay = true)
+Fi2 = plot(sh1, title = 'SHULL1', color = band ? ol1 : na , linewidth = 2, force_overlay = true)
+fill(Fi1, Fi2, title = 'MA1 Band', color = color.new(grady1, fill_transparency))
+
+// MA2 Plots
+Fi3 = plot(ma2_enabled ? fh2 : na, title = 'MHULL2', color = ol2, linewidth = 2, force_overlay = true)
+Fi4 = plot(ma2_enabled ? sh2 : na, title = 'SHULL2', color = band ? ol2 : na, linewidth = 2, force_overlay = true)
+fill(Fi3, Fi4, title = 'MA2 Band', color = color.new(grady2, fill_transparency))
+
+// MA3 Plots
+Fi5 = plot(ma3_enabled ? fh3 : na, title = 'MHULL3', color = ol3, linewidth = 2, force_overlay = true)
+Fi6 = plot(ma3_enabled ? sh3 : na, title = 'SHULL3', color = band ? ol3 : na, linewidth = 2, force_overlay = true)
+fill(Fi3, Fi6, title = 'MA3 Band', color = color.new(grady3, fill_transparency))

@@ -1,0 +1,154 @@
+//@version=6
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+
+///////////////////////////////////////////////////////////////////////////////
+
+indicator('Reverse Stochastic', 'RSTOCH', false, format.price, precision = 2)
+
+///////////////////////////////////////////////////////////////////////////////
+// Inputs
+
+TextBoxOn = input(true, 'Info Box On')
+DecPlaces = input.int(2, 'Prices Decimal Places', minval = 0, maxval = 10)
+BoxOffSet = input.int(5, 'Info Box Offset', minval = 1, maxval = 50)
+
+///////////////////////////////////////////////////////////////////////////////
+// Stoch Inputs
+
+Src = input(close, 'Stochastic Source')
+
+LenK = input.int(14, 'Stochs K Length', minval = 1, maxval = 200)
+LenD = input.int(3, 'Stochs D Length', minval = 1, maxval = 200)
+SmthK = input.int(6, 'Stochs Smooth', minval = 1, maxval = 200)
+
+///////////////////////////////////////////////////////////////////////////////
+// Scale Zone Inputs & Variable Declarations
+
+ScaleHi = 100
+BullHi = input.int(80, 'Bull Control Zone High', minval = 1)
+BullLo = input.float(61.8, 'Bull Control Zone Low', minval = 1)
+MidLine = input.int(50, 'Midline', minval = 1)
+BearHi = input.float(38.2, 'Bear Control Zone High', minval = 1)
+BearLo = input.int(20, 'Bear Control Zone Low', minval = 1)
+ScaleLo = 0
+
+///////////////////////////////////////////////////////////////////////////////
+// Variable Declarations
+
+GMSmooth = 6
+Trend = 25
+MaxTrend = 10
+
+var label KDXLabel = na
+var label GMLabel = na
+var string GMLabelText1 = ''
+var string KDXLabelText = ''
+var string LabelText = ''
+
+LabelXLoc = time_close + BoxOffSet * (time_close - time_close[1])
+
+///////////////////////////////////////////////////////////////////////////////
+// Function Declarations
+
+///// Decimal Truncation
+
+TruncdNum(Val, DecPl) =>
+    Fact = math.pow(10, DecPl)
+    int(Val * Fact) / Fact
+
+////// Reverse Stoch 
+
+f_OnChartStoch(LenK, LenD, SmthK) =>
+    var X = 0.0
+    var K = 0.0
+    var D = 0.0
+    var KSum = 0.0
+    var DSum = 0.0
+    var RStoch = 0.0
+    X := ta.stoch(close, high, low, LenK)
+    K := ta.sma(X, SmthK)
+    D := ta.sma(K, LenD)
+    KSum := math.sum(X[1], SmthK - 1)
+    DSum := math.sum(K[1], LenD - 1)
+    RStoch := (DSum * SmthK + KSum - KSum * LenD) * (ta.highest(high, LenK) - ta.lowest(low, LenK)) / ((LenD - 1) * 100) + ta.lowest(low, LenK)
+    RStoch
+
+OnChartValue(LenK, LenD, SmthK, ScaleValue) =>
+    var X = 0.0
+    var K = 0.0
+    var D = 0.0
+    var KSum = 0.0
+    var DSum = 0.0
+    var RScaleVal = 0.0
+    X := ta.stoch(close, high, low, LenK)
+    K := ta.sma(ScaleValue, SmthK)
+    D := ta.sma(K, LenD)
+    KSum := math.sum(X[1], SmthK - 1)
+    DSum := math.sum(K[1], LenD - 1)
+    RScaleVal := (DSum * SmthK + KSum - KSum * LenD) * (ta.highest(high, LenK) - ta.lowest(low, LenK)) / ((LenD - 1) * 100) + ta.lowest(low, LenK)
+    RScaleVal
+
+///////////////////////////////////////////////////////////////////////////////
+// Stoch Calcs
+
+BarHi = close > open ? close : open
+
+BarLo = close < open ? close : open
+
+///////////////////////////////////////////////////////////////////////////////
+// On Chart Stochastic & Scale Calcs
+
+OnChartStoch = f_OnChartStoch(LenK, LenD, SmthK)
+
+OnChartScaleHi = OnChartValue(LenK, LenD, SmthK, ScaleHi)
+OnChartBullHi = OnChartValue(LenK, LenD, SmthK, BullHi)
+OnChartBullLo = OnChartValue(LenK, LenD, SmthK, BullLo)
+OnChartMidLine = OnChartValue(LenK, LenD, SmthK, MidLine)
+OnChartBearHi = OnChartValue(LenK, LenD, SmthK, BearHi)
+OnChartBearLo = OnChartValue(LenK, LenD, SmthK, BearLo)
+OnChartScaleLo = OnChartValue(LenK, LenD, SmthK, ScaleLo)
+
+Delta = OnChartStoch - close
+K = ta.sma(ta.stoch(close, high, low, LenK), SmthK)
+D = ta.sma(K, LenD)
+
+///////////////////////////////////////////////////////////////////////////////
+// Compute Info Label
+
+StdKX = Delta > 0 ? 'Std Cross Up Above' : 'Std Cross Down Below'
+
+StochCrossText = '\n' + StdKX + '\n\n' + str.tostring(TruncdNum(OnChartStoch, DecPlaces))
+
+StochZoneText = K > BullHi ? 'Critical Bull Zone' : K > BullLo ? 'Bull Zone' : K > BearHi ? 'Neutral Zone' : K > BearLo ? 'Bear Zone' : 'Critical Bear Zone'
+
+InfoBox = StochZoneText + '\n\n' + StochCrossText
+
+///////////////////////////////////////////////////////////////////////////////
+// InfoBox Plot
+
+if TextBoxOn
+    GMLabel := label.new(LabelXLoc, K, InfoBox, xloc.bar_time, yloc.price, #000000ff, label.style_label_left, color.white)
+    GMLabel
+
+label.delete(GMLabel[1])
+
+///////////////////////////////////////////////////////////////////////////////
+// Stoch Plots & Fills
+
+plot(K, '%K', color.new(color.aqua, 10), 2, plot.style_line)
+plot(D, '%D', color.new(color.fuchsia, 10), 2, plot.style_line)
+
+///////////////////////////////////////////////////////////////////////////////
+// Scale Level Plots and Zone Fills
+
+h0 = hline(100, 'Upper Band', color = color.red, linestyle = hline.style_dotted, linewidth = 2)
+h1 = hline(0, 'Lower Band', color = color.red, linestyle = hline.style_dotted, linewidth = 2)
+h2 = hline(80, 'Upper Band', color = #606060)
+h3 = hline(20, 'Lower Band', color = #606060)
+h4 = hline(55, 'Upper Band', color = #606060)
+h5 = hline(45, 'Lower Band', color = #606060)
+//fill(BullHiPlot, BullLoPlot, color.new(color.aqua, 75), 'Bull Control Zone')
+//fill(BearHiPlot, BearLoPlot, color.new(color.purple, 75), 'Bear Control Zone')
+
+///////////////////////////////////////////////////////////////////////////////
+// End

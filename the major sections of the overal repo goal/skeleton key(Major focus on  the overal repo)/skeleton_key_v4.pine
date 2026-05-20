@@ -1,0 +1,562 @@
+﻿//@version=6
+strategy("Skeleton Key v4 - Diagnostic + Risk Management", "SKE-v4", overlay = true, pyramiding = 5,
+     default_qty_type = strategy.percent_of_equity, default_qty_value = 100,
+     initial_capital = 100000, commission_type = strategy.commission.cash_per_order, commission_value = 0)
+
+// ============================================================================
+// STRATEGY SETTINGS
+// ============================================================================
+stratDirection = input.string("Long", "Strategy Direction", options = ["Long", "Short"], group = "═══ STRATEGY ═══")
+showDebugTable = input.bool(true, "Show Debug Table", group = "═══ STRATEGY ═══")
+showPerfDash = input.bool(true, "Show Performance Dashboard", group = "═══ STRATEGY ═══")
+debugTablePos = input.string("top_right", "Debug Table Position", options = ["top_right", "top_left", "bottom_right", "bottom_left"], group = "═══ STRATEGY ═══")
+perfDashPos = input.string("bottom_right", "Perf Dashboard Position", options = ["top_right", "top_left", "bottom_right", "bottom_left"], group = "═══ STRATEGY ═══")
+
+// ============================================================================
+// RISK MANAGEMENT
+// ============================================================================
+grpRisk = "═══ RISK MANAGEMENT ═══"
+useStopLoss = input.bool(true, "Use Stop Loss", group = grpRisk)
+slType = input.string("ATR", "Stop Loss Type", options = ["ATR", "Fixed %", "Swing Low/High"], group = grpRisk)
+slATRMult = input.float(1.5, "SL ATR Multiplier", minval = 0.1, step = 0.1, group = grpRisk)
+slPercent = input.float(1.0, "SL % (Fixed % Type)", minval = 0.1, step = 0.1, group = grpRisk)
+slSwingLen = input.int(10, "SL Swing Length (Swing Type)", minval = 1, group = grpRisk)
+useTakeProfit = input.bool(true, "Use Take Profit", group = grpRisk)
+tpType = input.string("ATR Multiple", "Take Profit Type", options = ["ATR Multiple", "Fixed %", "Risk:Reward"], group = grpRisk)
+tpATRMult = input.float(2.0, "TP ATR Multiplier", minval = 0.1, step = 0.1, group = grpRisk)
+tpPercent = input.float(2.0, "TP % (Fixed % Type)", minval = 0.1, step = 0.1, group = grpRisk)
+tpRRRatio = input.float(2.0, "TP Risk:Reward Ratio", minval = 0.5, step = 0.1, group = grpRisk)
+useTrailingStop = input.bool(true, "Use Trailing Stop", group = grpRisk)
+trailActivationMult = input.float(1.0, "Trail Activation (ATR Mult)", minval = 0.1, step = 0.1, group = grpRisk)
+trailOffsetMult = input.float(0.5, "Trail Offset (ATR Mult)", minval = 0.1, step = 0.1, group = grpRisk)
+useBreakeven = input.bool(true, "Use Breakeven Stop", group = grpRisk)
+beActivationMult = input.float(1.0, "BE Activation (ATR Mult)", minval = 0.1, step = 0.1, group = grpRisk)
+beOffsetMult = input.float(0.1, "BE Offset (ATR Mult)", minval = 0.0, step = 0.05, group = grpRisk)
+entryCooldownBars = input.int(0, "Entry Cooldown (Bars)", minval = 0, maxval = 50, group = grpRisk)
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+f_threshold_compare_enhanced(float src, float src_prev, string op, float val) =>
+    switch op
+        "<"  => src < val
+        ">"  => src > val
+        "<=" => src <= val
+        ">=" => src >= val
+        "==" => src == val
+        "rising" => src > src_prev
+        "falling" => src < src_prev
+        "crosses_above" => src_prev <= val and src > val
+        "crosses_below" => src_prev >= val and src < val
+        => false
+
+f_external_compare(float src1, string op, float src2, float src1_prev, float src2_prev) =>
+    switch op
+        "<"  => src1 < src2
+        ">"  => src1 > src2
+        "<=" => src1 <= src2
+        ">=" => src1 >= src2
+        "==" => src1 == src2
+        "crossover"  => src1_prev < src2_prev and src1 > src2
+        "crossunder" => src1_prev > src2_prev and src1 < src2
+        => false
+
+f_profit_filter(string filter) =>
+    if filter == "ANY"
+        true
+    else if filter == "PROFIT"
+        strategy.position_size != 0 ? strategy.openprofit > 0 : true
+    else if filter == "LOSS"
+        strategy.position_size != 0 ? strategy.openprofit < 0 : true
+        true
+
+// ============================================================================
+// THRESHOLD A INPUTS
+// ============================================================================
+thresh_enabled_A = input.bool(true, "Enable?", group = "═══ THRESHOLD A ═══")
+thresh_source_A = input.source(close, "Source", inline = 'threshA', group = "═══ THRESHOLD A ═══")
+thresh_operator_A = input.string(">=", "Op", inline = 'threshA', options = ["<", ">", "<=", ">=", "==", "rising", "falling", "crosses_above", "crosses_below"], group = "═══ THRESHOLD A ═══")
+thresh_value_A = input.float(0.0, "Val", inline = 'threshA', group = "═══ THRESHOLD A ═══")
+thresh_offset_A = input.float(0.0, "Offset %", minval = -100, maxval = 100, step = 0.1, group = "═══ THRESHOLD A ═══")
+thresh_hist_bar_A = input.int(0, "Hist Bar Idx", minval = 0, group = "═══ THRESHOLD A ═══")
+thresh_bars_valid_A = input.int(0, "Bars Valid", minval = 0, group = "═══ THRESHOLD A ═══")
+thresh_profit_filter_A = input.string("ANY", "Profit Filter", options = ["ANY", "PROFIT", "LOSS"], group = "═══ THRESHOLD A ═══")
+thresh_entry_A = input.bool(true, "Entry", inline = 'threshA_act', group = "═══ THRESHOLD A ═══")
+thresh_exit_A = input.bool(false, "Exit", inline = 'threshA_act', group = "═══ THRESHOLD A ═══")
+thresh_entry_logic_A = input.string("AND-A", "Entry Group", options = ["AND-A", "AND-B", "OR"], group = "═══ THRESHOLD A ═══")
+thresh_exit_logic_A = input.string("OR", "Exit Group", options = ["AND-A", "AND-B", "OR"], group = "═══ THRESHOLD A ═══")
+
+// ============================================================================
+// THRESHOLD B INPUTS
+// ============================================================================
+thresh_enabled_B = input.bool(true, "Enable?", group = "═══ THRESHOLD B ═══")
+thresh_source_B = input.source(close, "Source", inline = 'threshB', group = "═══ THRESHOLD B ═══")
+thresh_operator_B = input.string(">=", "Op", inline = 'threshB', options = ["<", ">", "<=", ">=", "==", "rising", "falling", "crosses_above", "crosses_below"], group = "═══ THRESHOLD B ═══")
+thresh_value_B = input.float(0.0, "Val", inline = 'threshB', group = "═══ THRESHOLD B ═══")
+thresh_offset_B = input.float(0.0, "Offset %", minval = -100, maxval = 100, step = 0.1, group = "═══ THRESHOLD B ═══")
+thresh_hist_bar_B = input.int(0, "Hist Bar Idx", minval = 0, group = "═══ THRESHOLD B ═══")
+thresh_bars_valid_B = input.int(0, "Bars Valid", minval = 0, group = "═══ THRESHOLD B ═══")
+thresh_profit_filter_B = input.string("ANY", "Profit Filter", options = ["ANY", "PROFIT", "LOSS"], group = "═══ THRESHOLD B ═══")
+thresh_entry_B = input.bool(true, "Entry", inline = 'threshB_act', group = "═══ THRESHOLD B ═══")
+thresh_exit_B = input.bool(false, "Exit", inline = 'threshB_act', group = "═══ THRESHOLD B ═══")
+thresh_entry_logic_B = input.string("AND-A", "Entry Group", options = ["AND-A", "AND-B", "OR"], group = "═══ THRESHOLD B ═══")
+thresh_exit_logic_B = input.string("OR", "Exit Group", options = ["AND-A", "AND-B", "OR"], group = "═══ THRESHOLD B ═══")
+
+// ============================================================================
+// THRESHOLD C INPUTS
+// ============================================================================
+thresh_enabled_C = input.bool(false, "Enable?", group = "═══ THRESHOLD C ═══")
+thresh_source_C = input.source(close, "Source", inline = 'threshC', group = "═══ THRESHOLD C ═══")
+thresh_operator_C = input.string(">=", "Op", inline = 'threshC', options = ["<", ">", "<=", ">=", "==", "rising", "falling", "crosses_above", "crosses_below"], group = "═══ THRESHOLD C ═══")
+thresh_value_C = input.float(0.0, "Val", inline = 'threshC', group = "═══ THRESHOLD C ═══")
+thresh_offset_C = input.float(0.0, "Offset %", minval = -100, maxval = 100, step = 0.1, group = "═══ THRESHOLD C ═══")
+thresh_hist_bar_C = input.int(0, "Hist Bar Idx", minval = 0, group = "═══ THRESHOLD C ═══")
+thresh_bars_valid_C = input.int(0, "Bars Valid", minval = 0, group = "═══ THRESHOLD C ═══")
+thresh_profit_filter_C = input.string("ANY", "Profit Filter", options = ["ANY", "PROFIT", "LOSS"], group = "═══ THRESHOLD C ═══")
+thresh_entry_C = input.bool(true, "Entry", inline = 'threshC_act', group = "═══ THRESHOLD C ═══")
+thresh_exit_C = input.bool(false, "Exit", inline = 'threshC_act', group = "═══ THRESHOLD C ═══")
+thresh_entry_logic_C = input.string("AND-A", "Entry Group", options = ["AND-A", "AND-B", "OR"], group = "═══ THRESHOLD C ═══")
+thresh_exit_logic_C = input.string("OR", "Exit Group", options = ["AND-A", "AND-B", "OR"], group = "═══ THRESHOLD C ═══")
+
+// ============================================================================
+// THRESHOLD D INPUTS
+// ============================================================================
+thresh_enabled_D = input.bool(false, "Enable?", group = "═══ THRESHOLD D ═══")
+thresh_source_D = input.source(close, "Source", inline = 'threshD', group = "═══ THRESHOLD D ═══")
+thresh_operator_D = input.string(">=", "Op", inline = 'threshD', options = ["<", ">", "<=", ">=", "==", "rising", "falling", "crosses_above", "crosses_below"], group = "═══ THRESHOLD D ═══")
+thresh_value_D = input.float(0.0, "Val", inline = 'threshD', group = "═══ THRESHOLD D ═══")
+thresh_offset_D = input.float(0.0, "Offset %", minval = -100, maxval = 100, step = 0.1, group = "═══ THRESHOLD D ═══")
+thresh_hist_bar_D = input.int(0, "Hist Bar Idx", minval = 0, group = "═══ THRESHOLD D ═══")
+thresh_bars_valid_D = input.int(0, "Bars Valid", minval = 0, group = "═══ THRESHOLD D ═══")
+thresh_profit_filter_D = input.string("ANY", "Profit Filter", options = ["ANY", "PROFIT", "LOSS"], group = "═══ THRESHOLD D ═══")
+thresh_entry_D = input.bool(true, "Entry", inline = 'threshD_act', group = "═══ THRESHOLD D ═══")
+thresh_exit_D = input.bool(false, "Exit", inline = 'threshD_act', group = "═══ THRESHOLD D ═══")
+thresh_entry_logic_D = input.string("AND-A", "Entry Group", options = ["AND-A", "AND-B", "OR"], group = "═══ THRESHOLD D ═══")
+thresh_exit_logic_D = input.string("OR", "Exit Group", options = ["AND-A", "AND-B", "OR"], group = "═══ THRESHOLD D ═══")
+
+// ============================================================================
+// THRESHOLD E INPUTS
+// ============================================================================
+thresh_enabled_E = input.bool(false, "Enable?", group = "═══ THRESHOLD E ═══")
+thresh_source_E = input.source(close, "Source", inline = 'threshE', group = "═══ THRESHOLD E ═══")
+thresh_operator_E = input.string(">=", "Op", inline = 'threshE', options = ["<", ">", "<=", ">=", "==", "rising", "falling", "crosses_above", "crosses_below"], group = "═══ THRESHOLD E ═══")
+thresh_value_E = input.float(0.0, "Val", inline = 'threshE', group = "═══ THRESHOLD E ═══")
+thresh_offset_E = input.float(0.0, "Offset %", minval = -100, maxval = 100, step = 0.1, group = "═══ THRESHOLD E ═══")
+thresh_hist_bar_E = input.int(0, "Hist Bar Idx", minval = 0, group = "═══ THRESHOLD E ═══")
+thresh_bars_valid_E = input.int(0, "Bars Valid", minval = 0, group = "═══ THRESHOLD E ═══")
+thresh_profit_filter_E = input.string("ANY", "Profit Filter", options = ["ANY", "PROFIT", "LOSS"], group = "═══ THRESHOLD E ═══")
+thresh_entry_E = input.bool(true, "Entry", inline = 'threshE_act', group = "═══ THRESHOLD E ═══")
+thresh_exit_E = input.bool(false, "Exit", inline = 'threshE_act', group = "═══ THRESHOLD E ═══")
+thresh_entry_logic_E = input.string("AND-A", "Entry Group", options = ["AND-A", "AND-B", "OR"], group = "═══ THRESHOLD E ═══")
+thresh_exit_logic_E = input.string("OR", "Exit Group", options = ["AND-A", "AND-B", "OR"], group = "═══ THRESHOLD E ═══")
+
+// ============================================================================
+// EXTERNAL A INPUTS
+// ============================================================================
+ext_enabled_A = input.bool(true, "Enable?", group = "═══ EXTERNAL A ═══")
+ext_source1_A = input.source(close, "Src1", inline = 'extA', group = "═══ EXTERNAL A ═══")
+ext_operator_A = input.string("crossover", "Op", inline = 'extA', options = ["<", ">", "<=", ">=", "==", "crossover", "crossunder"], group = "═══ EXTERNAL A ═══")
+ext_source2_A = input.source(open, "Src2", inline = 'extA', group = "═══ EXTERNAL A ═══")
+ext_offset1_A = input.float(0.0, "Offset1 %", minval = -100, maxval = 100, step = 0.1, group = "═══ EXTERNAL A ═══")
+ext_offset2_A = input.float(0.0, "Offset2 %", minval = -100, maxval = 100, step = 0.1, group = "═══ EXTERNAL A ═══")
+ext_hist_bar1_A = input.int(0, "Hist Bar 1", minval = 0, group = "═══ EXTERNAL A ═══")
+ext_hist_bar2_A = input.int(1, "Hist Bar 2", minval = 0, group = "═══ EXTERNAL A ═══")
+ext_bars_valid_A = input.int(0, "Bars Valid", minval = 0, group = "═══ EXTERNAL A ═══")
+ext_profit_filter_A = input.string("ANY", "Profit Filter", options = ["ANY", "PROFIT", "LOSS"], group = "═══ EXTERNAL A ═══")
+ext_entry_A = input.bool(true, "Entry", inline = 'extA_act', group = "═══ EXTERNAL A ═══")
+ext_exit_A = input.bool(false, "Exit", inline = 'extA_act', group = "═══ EXTERNAL A ═══")
+ext_entry_logic_A = input.string("AND-A", "Entry Group", options = ["AND-A", "AND-B", "OR"], group = "═══ EXTERNAL A ═══")
+ext_exit_logic_A = input.string("OR", "Exit Group", options = ["AND-A", "AND-B", "OR"], group = "═══ EXTERNAL A ═══")
+
+// ============================================================================
+// EXTERNAL B INPUTS
+// ============================================================================
+ext_enabled_B = input.bool(false, "Enable?", group = "═══ EXTERNAL B ═══")
+ext_source1_B = input.source(close, "Src1", inline = 'extB', group = "═══ EXTERNAL B ═══")
+ext_operator_B = input.string("crossover", "Op", inline = 'extB', options = ["<", ">", "<=", ">=", "==", "crossover", "crossunder"], group = "═══ EXTERNAL B ═══")
+ext_source2_B = input.source(open, "Src2", inline = 'extB', group = "═══ EXTERNAL B ═══")
+ext_offset1_B = input.float(0.0, "Offset1 %", minval = -100, maxval = 100, step = 0.1, group = "═══ EXTERNAL B ═══")
+ext_offset2_B = input.float(0.0, "Offset2 %", minval = -100, maxval = 100, step = 0.1, group = "═══ EXTERNAL B ═══")
+ext_hist_bar1_B = input.int(0, "Hist Bar 1", minval = 0, group = "═══ EXTERNAL B ═══")
+ext_hist_bar2_B = input.int(1, "Hist Bar 2", minval = 0, group = "═══ EXTERNAL B ═══")
+ext_bars_valid_B = input.int(0, "Bars Valid", minval = 0, group = "═══ EXTERNAL B ═══")
+ext_profit_filter_B = input.string("ANY", "Profit Filter", options = ["ANY", "PROFIT", "LOSS"], group = "═══ EXTERNAL B ═══")
+ext_entry_B = input.bool(true, "Entry", inline = 'extB_act', group = "═══ EXTERNAL B ═══")
+ext_exit_B = input.bool(false, "Exit", inline = 'extB_act', group = "═══ EXTERNAL B ═══")
+ext_entry_logic_B = input.string("AND-A", "Entry Group", options = ["AND-A", "AND-B", "OR"], group = "═══ EXTERNAL B ═══")
+ext_exit_logic_B = input.string("OR", "Exit Group", options = ["AND-A", "AND-B", "OR"], group = "═══ EXTERNAL B ═══")
+
+// ============================================================================
+// EXTERNAL C INPUTS
+// ============================================================================
+ext_enabled_C = input.bool(false, "Enable?", group = "═══ EXTERNAL C ═══")
+ext_source1_C = input.source(close, "Src1", inline = 'extC', group = "═══ EXTERNAL C ═══")
+ext_operator_C = input.string("crossover", "Op", inline = 'extC', options = ["<", ">", "<=", ">=", "==", "crossover", "crossunder"], group = "═══ EXTERNAL C ═══")
+ext_source2_C = input.source(open, "Src2", inline = 'extC', group = "═══ EXTERNAL C ═══")
+ext_offset1_C = input.float(0.0, "Offset1 %", minval = -100, maxval = 100, step = 0.1, group = "═══ EXTERNAL C ═══")
+ext_offset2_C = input.float(0.0, "Offset2 %", minval = -100, maxval = 100, step = 0.1, group = "═══ EXTERNAL C ═══")
+ext_hist_bar1_C = input.int(0, "Hist Bar 1", minval = 0, group = "═══ EXTERNAL C ═══")
+ext_hist_bar2_C = input.int(1, "Hist Bar 2", minval = 0, group = "═══ EXTERNAL C ═══")
+ext_bars_valid_C = input.int(0, "Bars Valid", minval = 0, group = "═══ EXTERNAL C ═══")
+ext_profit_filter_C = input.string("ANY", "Profit Filter", options = ["ANY", "PROFIT", "LOSS"], group = "═══ EXTERNAL C ═══")
+ext_entry_C = input.bool(true, "Entry", inline = 'extC_act', group = "═══ EXTERNAL C ═══")
+ext_exit_C = input.bool(false, "Exit", inline = 'extC_act', group = "═══ EXTERNAL C ═══")
+ext_entry_logic_C = input.string("AND-A", "Entry Group", options = ["AND-A", "AND-B", "OR"], group = "═══ EXTERNAL C ═══")
+ext_exit_logic_C = input.string("OR", "Exit Group", options = ["AND-A", "AND-B", "OR"], group = "═══ EXTERNAL C ═══")
+
+// ============================================================================
+// EXTERNAL D INPUTS
+// ============================================================================
+ext_enabled_D = input.bool(false, "Enable?", group = "═══ EXTERNAL D ═══")
+ext_source1_D = input.source(close, "Src1", inline = 'extD', group = "═══ EXTERNAL D ═══")
+ext_operator_D = input.string("crossover", "Op", inline = 'extD', options = ["<", ">", "<=", ">=", "==", "crossover", "crossunder"], group = "═══ EXTERNAL D ═══")
+ext_source2_D = input.source(open, "Src2", inline = 'extD', group = "═══ EXTERNAL D ═══")
+ext_offset1_D = input.float(0.0, "Offset1 %", minval = -100, maxval = 100, step = 0.1, group = "═══ EXTERNAL D ═══")
+ext_offset2_D = input.float(0.0, "Offset2 %", minval = -100, maxval = 100, step = 0.1, group = "═══ EXTERNAL D ═══")
+ext_hist_bar1_D = input.int(0, "Hist Bar 1", minval = 0, group = "═══ EXTERNAL D ═══")
+ext_hist_bar2_D = input.int(1, "Hist Bar 2", minval = 0, group = "═══ EXTERNAL D ═══")
+ext_bars_valid_D = input.int(0, "Bars Valid", minval = 0, group = "═══ EXTERNAL D ═══")
+ext_profit_filter_D = input.string("ANY", "Profit Filter", options = ["ANY", "PROFIT", "LOSS"], group = "═══ EXTERNAL D ═══")
+ext_entry_D = input.bool(true, "Entry", inline = 'extD_act', group = "═══ EXTERNAL D ═══")
+ext_exit_D = input.bool(false, "Exit", inline = 'extD_act', group = "═══ EXTERNAL D ═══")
+ext_entry_logic_D = input.string("AND-A", "Entry Group", options = ["AND-A", "AND-B", "OR"], group = "═══ EXTERNAL D ═══")
+ext_exit_logic_D = input.string("OR", "Exit Group", options = ["AND-A", "AND-B", "OR"], group = "═══ EXTERNAL D ═══")
+
+// ============================================================================
+// THRESHOLD CALCULATIONS (A-E)
+// ============================================================================
+thresh_src_val_A = thresh_source_A[thresh_hist_bar_A] * (1 + thresh_offset_A / 100)
+thresh_src_prev_A = thresh_source_A[thresh_hist_bar_A + 1] * (1 + thresh_offset_A / 100)
+thresh_raw_A = thresh_enabled_A and f_threshold_compare_enhanced(thresh_src_val_A, thresh_src_prev_A, thresh_operator_A, thresh_value_A)
+var int thresh_bars_since_true_A = 999999
+if thresh_raw_A
+    thresh_bars_since_true_A := 0
+else
+    thresh_bars_since_true_A += 1
+thresh_signal_valid_A = thresh_enabled_A and thresh_bars_since_true_A <= thresh_bars_valid_A
+thresh_signal_entry_A = thresh_signal_valid_A and thresh_entry_A and f_profit_filter(thresh_profit_filter_A)
+thresh_signal_exit_A = thresh_signal_valid_A and thresh_exit_A and f_profit_filter(thresh_profit_filter_A)
+
+thresh_src_val_B = thresh_source_B[thresh_hist_bar_B] * (1 + thresh_offset_B / 100)
+thresh_src_prev_B = thresh_source_B[thresh_hist_bar_B + 1] * (1 + thresh_offset_B / 100)
+thresh_raw_B = thresh_enabled_B and f_threshold_compare_enhanced(thresh_src_val_B, thresh_src_prev_B, thresh_operator_B, thresh_value_B)
+var int thresh_bars_since_true_B = 999999
+if thresh_raw_B
+    thresh_bars_since_true_B := 0
+else
+    thresh_bars_since_true_B += 1
+thresh_signal_valid_B = thresh_enabled_B and thresh_bars_since_true_B <= thresh_bars_valid_B
+thresh_signal_entry_B = thresh_signal_valid_B and thresh_entry_B and f_profit_filter(thresh_profit_filter_B)
+thresh_signal_exit_B = thresh_signal_valid_B and thresh_exit_B and f_profit_filter(thresh_profit_filter_B)
+
+thresh_src_val_C = thresh_source_C[thresh_hist_bar_C] * (1 + thresh_offset_C / 100)
+thresh_src_prev_C = thresh_source_C[thresh_hist_bar_C + 1] * (1 + thresh_offset_C / 100)
+thresh_raw_C = thresh_enabled_C and f_threshold_compare_enhanced(thresh_src_val_C, thresh_src_prev_C, thresh_operator_C, thresh_value_C)
+var int thresh_bars_since_true_C = 999999
+if thresh_raw_C
+    thresh_bars_since_true_C := 0
+else
+    thresh_bars_since_true_C += 1
+thresh_signal_valid_C = thresh_enabled_C and thresh_bars_since_true_C <= thresh_bars_valid_C
+thresh_signal_entry_C = thresh_signal_valid_C and thresh_entry_C and f_profit_filter(thresh_profit_filter_C)
+thresh_signal_exit_C = thresh_signal_valid_C and thresh_exit_C and f_profit_filter(thresh_profit_filter_C)
+
+thresh_src_val_D = thresh_source_D[thresh_hist_bar_D] * (1 + thresh_offset_D / 100)
+thresh_src_prev_D = thresh_source_D[thresh_hist_bar_D + 1] * (1 + thresh_offset_D / 100)
+thresh_raw_D = thresh_enabled_D and f_threshold_compare_enhanced(thresh_src_val_D, thresh_src_prev_D, thresh_operator_D, thresh_value_D)
+var int thresh_bars_since_true_D = 999999
+if thresh_raw_D
+    thresh_bars_since_true_D := 0
+else
+    thresh_bars_since_true_D += 1
+thresh_signal_valid_D = thresh_enabled_D and thresh_bars_since_true_D <= thresh_bars_valid_D
+thresh_signal_entry_D = thresh_signal_valid_D and thresh_entry_D and f_profit_filter(thresh_profit_filter_D)
+thresh_signal_exit_D = thresh_signal_valid_D and thresh_exit_D and f_profit_filter(thresh_profit_filter_D)
+
+thresh_src_val_E = thresh_source_E[thresh_hist_bar_E] * (1 + thresh_offset_E / 100)
+thresh_src_prev_E = thresh_source_E[thresh_hist_bar_E + 1] * (1 + thresh_offset_E / 100)
+thresh_raw_E = thresh_enabled_E and f_threshold_compare_enhanced(thresh_src_val_E, thresh_src_prev_E, thresh_operator_E, thresh_value_E)
+var int thresh_bars_since_true_E = 999999
+if thresh_raw_E
+    thresh_bars_since_true_E := 0
+else
+    thresh_bars_since_true_E += 1
+thresh_signal_valid_E = thresh_enabled_E and thresh_bars_since_true_E <= thresh_bars_valid_E
+thresh_signal_entry_E = thresh_signal_valid_E and thresh_entry_E and f_profit_filter(thresh_profit_filter_E)
+thresh_signal_exit_E = thresh_signal_valid_E and thresh_exit_E and f_profit_filter(thresh_profit_filter_E)
+
+// ============================================================================
+// EXTERNAL CALCULATIONS (A-D)
+// ============================================================================
+ext_src1_val_A = ext_source1_A[ext_hist_bar1_A] * (1 + ext_offset1_A / 100)
+ext_src2_val_A = ext_source2_A[ext_hist_bar2_A] * (1 + ext_offset2_A / 100)
+ext_src1_prev_A = ext_source1_A[ext_hist_bar1_A + 1] * (1 + ext_offset1_A / 100)
+ext_src2_prev_A = ext_source2_A[ext_hist_bar2_A + 1] * (1 + ext_offset2_A / 100)
+ext_raw_A = ext_enabled_A and f_external_compare(ext_src1_val_A, ext_operator_A, ext_src2_val_A, ext_src1_prev_A, ext_src2_prev_A)
+var int ext_bars_since_true_A = 999999
+if ext_raw_A
+    ext_bars_since_true_A := 0
+else
+    ext_bars_since_true_A += 1
+ext_signal_valid_A = ext_enabled_A and ext_bars_since_true_A <= ext_bars_valid_A
+ext_signal_entry_A = ext_signal_valid_A and ext_entry_A and f_profit_filter(ext_profit_filter_A)
+ext_signal_exit_A = ext_signal_valid_A and ext_exit_A and f_profit_filter(ext_profit_filter_A)
+
+ext_src1_val_B = ext_source1_B[ext_hist_bar1_B] * (1 + ext_offset1_B / 100)
+ext_src2_val_B = ext_source2_B[ext_hist_bar2_B] * (1 + ext_offset2_B / 100)
+ext_src1_prev_B = ext_source1_B[ext_hist_bar1_B + 1] * (1 + ext_offset1_B / 100)
+ext_src2_prev_B = ext_source2_B[ext_hist_bar2_B + 1] * (1 + ext_offset2_B / 100)
+ext_raw_B = ext_enabled_B and f_external_compare(ext_src1_val_B, ext_operator_B, ext_src2_val_B, ext_src1_prev_B, ext_src2_prev_B)
+var int ext_bars_since_true_B = 999999
+if ext_raw_B
+    ext_bars_since_true_B := 0
+else
+    ext_bars_since_true_B += 1
+ext_signal_valid_B = ext_enabled_B and ext_bars_since_true_B <= ext_bars_valid_B
+ext_signal_entry_B = ext_signal_valid_B and ext_entry_B and f_profit_filter(ext_profit_filter_B)
+ext_signal_exit_B = ext_signal_valid_B and ext_exit_B and f_profit_filter(ext_profit_filter_B)
+
+ext_src1_val_C = ext_source1_C[ext_hist_bar1_C] * (1 + ext_offset1_C / 100)
+ext_src2_val_C = ext_source2_C[ext_hist_bar2_C] * (1 + ext_offset2_C / 100)
+ext_src1_prev_C = ext_source1_C[ext_hist_bar1_C + 1] * (1 + ext_offset1_C / 100)
+ext_src2_prev_C = ext_source2_C[ext_hist_bar2_C + 1] * (1 + ext_offset2_C / 100)
+ext_raw_C = ext_enabled_C and f_external_compare(ext_src1_val_C, ext_operator_C, ext_src2_val_C, ext_src1_prev_C, ext_src2_prev_C)
+var int ext_bars_since_true_C = 999999
+if ext_raw_C
+    ext_bars_since_true_C := 0
+else
+    ext_bars_since_true_C += 1
+ext_signal_valid_C = ext_enabled_C and ext_bars_since_true_C <= ext_bars_valid_C
+ext_signal_entry_C = ext_signal_valid_C and ext_entry_C and f_profit_filter(ext_profit_filter_C)
+ext_signal_exit_C = ext_signal_valid_C and ext_exit_C and f_profit_filter(ext_profit_filter_C)
+
+ext_src1_val_D = ext_source1_D[ext_hist_bar1_D] * (1 + ext_offset1_D / 100)
+ext_src2_val_D = ext_source2_D[ext_hist_bar2_D] * (1 + ext_offset2_D / 100)
+ext_src1_prev_D = ext_source1_D[ext_hist_bar1_D + 1] * (1 + ext_offset1_D / 100)
+ext_src2_prev_D = ext_source2_D[ext_hist_bar2_D + 1] * (1 + ext_offset2_D / 100)
+ext_raw_D = ext_enabled_D and f_external_compare(ext_src1_val_D, ext_operator_D, ext_src2_val_D, ext_src1_prev_D, ext_src2_prev_D)
+var int ext_bars_since_true_D = 999999
+if ext_raw_D
+    ext_bars_since_true_D := 0
+else
+    ext_bars_since_true_D += 1
+ext_signal_valid_D = ext_enabled_D and ext_bars_since_true_D <= ext_bars_valid_D
+ext_signal_entry_D = ext_signal_valid_D and ext_entry_D and f_profit_filter(ext_profit_filter_D)
+ext_signal_exit_D = ext_signal_valid_D and ext_exit_D and f_profit_filter(ext_profit_filter_D)
+
+// ============================================================================
+// ENTRY LOGIC GROUPS
+// ============================================================================
+entry_andA_count = (thresh_entry_A and thresh_entry_logic_A == "AND-A" ? 1 : 0) +
+                   (thresh_entry_B and thresh_entry_logic_B == "AND-A" ? 1 : 0) +
+                   (thresh_entry_C and thresh_entry_logic_C == "AND-A" ? 1 : 0) +
+                   (thresh_entry_D and thresh_entry_logic_D == "AND-A" ? 1 : 0) +
+                   (thresh_entry_E and thresh_entry_logic_E == "AND-A" ? 1 : 0) +
+                   (ext_entry_A and ext_entry_logic_A == "AND-A" ? 1 : 0) +
+                   (ext_entry_B and ext_entry_logic_B == "AND-A" ? 1 : 0) +
+                   (ext_entry_C and ext_entry_logic_C == "AND-A" ? 1 : 0) +
+                   (ext_entry_D and ext_entry_logic_D == "AND-A" ? 1 : 0)
+
+entry_andB_count = (thresh_entry_A and thresh_entry_logic_A == "AND-B" ? 1 : 0) +
+                   (thresh_entry_B and thresh_entry_logic_B == "AND-B" ? 1 : 0) +
+                   (thresh_entry_C and thresh_entry_logic_C == "AND-B" ? 1 : 0) +
+                   (thresh_entry_D and thresh_entry_logic_D == "AND-B" ? 1 : 0) +
+                   (thresh_entry_E and thresh_entry_logic_E == "AND-B" ? 1 : 0) +
+                   (ext_entry_A and ext_entry_logic_A == "AND-B" ? 1 : 0) +
+                   (ext_entry_B and ext_entry_logic_B == "AND-B" ? 1 : 0) +
+                   (ext_entry_C and ext_entry_logic_C == "AND-B" ? 1 : 0) +
+                   (ext_entry_D and ext_entry_logic_D == "AND-B" ? 1 : 0)
+
+entry_andA_true = (thresh_signal_entry_A and thresh_entry_logic_A == "AND-A" ? 1 : 0) +
+                  (thresh_signal_entry_B and thresh_entry_logic_B == "AND-A" ? 1 : 0) +
+                  (thresh_signal_entry_C and thresh_entry_logic_C == "AND-A" ? 1 : 0) +
+                  (thresh_signal_entry_D and thresh_entry_logic_D == "AND-A" ? 1 : 0) +
+                  (thresh_signal_entry_E and thresh_entry_logic_E == "AND-A" ? 1 : 0) +
+                  (ext_signal_entry_A and ext_entry_logic_A == "AND-A" ? 1 : 0) +
+                  (ext_signal_entry_B and ext_entry_logic_B == "AND-A" ? 1 : 0) +
+                  (ext_signal_entry_C and ext_entry_logic_C == "AND-A" ? 1 : 0) +
+                  (ext_signal_entry_D and ext_entry_logic_D == "AND-A" ? 1 : 0)
+
+entry_andB_true = (thresh_signal_entry_A and thresh_entry_logic_A == "AND-B" ? 1 : 0) +
+                  (thresh_signal_entry_B and thresh_entry_logic_B == "AND-B" ? 1 : 0) +
+                  (thresh_signal_entry_C and thresh_entry_logic_C == "AND-B" ? 1 : 0) +
+                  (thresh_signal_entry_D and thresh_entry_logic_D == "AND-B" ? 1 : 0) +
+                  (thresh_signal_entry_E and thresh_entry_logic_E == "AND-B" ? 1 : 0) +
+                  (ext_signal_entry_A and ext_entry_logic_A == "AND-B" ? 1 : 0) +
+                  (ext_signal_entry_B and ext_entry_logic_B == "AND-B" ? 1 : 0) +
+                  (ext_signal_entry_C and ext_entry_logic_C == "AND-B" ? 1 : 0) +
+                  (ext_signal_entry_D and ext_entry_logic_D == "AND-B" ? 1 : 0)
+
+entry_andA_trigger = entry_andA_count > 0 and entry_andA_true == entry_andA_count
+entry_andB_trigger = entry_andB_count > 0 and entry_andB_true == entry_andB_count
+
+entry_or_trigger = (thresh_signal_entry_A and thresh_entry_logic_A == "OR") or
+                   (thresh_signal_entry_B and thresh_entry_logic_B == "OR") or
+                   (thresh_signal_entry_C and thresh_entry_logic_C == "OR") or
+                   (thresh_signal_entry_D and thresh_entry_logic_D == "OR") or
+                   (thresh_signal_entry_E and thresh_entry_logic_E == "OR") or
+                   (ext_signal_entry_A and ext_entry_logic_A == "OR") or
+                   (ext_signal_entry_B and ext_entry_logic_B == "OR") or
+                   (ext_signal_entry_C and ext_entry_logic_C == "OR") or
+                   (ext_signal_entry_D and ext_entry_logic_D == "OR")
+
+entry_signal = entry_andA_trigger or entry_andB_trigger or entry_or_trigger
+
+// ============================================================================
+// EXIT LOGIC GROUPS
+// ============================================================================
+exit_andA_count = (thresh_exit_A and thresh_exit_logic_A == "AND-A" ? 1 : 0) +
+                  (thresh_exit_B and thresh_exit_logic_B == "AND-A" ? 1 : 0) +
+                  (thresh_exit_C and thresh_exit_logic_C == "AND-A" ? 1 : 0) +
+                  (thresh_exit_D and thresh_exit_logic_D == "AND-A" ? 1 : 0) +
+                  (thresh_exit_E and thresh_exit_logic_E == "AND-A" ? 1 : 0) +
+                  (ext_exit_A and ext_exit_logic_A == "AND-A" ? 1 : 0) +
+                  (ext_exit_B and ext_exit_logic_B == "AND-A" ? 1 : 0) +
+                  (ext_exit_C and ext_exit_logic_C == "AND-A" ? 1 : 0) +
+                  (ext_exit_D and ext_exit_logic_D == "AND-A" ? 1 : 0)
+
+exit_andB_count = (thresh_exit_A and thresh_exit_logic_A == "AND-B" ? 1 : 0) +
+                  (thresh_exit_B and thresh_exit_logic_B == "AND-B" ? 1 : 0) +
+                  (thresh_exit_C and thresh_exit_logic_C == "AND-B" ? 1 : 0) +
+                  (thresh_exit_D and thresh_exit_logic_D == "AND-B" ? 1 : 0) +
+                  (thresh_exit_E and thresh_exit_logic_E == "AND-B" ? 1 : 0) +
+                  (ext_exit_A and ext_exit_logic_A == "AND-B" ? 1 : 0) +
+                  (ext_exit_B and ext_exit_logic_B == "AND-B" ? 1 : 0) +
+                  (ext_exit_C and ext_exit_logic_C == "AND-B" ? 1 : 0) +
+                  (ext_exit_D and ext_exit_logic_D == "AND-B" ? 1 : 0)
+
+exit_andA_true = (thresh_signal_exit_A and thresh_exit_logic_A == "AND-A" ? 1 : 0) +
+                 (thresh_signal_exit_B and thresh_exit_logic_B == "AND-A" ? 1 : 0) +
+                 (thresh_signal_exit_C and thresh_exit_logic_C == "AND-A" ? 1 : 0) +
+                 (thresh_signal_exit_D and thresh_exit_logic_D == "AND-A" ? 1 : 0) +
+                 (thresh_signal_exit_E and thresh_exit_logic_E == "AND-A" ? 1 : 0) +
+                 (ext_signal_exit_A and ext_exit_logic_A == "AND-A" ? 1 : 0) +
+                 (ext_signal_exit_B and ext_exit_logic_B == "AND-A" ? 1 : 0) +
+                 (ext_signal_exit_C and ext_exit_logic_C == "AND-A" ? 1 : 0) +
+                 (ext_signal_exit_D and ext_exit_logic_D == "AND-A" ? 1 : 0)
+
+exit_andB_true = (thresh_signal_exit_A and thresh_exit_logic_A == "AND-B" ? 1 : 0) +
+                 (thresh_signal_exit_B and thresh_exit_logic_B == "AND-B" ? 1 : 0) +
+                 (thresh_signal_exit_C and thresh_exit_logic_C == "AND-B" ? 1 : 0) +
+                 (thresh_signal_exit_D and thresh_exit_logic_D == "AND-B" ? 1 : 0) +
+                 (thresh_signal_exit_E and thresh_exit_logic_E == "AND-B" ? 1 : 0) +
+                 (ext_signal_exit_A and ext_exit_logic_A == "AND-B" ? 1 : 0) +
+                 (ext_signal_exit_B and ext_exit_logic_B == "AND-B" ? 1 : 0) +
+                 (ext_signal_exit_C and ext_exit_logic_C == "AND-B" ? 1 : 0) +
+                 (ext_signal_exit_D and ext_exit_logic_D == "AND-B" ? 1 : 0)
+
+exit_andA_trigger = exit_andA_count > 0 and exit_andA_true == exit_andA_count
+exit_andB_trigger = exit_andB_count > 0 and exit_andB_true == exit_andB_count
+
+exit_or_trigger = (thresh_signal_exit_A and thresh_exit_logic_A == "OR") or
+                  (thresh_signal_exit_B and thresh_exit_logic_B == "OR") or
+                  (thresh_signal_exit_C and thresh_exit_logic_C == "OR") or
+                  (thresh_signal_exit_D and thresh_exit_logic_D == "OR") or
+                  (thresh_signal_exit_E and thresh_exit_logic_E == "OR") or
+                  (ext_signal_exit_A and ext_exit_logic_A == "OR") or
+                  (ext_signal_exit_B and ext_exit_logic_B == "OR") or
+                  (ext_signal_exit_C and ext_exit_logic_C == "OR") or
+                  (ext_signal_exit_D and ext_exit_logic_D == "OR")
+
+exit_signal = exit_andA_trigger or exit_andB_trigger or exit_or_trigger
+
+// ============================================================================
+// ENTRY COOLDOWN
+// ============================================================================
+var int lastExitBar = na
+if strategy.position_size == 0 and strategy.position_size[1] != 0
+    lastExitBar := bar_index
+
+cooldownOk = na(lastExitBar) or (bar_index - lastExitBar) >= entryCooldownBars
+
+// ============================================================================
+// STRATEGY EXECUTION
+// ============================================================================
+is_long = stratDirection == "Long"
+is_short = stratDirection == "Short"
+
+atrVal = ta.atr(14)
+
+if entry_signal and cooldownOk and is_long
+    strategy.entry("Long", strategy.long)
+
+if entry_signal and cooldownOk and is_short
+    strategy.entry("Short", strategy.short)
+
+// ============================================================================
+// RISK MANAGEMENT - SL / TP / TRAILING / BREAKEVEN
+// ============================================================================
+var float longStopPrice = na
+var float shortStopPrice = na
+var bool longTrailingActive = false
+var bool shortTrailingActive = false
+var float longTrailHighest = na
+var float shortTrailLowest = na
+var bool longBEActive = false
+var bool shortBEActive = false
+
+if strategy.position_size > 0
+    float slDist = slType == "ATR" ? atrVal * slATRMult : slType == "Fixed %" ? strategy.position_avg_price * slPercent / 100 : strategy.position_avg_price - ta.lowest(low, slSwingLen)
+    float tpDist = tpType == "ATR Multiple" ? atrVal * tpATRMult : tpType == "Fixed %" ? strategy.position_avg_price * tpPercent / 100 : slDist * tpRRRatio
+
+    float initialSL = strategy.position_avg_price - slDist
+    float initialTP = strategy.position_avg_price + tpDist
+
+    longTrailHighest := math.max(nz(longTrailHighest, high), high)
+
+    if useBreakeven and not longBEActive and close - strategy.position_avg_price >= atrVal * beActivationMult
+        longBEActive := true
+
+    float effectiveSL = longBEActive ? math.max(initialSL, strategy.position_avg_price + atrVal * beOffsetMult) : initialSL
+
+    if useTrailingStop
+        if close - strategy.position_avg_price >= atrVal * trailActivationMult
+            longTrailingActive := true
+        if longTrailingActive
+            effectiveSL := math.max(effectiveSL, longTrailHighest - atrVal * trailOffsetMult)
+
+    longStopPrice := effectiveSL
+
+    if useStopLoss and useTakeProfit
+        strategy.exit("Long Exit", "Long", stop = effectiveSL, limit = initialTP)
+    else if useStopLoss
+        strategy.exit("Long SL", "Long", stop = effectiveSL)
+    else if useTakeProfit
+        strategy.exit("Long TP", "Long", limit = initialTP)
+
+if strategy.position_size < 0
+    float slDist = slType == "ATR" ? atrVal * slATRMult : slType == "Fixed %" ? strategy.position_avg_price * slPercent / 100 : ta.highest(high, slSwingLen) - strategy.position_avg_price
+    float tpDist = tpType == "ATR Multiple" ? atrVal * tpATRMult : tpType == "Fixed %" ? strategy.position_avg_price * tpPercent / 100 : slDist * tpRRRatio
+
+    float initialSL = strategy.position_avg_price + slDist
+    float initialTP = strategy.position_avg_price - tpDist
+
+    shortTrailLowest := math.min(nz(shortTrailLowest, low), low)
+
+    if useBreakeven and not shortBEActive and strategy.position_avg_price - close >= atrVal * beActivationMult
+        shortBEActive := true
+
+    float effectiveSL = shortBEActive ? math.min(initialSL, strategy.position_avg_price - atrVal * beOffsetMult) : initialSL
+
+    if useTrailingStop
+        if strategy.position_avg_price - close >= atrVal * trailActivationMult
+            shortTrailingActive := true
+        if shortTrailingActive
+            effectiveSL := math.min(effectiveSL, shortTrailLowest + atrVal * trailOffsetMult)
+
+    shortStopPrice := effectiveSL
+
+    if useStopLoss and useTakeProfit
+        strategy.exit("Short Exit", "Short", stop = effectiveSL, limit = initialTP)
+    else if useStopLoss
+        strategy.exit("Short SL", "Short", stop = effectiveSL)
+    else if useTakeProfit
+        strategy.exit("Short TP", "Short", limit = initialTP)
+
+// ============================================================================
+// ENTRY/EXIT MARKERS
+// ============================================================================
+plotshape(entry_signal and is_long, title = "Long Entry", location = location.belowbar, color = color.green, style = shape.triangleup, size = size.small)
+plotshape(entry_signal and is_short, title = "Short Entry", location = location.abovebar, color = color.red, style = shape.triangledown, size = size.small)
+plotshape(exit_signal and is_long and strategy.position_size > 0, title = "Long Exit", location = location.abovebar, color = color.orange, style = shape.xcross, size = size.tiny)
+plotshape(exit_signal and is_short and strategy.position_size < 0, title = "Short Exit", location = location.belowbar, color = color.blue, style = shape.xcross, size = size.tiny)

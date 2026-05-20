@@ -1,0 +1,307 @@
+// This Pine Script™ code is subject to the terms of the Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0) https://creativecommons.org/licenses/by-nc-sa/4.0/
+// © EliCobra
+
+//@version=5
+indicator("Enhanced WaveTrend Oscillator", "[Ʌ] -‌ 𝗪𝗮𝘃𝗲𝗧𝗿𝗲𝗻𝗱", false)
+
+enhanced_vwma(_series, _length) =>    
+    vmp = _series * volumen
+    VWMA = math.sum(vmp, _length) / math.sum(volumen, _length)
+    VWMA
+
+// ALMA - Arnaud Legoux Moving Average of @kurtsmock
+enhanced_alma(_series, _length, _offset, _sigma) =>
+    length = int(_length) // Floating point protection
+    numerator = 0.0
+    denominator = 0.0
+    m = _offset * (length - 1)
+    s = length / _sigma
+    for i = 0 to length - 1 by 1
+        weight = math.exp(-((i - m) * (i - m)) / (2 * s * s))
+        numerator := numerator + weight * _series[length - 1 - i]
+        denominator := denominator + weight
+        denominator
+    numerator / denominator
+
+//T3 Moving Average based on the article 'Smoothing Techniques For More Accurate Signals' by Tim Tillson
+f_t3(src, len) =>
+    x1 = ta.ema(src, len) //(hlcc, 8)
+    x2 = ta.ema(x1, len)
+    x3 = ta.ema(x2, len)
+    x4 = ta.ema(x3, len)
+    x5 = ta.ema(x4, len)
+    x6 = ta.ema(x5, len)
+    b = 0.7 //Volume Factor
+    c1 = -math.pow(b, 3)
+    c2 = 3 * math.pow(b, 2) + 3 * math.pow(b, 3)
+    c3 = -6 * math.pow(b, 2) - 3 * b - 3 * math.pow(b, 3)
+    c4 = 1 + 3 * b + math.pow(b, 3) + 3 * math.pow(b, 2)
+    c1 * x6 + c2 * x5 + c3 * x4 + c4 * x3
+
+// Kaufman's Adaptive Moving Average - Fast and Slow Ends
+kama(x, t) =>
+    fastK = 0.666 // KAMA Fast End
+    slowK = 0.0645 // KAMA Slow End
+    dist = math.abs(x[0] - x[1])
+    signal_x = math.abs(x - x[t])
+    noise = math.sum(dist, t)
+    effr = noise != 0 ? signal_x / noise : 1
+    sc = math.pow(effr * (fastK - slowK) + slowK, 2)
+    KAma = x
+    KAma := nz(KAma[1]) + sc * (x - nz(KAma[1]))
+    KAma
+
+// Jurik Moving Average of @everget
+jma(src, length, power, phase) =>
+    phaseRatio = phase < -100 ? 0.5 : phase > 100 ? 2.5 : phase / 100 + 1.5
+    beta = 0.45 * (length - 1) / (0.45 * (length - 1) + 2)
+    alpha = math.pow(beta, power)
+    Jma = 0.0
+    e0 = 0.0
+    e0 := (1 - alpha) * src + alpha * nz(e0[1])
+    e1 = 0.0
+    e1 := (src - e0) * (1 - beta) + beta * nz(e1[1])
+    e2 = 0.0
+    e2 := (e0 + phaseRatio * e1 - nz(Jma[1])) * math.pow(1 - alpha, 2) + math.pow(alpha, 2) * nz(e2[1])
+    Jma := e2 + nz(Jma[1])
+    Jma
+
+// VAMA - Volume Adjusted Moving Average of @allanster
+vama(_src, _len, _fct, _rul, _nvb) => // vama(source,length,factor,rule,sample)
+    tvb = 0 // total volume bars used in sample            
+    tvb := _nvb == 0 ? nz(tvb[1]) + 1 : _nvb
+    tvs = _nvb == 0 ? ta.cum(volumen) : math.sum(volumen, _nvb) // total volume in sample
+    v2i = volumen / (tvs / tvb * _fct) // ratio of volume to increments of volume                                                  
+    wtd = _src * v2i // weighted prices 
+    nmb = 1 // initialize number of bars summed back               
+    wtdSumB = 0.0 // initialize weighted prices summed back
+    v2iSumB = 0.0 // initialize ratio of volume to increments of volume summed back
+    for i = 1 to _len * 10 by 1 // set artificial cap for strict to VAMA length * 10 to help reduce edge case timeout errors
+        strict = _rul ? false : i == _len // strict rule N bars' v2i ratios >= vama length, else <= vama length
+        wtdSumB := wtdSumB + nz(wtd[i - 1]) // increment number of bars' weighted prices summed back
+        v2iSumB := v2iSumB + nz(v2i[i - 1]) // increment number of bars' v2i's summed back
+        if v2iSumB >= _len or strict // if chosen rule met
+            break // break (exit loop)
+        nmb := nmb + 1 // increment number of bars summed back counter
+        nmb
+    //nmb         // number of bars summed back to fulfill volume requirements or vama length
+    //wtdSumB     // number of bars' weighted prices summed back
+    //v2iSumB     // number of bars' v2i's summed back
+    vama = (wtdSumB - (v2iSumB - _len) * _src[nmb]) / _len // volume adjusted moving average
+    vama
+
+// Variable Index Dynamic Average (VIDYA) by Tushar Chande
+VIDYA(src, length) =>
+    valpha = 2 / (length + 1)
+    vud1 = src > src[1] ? src - src[1] : 0
+    vdd1 = src < src[1] ? src[1] - src : 0
+    vUD = math.sum(vud1, 9)
+    vDD = math.sum(vdd1, 9)
+    vCMO = nz((vUD - vDD) / (vUD + vDD))
+    VAR = 0.0
+    VAR := nz(valpha * math.abs(vCMO) * src) + (1 - valpha * math.abs(vCMO)) * nz(VAR[1])
+    VAR
+
+// https://www.tradingview.com/script/X67OSwqc-TASC-2024-04-The-Ultimate-Smoother/
+// @function      The UltimateSmoother is a filter created
+//                by subtracting the response of a high-pass 
+//                filter from that of an all-pass filter.
+// @param src     Source series.
+// @param period  Critical period.
+// @returns       Smoothed series.
+UltimateSmoother(float src, int period) =>
+    float a1 = math.exp(-1.414 * math.pi / period)
+    float c2 = 2.0 * a1 * math.cos(1.414 * math.pi / period)
+    float c3 = -a1 * a1
+    float c1 = (1.0 + c2 - c3) / 4.0
+    float us = src
+    if bar_index >= 4
+        us := (1.0 - c1) * src + (2.0 * c1 - c2) * src[1] - (c1 + c3) * src[2] + c2 * nz(us[1]) + c3 * nz(us[2])
+        us
+    us
+
+ma(_type, _source, _length) =>
+    switch _type
+        'SMA' => ta.sma(_source, _length)
+        'EMA' => ta.ema(_source, _length)
+        'WMA' => ta.wma(_source, _length)
+        'D_WMA' => ta.wma(ta.wma(_source, _length), _length) // Double Weighted Moving Average
+        'D_EMA' => ta.ema(ta.ema(_source, _length), _length)
+        'D_SMA' => ta.sma(ta.sma(_source, _length), _length)
+        'VWMA' => enhanced_vwma(_source, _length)
+        'D_VWMA' => enhanced_vwma(enhanced_vwma(_source, _length), _length)
+        'ALMA' => enhanced_alma(_source, _length, 0.85, 6)
+        'Wilder' => 
+    	    wild = _source // Wilder's moving average
+    	    wild := nz(wild[1]) + (_source - nz(wild[1])) / _length
+    	    wild
+        'T3' => f_t3(_source, _length)
+        'HMA' => ta.hma(_source, _length)
+        'VAMA' => vama(_source, _length, 0.67, true, 0)
+        'KAMA' => kama(_source, _length)
+        'JMA' => jma(_source, _length, 2, 50)
+        'Ultimate Smoother' => UltimateSmoother(_source, _length)
+        'D_T3' => f_t3(f_t3(_source, _length), _length)
+        'Smooth LSMA' => 
+    	    lsma = ta.linreg(_source, _length, 0)
+    	    slsma = lsma - (lsma - ta.linreg(lsma, _length, 0))
+    	    slsma
+        'VIDYA' => VIDYA(_source, _length)
+        'WMA(EMA)' => ta.wma(ta.ema(_source, _length), _length)
+
+
+type bar
+    float o = open
+    float h = high
+    float l = low
+    float c = close
+
+type osc
+    float o = na
+    float s = na
+    float h = na
+
+type alerts
+    bool  s = na
+    bool  b = na
+    bool  u = na
+    bool  d = na
+    bool  x = na
+    bool  y = na
+
+type prompt
+    string s = ''
+    bool   c = false
+
+method notify(prompt p) =>
+    if p.c
+        alert(p.s, alert.freq_once_per_bar_close)
+        
+method any(alerts a) =>
+    string s = switch
+        a.s => 'OS Signal'    
+        a.b => 'OB Signal'    
+        a.u => 'Bullish Trend'
+        a.d => 'Bearish Trend'
+        a.x => 'Bullish Swing'
+        a.y => 'Bearish Swing'
+
+        =>      na
+
+    prompt.new(s, not na(s))
+
+method src(bar b, simple string src) =>
+    float x = switch src
+        'open'  =>          b.o
+        'high'  =>          b.h
+        'low'   =>          b.l
+        'close' =>          b.c
+        'oc2'   => math.avg(b.o, b.c          )
+        'hl2'   => math.avg(b.h, b.l          )
+        'hlc3'  => math.avg(b.h, b.l, b.c     )
+        'ohlc4' => math.avg(b.o, b.h, b.l, b.c)
+        'hlcc4' => math.avg(b.h, b.l, b.c, b.c)
+
+    x
+
+method stdev(float src, simple int len) =>
+    float sq  = 0.
+    float psq = 0.
+    float sum = 0.
+    
+    for k = 0 to len - 1
+        val  = nz(src[k])
+        psq :=        sq
+        sq  += (val - sq) / (1   + k  )
+        sum += (val - sq) * (val - psq)
+        
+    math.sqrt(sum / (len - 1))
+
+method wave(bar b, simple string src, simple int clen, simple int alen, simple int slen) =>
+    float x = b .src  (src                    )
+    float m = ta.ema  (x                , clen)
+    float d = x .stdev(                   clen)
+    float o = ta.ema  ((x - m) / d * 100, alen)
+    float s = ta.sma  (o                , slen)
+
+    osc.new(o, s, o - s)
+
+
+const string gw = "WaveTrend", const string gu = "UI Options"
+src  = input.string('hlc3', "Source"             , ['open', 'high', 'low', 'close', 'oc2', 'hl2', 'hlc3', 'ohlc4', 'hlcc4'],               group = gw)
+clen = input.int   (10    , "Channel Length"     ,  7,                                 50,                               1 ,               group = gw)
+alen = input.int   (21    , "Average Length"     ,  7,                                 50,                               1 ,               group = gw)
+slen = input.int   (4     , "Signal  Length"     ,  2,                                  7,                               1 ,               group = gw)
+revb = input.bool  (true  , ""                   ,                                                                           inline = '0', group = gu)
+revt = input.int   (100   , "Reversion Threshold", [100,                                                               125], inline = '0', group = gu)
+colb = input.string('None', "Bar Coloring"       , ["None",    "Midline Cross",   "Extremities",   "Reversions",   "Slope"],               group = gu)
+
+
+bar b  = bar.new (                     )
+osc wt = b  .wave(src, clen, alen, slen)
+
+
+const color colup = #5996ff
+const color coldn = #e864ff
+const color colhu = #d9a8ff
+const color colhd = #ffc973
+var   color colnt = chart.fg_color
+color       colof = 
+                      wt.o > wt.s                          ? 
+                                     color.new(colup, 50)  : 
+                                     color.new(coldn, 50)
+color       colh  = 
+                      wt.h > 0                             ? 
+                     (wt.h > wt.h[1]                       ? 
+                                     color.new(colhu, 40)  : 
+                                     color.new(colhu, 60)) : 
+                     (wt.h > wt.h[1]                       ? 
+                                     color.new(colhd, 40)  : 
+                                     color.new(colhd, 60))
+
+
+m   = hline(0   , "Mid Line", color.new(colnt, 50)       ,    hline.style_solid                        )
+max = hline(+150,                                                                display = display.none)
+hh  = hline(+125,                                                                display = display.none)
+lh  = hline(+100,                                                                display = display.none)
+min = hline(-150,                                                                display = display.none)
+ll  = hline(-125,                                                                display = display.none)
+hl  = hline(-100,                                                                display = display.none)
+h   = plot (wt.h, "H"       , colh                       , 1, plot.style_area                          )
+w   = plot (wt.o, "WT"      , wt.o > wt.s ? colup : coldn, 1, plot.style_line                          )
+s   = plot (wt.s,                                                                display = display.none)
+
+fill(lh, hh , color.new(colhd, 86))
+fill(hh, max, color.new(colhd, 79))
+fill(ll, hl , color.new(colhu, 87))
+fill(ll, min, color.new(colhu, 80))
+fill(w , s  ,           colof     )
+
+alerts a = alerts.new(
+     ta.crossover (wt.o, wt.s) and wt.o < -revt,
+     ta.crossunder(wt.o, wt.s) and wt.o >  revt,
+     ta.crossover (wt.o,    0)                 ,
+     ta.crossunder(wt.o,    0)                 ,
+     ta.crossover (wt.o, wt.s)                 ,
+     ta.crossunder(wt.o, wt.s)                 )
+
+plotchar(revb ? a.b ? wt.o + 40 : na : na, "OB", "⚬", location.absolute, coldn, size = size.tiny)
+plotchar(revb ? a.s ? wt.o - 40 : na : na, "OS", "⚬", location.absolute, colup, size = size.tiny)
+
+
+alertcondition(a.b, "Overbought"        , 'OB Signal'    )
+alertcondition(a.s, "Oversold  "        , 'OS Signal'    )
+alertcondition(a.u, "Midline Crossover ", 'Bullish Trend')
+alertcondition(a.d, "Midline Crossunder", 'Bearish Trend')
+alertcondition(a.x, "Oscillator Up"     , 'Bullish Swing')
+alertcondition(a.y, "Oscillator Down"   , 'Bearish Swing')
+
+a.any().notify()
+
+color col = switch colb
+    "Midline Cross" => wt.o > 0    ? colup                : coldn
+    "Extremities"   => wt.o > revt ? colup : wt.o < -revt ? coldn : colnt
+    "Reversions"    => a.b         ? coldn : a.s          ? colup : colnt
+    "Slope"         => wt.o > wt.s ? colup                : coldn
+    "None"          => na
+barcolor(col)

@@ -1,0 +1,183 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © ChartPrime
+
+
+//@version=6
+indicator("MA Oscillator Map [ChartPrime]", overlay=false)
+
+// --------------------------------------------------------------------------------------------------------------------}
+// 📌 𝙐𝙎𝙀𝙍 𝙄𝙉𝙋𝙐𝙏𝙎
+// --------------------------------------------------------------------------------------------------------------------{
+
+src 			= input(close, title="Source")
+src1            = input.source( close , 'input source')
+GRP 			= "MA Settings"
+maTypeInput 	= input.string("SMA", "Type", options = ["SMA","SMA + BB", "HMA","EMA", "SMMA (RMA)", "WMA", "VWMA"], group = GRP, display = display.data_window)
+maLengthInput 	= input.int(50, "Length", group = GRP, display = display.data_window, active = maTypeInput != "None")
+maTypeInput1 	= input.string("SMA", "Type 1", options = ["SMA","ALSMA", "HMA","EMA", "SMMA (RMA)", "WMA", "VWMA"], group = 'GRP1')
+maLengthInput1 	= input.int(50, "Length 1", group = 'GRP1')
+length1 = input.int(50,"length 1 ")
+colUp = input.color(color.rgb(26, 144, 223), "", inline = "c", group = GRP)
+colDn = input.color(color.rgb(219, 20, 20), "", inline = "c", group = GRP)
+colUp1 = input.color(#002fff, "", inline = "c1", group = GRP)
+colDn1 = input.color(#ffd000, "", inline = "c1", group = GRP)
+colgup = color.from_gradient(src1, -100, -50, colUp1,#00f7ff)
+colgdwn = color.from_gradient(src1, 50,100, #22aa00,colDn1)
+var upper = float(na)
+var lower = float(na)
+var startUp = 0
+var startDn = 0
+
+
+// --------------------------------------------------------------------------------------------------------------------}
+// 📌 𝙄𝙉𝘿𝙄𝘾𝘼𝙏𝙊𝙍 𝘾𝘼𝙇𝘾𝙐𝙇𝘼𝙏𝙄𝙊𝙉𝙎
+// --------------------------------------------------------------------------------------------------------------------{
+// @function    Adaptive Least Squares
+m(alpha, a) => // Credit @alexgrover
+    float p = na
+    p := alpha * a + (1-alpha) * nz(p[1],a)
+
+ALSMA(src, len) => // Credit @alexgrover
+    smooth=1.5
+    alpha = math.pow(ta.tr/ta.highest(ta.tr, len), smooth)
+    x = bar_index
+    y = src
+    x_ = m(alpha, x)
+    y_ = m(alpha, y)
+    //
+    dx = math.abs(x-x_)
+    dy = math.abs(y-y_)
+    mx = m(alpha, dx)
+    my = m(alpha, dy)
+    //
+    a1 = math.pow(2/alpha+1,2)*m(alpha, x*y) - ((2/alpha+1)*m(alpha, x))*((2/alpha+1)*m(alpha, y))
+    b1 = math.sqrt((math.pow(2/alpha+1,2)*m(alpha, x*x) - math.pow((2/alpha+1)*m(alpha, x),2)) * (math.pow(2/alpha+1,2)*m(alpha, y*y) - math.pow((2/alpha+1)*m(alpha, y),2)))
+    r = a1/b1
+    //
+    a = r * (my/mx)
+    b = y_ - a*x_
+    reg = x*a + b
+
+// Smoothing MA Calculation
+ma(source, length, MAtype) =>
+	switch MAtype
+		"SMA"                   => ta.sma(source, length)
+		"HMA"                   => ta.hma(source,length)
+        "SMA + Bollinger Bands" => ta.sma(source, length)
+		"EMA"                   => ta.ema(source, length)
+		"SMMA (RMA)"            => ta.rma(source, length)
+		"WMA"                   => ta.wma(source, length)
+		"VWMA"                  => ta.vwma(source, length)
+// Smoothing MA Calculation
+ma1(source, length, MAtype) =>
+	switch MAtype
+		"SMA"                   =>  ta.sma(source, length)
+		"HMA"                   =>  ta.hma(src1, length1)
+        "SMA + Bollinger Bands" =>  ta.sma(src1, length1)
+		"EMA"                   =>  ta.ema(src1, length1)
+		"SMMA (RMA)"            =>  ta.rma(src1, length1)
+		"WMA"                   =>  ta.wma(src1, length1)
+		"VWMA"                  => ta.vwma(src1, length1)
+		"ALSMA"                 =>   ALSMA(src1, length1)
+// MA
+MA = ma(close, maLengthInput, maTypeInput) 
+MA1 = ma(close, maLengthInput1, maTypeInput1) 
+
+diff   = src - MA
+maxVal = ta.highest(math.abs(diff), 50)
+osc    = diff / maxVal * 100
+TColor = color.from_gradient(osc, -100, 100, colDn, colUp)
+
+diff1   = src1 - MA1
+maxVal1 = ta.highest(math.abs(diff), 50)
+MAdiff = MA1 - MA1[1]
+mxvl1 = ta.highest(math.abs(MAdiff),50)
+osc1    = diff / maxVal * 100
+TColor1 = color.from_gradient(osc1, -100, 100, colDn1, colUp1)
+MAosc = MAdiff/mxvl1 * 100
+if osc[1] == 100 and osc < 100
+	upper  := high[1]
+	startUp := bar_index
+if osc[1] == -100 and osc > -100
+	startDn := bar_index
+	lower  := low[1]
+
+if high > upper and bar_index - startUp > 10
+	upper := float(na) 
+if low < lower and bar_index - startDn > 10
+	lower := float(na) 
+
+
+//                                                                                                                                                                                                                                                                                                                                                 
+var tbl = table.new(position.middle_right, 100, 100, force_overlay = true, frame_color = chart.fg_color, frame_width = 1)
+
+if barstate.islast
+	for i = 0 to 20
+		tbl.cell(1, i, i == 10 ? "x" : "", bgcolor = chart.bg_color, text_color = chart.fg_color, height = 3)
+
+	for i = 0 to int(math.abs(osc/10))
+		val = int(osc/10) > 0 
+		index = val ? 10 - i : 10 + i
+		BGColor = color.from_gradient(index, 0, 20, colUp, colDn)
+
+		tbl.cell(1, index,  i == 0 ? "0%" : (i == int(math.abs(osc/10)) ? str.tostring(osc/100, "##.#%") : ""), bgcolor = BGColor, text_color = chart.fg_color, height = 3)
+
+
+posc = plot(osc, "Oscillator", force_overlay = false, color = TColor)
+pcls = plot(0, "", display = display.none, editable = false)
+
+// --------------------------------------------------------------------------------------------------------------------}
+// 📌 𝙃𝙀𝙄𝙆𝙄𝙉-𝘼𝙎𝙃𝙄 𝘾𝘼𝙇𝘾𝙐𝙇𝘼𝙏𝙄𝙊𝙉𝙎 (𝙇𝙊𝘾𝘼𝙇)
+// --------------------------------------------------------------------------------------------------------------------{
+
+candy = input.bool(false, "Show Heikin-Ashi Bars", group = GRP)
+showOsc1 = input.bool(false, "Show Oscillator 1", group = GRP)
+posc1 = plot(showOsc1 ? osc1 : na, "Oscillator1", force_overlay = false, color = TColor1)
+
+// Compute Heikin-Ashi locally using regular close (not HA close formula)
+var float ha_open = na
+ha_close = (open +high + low + close) / 4
+ha_open := na(ha_open[1]) ? (open + close) / 2 : (ha_open[1] + ha_close[1]) / 2
+ha_high = math.max(high, math.max(ha_open, ha_close))
+ha_low  = math.min(low, math.min(ha_open, ha_close))
+
+// --------------------------------------------------------------------------------------------------------------------}
+// 📌 𝙋𝙇𝙊𝙏𝙏𝙄𝙉𝙂
+// --------------------------------------------------------------------------------------------------------------------{
+
+barcolor(TColor)
+//plot(MAdiff, "ma1 diff", MA1 > MA1[1] ? colUp1 : colDn1)
+plot(MAosc,'maosc', MA1 > MA1[1] ? colgup : colgdwn)
+// Plot regular candles - hollow when candy is true, filled when false
+plotcandle(open, high, low, close, title = 'Candles Color', color = TColor, wickcolor = TColor, bordercolor = TColor, force_overlay = true)
+// Plot Heikin-Ashi as OHLC bars only when candy is true
+plotbar(candy ? ha_open : na, candy ? ha_high : na, candy ? ha_low : na, candy ? ha_close : na,title = 'Heikin-Ashi Bars',color = TColor1,editable = false,force_overlay = true)
+
+plotshape(osc[1] == 100 and osc < 100 ? high[1] : float(na), "Upper Signals Chart", shape.diamond, force_overlay = true, location = location.absolute, size = size.tiny, color = colDn)
+plotshape(osc[1] == 100 and osc < 100 ? osc[1] : float(na), "Upper Signals", shape.diamond, force_overlay = false, location = location.absolute, size = size.tiny, color = colDn, offset = -1)
+
+plotshape(osc[1] == -100 and osc > -100 ? low[1] : float(na), "Lower Signals Chart", shape.diamond, force_overlay = true, location = location.absolute, size = size.tiny, color = colUp)
+plotshape(osc[1] == -100 and osc > -100 ? osc[1] : float(na), "Lower Signals", shape.diamond, force_overlay = false, location = location.absolute, size = size.tiny, color = colUp, offset = -1)
+
+plot(upper[1] != upper ? float(na) : upper, "Upper Level", force_overlay = true, style = plot.style_linebr, offset = 0, color = colDn)
+plot(lower[1] != lower ? float(na) : lower, "Lower Level", force_overlay = true, style = plot.style_linebr, offset = 0, color = colUp)
+plot(MA, "MA", color=chart.fg_color, force_overlay = true)
+
+hline(0)
+
+fill(posc, pcls, 100, 0, colUp, color(na))
+fill(posc, pcls, 0, -100, color(na), colDn)
+fill(posc1, pcls, 100, -50, showOsc1 ? colgup : colgup, color(na))
+fill(posc1, pcls, 0, -100, color(na), showOsc1 ? colgdwn : colgdwn)
+//fill(posc1, pcls, 100, 0, colUp1, color(na))
+//fill(posc1, pcls, 0, -100, color(na), colDn1)
+MAA1 = MA1/ ta.highest(math.abs(MAdiff),50)
+MAAA1 = MA1[1]/ ta.highest(math.abs(MAdiff),50)
+fuk1= MAdiff/MAA1
+fuk2 = MAdiff/MAAA1
+p1 = plot (fuk1,"MA1", color.red) 
+p2 = plot(fuk2,'ma[1]', color.blue)
+fill(p1,p2, fuk1, fuk2 ,colDn1,colUp1,'ma fill')
+plot (MA1,"MA1", color.red, force_overlay = true) 
+plot(MA1[3],'ma[1]', color.blue , force_overlay = true)
+// --------------------------------------------------------------------------------------------------------------------}

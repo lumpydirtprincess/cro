@@ -1,0 +1,56 @@
+{
+  "1": {
+    "config": {
+      "executionHistory": [
+        {
+          "id": "1765107514446-zarzuhl90",
+          "cellIndex": 1,
+          "languageId": "python",
+          "code": "for fast_ma in [5, 10, 15, 20]:\n    for slow_ma in [20, 30, 40, 50]:\n        for ma_type in ['SMA', 'EMA', 'RMA']:\n            run_backtest(fast_ma, slow_ma, ma_type)",
+          "output": "12/7/2025, 11:38:33 AM\npython3 f:\\Kirbys litter box\\clean litter\\skeleton key\\skellyBuildingBlocksTemplatesTitsPUS\\codebook-md\\codebook_md_exec.py\n\nTraceback (most recent call last):\r\n  File \"f:\\Kirbys litter box\\clean litter\\skeleton key\\skellyBuildingBlocksTemplatesTitsPUS\\codebook-md\\codebook_md_exec.py\", line 5, in <module>\r\n    run_backtest(fast_ma, slow_ma, ma_type)\r\n    ^^^^^^^^^^^^\r\nNameError: name 'run_backtest' is not defined\r\nTraceback (most recent call last):\r\n  File \"f:\\Kirbys litter box\\clean litter\\skeleton key\\skellyBuildingBlocksTemplatesTitsPUS\\codebook-md\\codebook_md_exec.py\", line 5, in <module>\r\n    run_backtest(fast_ma, slow_ma, ma_type)\r\n    ^^^^^^^^^^^^\r\nNameError: name 'run_backtest' is not defined\r\n\n",
+          "status": "failure",
+          "timestamp": "2025-12-07T11:38:34.446Z",
+          "errorMessage": "Process exited with code 1",
+          "exitCode": 1,
+          "duration": 695
+        }
+      ]
+    }
+  },
+  "3": {
+    "config": {
+      "executionHistory": [
+        {
+          "id": "1765107514795-zod1jzfi3",
+          "cellIndex": 3,
+          "languageId": "python",
+          "code": "import random\n\nnum_tests = 100\nfor i in range(num_tests):\n    fast_ma = random.choice([5, 10, 15, 20, 25])\n    slow_ma = random.choice([20, 30, 40, 50, 60])\n    ma_type = random.choice(['SMA', 'EMA', 'RMA'])\n    run_backtest(fast_ma, slow_ma, ma_type)",
+          "output": "12/7/2025, 11:38:34 AM\npython3 f:\\Kirbys litter box\\clean litter\\skeleton key\\skellyBuildingBlocksTemplatesTitsPUS\\codebook-md\\codebook_md_exec.py\n\nTraceback (most recent call last):\r\n  File \"f:\\Kirbys litter box\\clean litter\\skeleton key\\skellyBuildingBlocksTemplatesTitsPUS\\codebook-md\\codebook_md_exec.py\", line 8, in <module>\r\n    run_backtest(fast_ma, slow_ma, ma_type)\r\n    ^^^^^^^^^^^^\r\nNameError: name 'run_backtest' is not defined\r\nTraceback (most recent call last):\r\n  File \"f:\\Kirbys litter box\\clean litter\\skeleton key\\skellyBuildingBlocksTemplatesTitsPUS\\codebook-md\\codebook_md_exec.py\", line 8, in <module>\r\n    run_backtest(fast_ma, slow_ma, ma_type)\r\n    ^^^^^^^^^^^^\r\nNameError: name 'run_backtest' is not defined\r\n\n",
+          "status": "failure",
+          "timestamp": "2025-12-07T11:38:34.795Z",
+          "errorMessage": "Process exited with code 1",
+          "exitCode": 1,
+          "duration": 348
+        }
+      ]
+    }
+  },
+  "5": {
+    "config": {
+      "executionHistory": [
+        {
+          "id": "1765107515093-krrcxs6tj",
+          "cellIndex": 5,
+          "languageId": "python",
+          "code": "import tradingview_api  # hypothetical\n\n# Define parameter ranges\nfast_ma_range = range(5, 25, 5)\nslow_ma_range = range(20, 100, 20)\nma_types = ['SMA', 'EMA', 'RMA']\n\nresults = []\n\nfor fast in fast_ma_range:\n    for slow in slow_ma_range:\n        for ma_type in ma_types:\n            # Update strategy parameters\n            params = {\n                'fast_ma': fast,\n                'slow_ma': slow,\n                'ma_type': ma_type\n            }\n\n            # Run backtest\n            result = tradingview_api.run_backtest(strategy_id, params)\n\n            # Store results\n            results.append({\n                'params': params,\n                'net_profit': result.net_profit,\n                'sharpe': result.sharpe_ratio,\n                'max_dd': result.max_drawdown\n            })\n\n# Analyze results\nbest = max(results, key=lambda x: x['sharpe'])\nprint(f\"Best parameters: {best['params']}\")",
+          "output": "12/7/2025, 11:38:34 AM\npython3 f:\\Kirbys litter box\\clean litter\\skeleton key\\skellyBuildingBlocksTemplatesTitsPUS\\codebook-md\\codebook_md_exec.py\n\nTraceback (most recent call last):\r\n  File \"f:\\Kirbys litter box\\clean litter\\skeleton key\\skellyBuildingBlocksTemplatesTitsPUS\\codebook-md\\codebook_md_exec.py\", line 2, in <module>\r\n    import tradingview_api  # hypothetical\r\n    ^^^^^^^^^^^^^^^^^^^^^^\r\nModuleNotFoundError: No module named 'tradingview_api'\r\nTraceback (most recent call last):\r\n  File \"f:\\Kirbys litter box\\clean litter\\skeleton key\\skellyBuildingBlocksTemplatesTitsPUS\\codebook-md\\codebook_md_exec.py\", line 2, in <module>\r\n    import tradingview_api  # hypothetical\r\n    ^^^^^^^^^^^^^^^^^^^^^^\r\nModuleNotFoundError: No module named 'tradingview_api'\r\n\n",
+          "status": "failure",
+          "timestamp": "2025-12-07T11:38:35.093Z",
+          "errorMessage": "Process exited with code 1",
+          "exitCode": 1,
+          "duration": 297
+        }
+      ]
+    }
+  }
+}

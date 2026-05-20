@@ -1,0 +1,1677 @@
+//@version=6
+indicator('PSAR Laboratory [DAFE]', shorttitle = 'PSAR Lab', overlay = true, max_bars_back = 1000, max_lines_count = 100, max_labels_count = 100, max_boxes_count = 100)
+// ╔════════════════════════════════════════════════════════════════════════════╗
+// ║                                                                            ║
+// ║     ██████╗ ███████╗ █████╗ ██████╗     ██╗      █████╗ ██████╗            ║
+// ║     ██╔══██╗██╔════╝██╔══██╗██╔══██╗    ██║     ██╔══██╗██╔══██╗           ║
+// ║     ██████╔╝███████╗███████║██████╔╝    ██║     ███████║██████╔╝           ║
+// ║     ██╔═══╝ ╚════██║██╔══██║██╔══██╗    ██║     ██╔══██║██╔══██╗           ║
+// ║     ██║     ███████║██║  ██║██║  ██║    ███████╗██║  ██║██████╔╝           ║
+// ║     ╚═╝     ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝    ╚══════╝╚═╝  ╚═╝╚═════╝            ║
+// ║                                                                            ║
+// ║                                                                            ║
+// ║              ⚡ Dskyz (DAFE) Trading Systems ⚡                           ║
+// ║                 PSAR LABORATORY: 23 ALGORITHMS                             ║
+// ║                                                                            ║
+// ║    Parabolic SAR Reimagined: Adaptive Acceleration, Smart Flip Logic       ║
+// ║                                                                            ║
+// ╚══════════════════════════════════════════════════════════════════════════════════════════════════════════════
+// GROUPS
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════
+var g_algo = '════════════ 🧠 ALGORITHM ENGINE ════════════'
+var g_core = '════════════ ⚙️ CORE AF SETTINGS ════════════'
+var g_flip = '════════════ 🔄 FLIP CONFIRMATION ═══════════'
+var g_filter = '════════════ 🎛️ NOISE FILTERING ═════════════'
+var g_perf = '════════════ 📊 PERFORMANCE TRACKING ═════════'
+var g_vol = '════════════ 📈 1. VOLATILITY-SCALED AF ═══════'
+var g_er = '════════════ 📉 2. EFFICIENCY RATIO AF ════════'
+var g_ent = '════════════ 🎲 3. SHANNON ENTROPY AF ═════════'
+var g_fd = '════════════ 🔬 4. FRACTAL DIMENSION AF ═══════'
+var g_adx = '════════════ 💪 5. ADX-GATED AF ══════════════'
+var g_kal = '════════════ 🎯 6. KALMAN AF ESTIMATOR ════════'
+var g_vm = '════════════ 📊 7. VOLUME-MOMENTUM AF ════════'
+var g_gk = '════════════ 📐 8. GARMAN-KLASS AF ══════════'
+var g_rsi = '════════════ 📏 9. RSI-MODULATED AF ═══════════'
+var g_bb = '════════════ 🎯 10. BOLLINGER SQUEEZE AF ════════'
+var g_kc = '════════════ 📊 11. KELTNER ADAPTIVE AF ════════'
+var g_chop = '════════════ 🌊 12. CHOPPINESS-GATED AF ══════'
+var g_vidya = '════════════ ⚡ 13. VIDYA-STYLE AF ════════'
+var g_hilbert = '════════════ 🔄 14. HILBERT CYCLE AF ═════════'
+var g_vwep = '════════════ 📦 15. VOLUME-WEIGHTED EP ═════════'
+var g_wavelet = '════════════ 🌊 16. WAVELET FILTERED EP ════════'
+var g_atrep = '════════════ 📏 17. ATR-VALIDATED EP ══════════'
+var g_statep = '════════════ 📊 18. STATISTICAL EP FILTER ═══════'
+var g_dual = '════════════ ⚔️ 19. DUAL-PSAR GATE ════════════'
+var g_mtf = '════════════ 🔗 20. MTF COHERENCE PSAR ═════════'
+var g_momflip = '════════════ 🚀 21. MOMENTUM-GATED FLIP ═════════'
+var g_closeonly = '═══════════ 🕯️ 22. CLOSE-ONLY PSAR ═══════════'
+var g_consensus = '═══════════ 🏆 23. ULTIMATE CONSENSUS ═════════'
+var g_visual = '════════════ 🎨 VISUALIZATION ═════════════'
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════
+// TOOLTIPS
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════
+string TT_ALGO = 'ALGORITHM SELECTION ENGINE:\n\nSelects the mathematical engine that adapts your PSAR behavior. Traditional PSAR uses fixed AF (0.02 start, +0.02 step, 0.20 max). These 23 algorithms make AF, EP detection, and flip logic ADAPTIVE.\n\n📊 ALGORITHM CATEGORIES:\n\n🔹 AF ADAPTATION (1-14):\nModify acceleration based on volatility, trend quality, entropy, cycles.\n\n🔹 EP ENHANCEMENT (15-18):\nSmarter extreme point detection with filtering and validation.\n\n🔹 FLIP LOGIC (19-23):\nEnhanced reversal confirmation with consensus and MTF.\n\n💡 PRO TIP: Start with \'Volatility-Scaled AF\' (best all-rounder). If too many whipsaws, try \'Dual-PSAR Gate\' or \'MTF Coherence\'. If missing trends, try \'VIDYA-Style\' or \'Volume-Momentum\'.'
+string TT_AF_START = 'ACCELERATION FACTOR START:\n\nInitial AF when a new trend begins. This is the STARTING trailing speed after each flip.\n\n• Lower (0.01-0.015): SAR starts further from price, conservative\n• Standard (0.02): Wilder\'s original setting\n• Higher (0.025-0.03): SAR starts closer, aggressive\n\n📊 MARKET GUIDELINES:\n• Crypto: 0.02-0.03 (volatile)\n• Futures: 0.015-0.02 (balanced)\n• Forex: 0.012-0.018 (smooth)\n\n💡 The algorithm adapts FROM this baseline.'
+string TT_AF_STEP = 'ACCELERATION FACTOR STEP:\n\nBase increment added to AF each time price makes a new Extreme Point (new high in uptrend, new low in downtrend).\n\n• Lower (0.01): Slow acceleration, fewer whipsaws\n• Standard (0.02): Wilder\'s original\n• Higher (0.03+): Fast acceleration, tighter trailing\n\n⚠️ Algorithms MODIFY this step dynamically based on market conditions - some increase it in strong trends, some decrease it in chop.'
+string TT_AF_MAX = 'ACCELERATION FACTOR MAXIMUM:\n\nCap on AF - once reached, it stops increasing regardless of new EPs. This is your \'max trailing speed\' limit.\n\n• Conservative (0.15): SAR stays further, more room\n• Standard (0.20): Wilder\'s original\n• Aggressive (0.25-0.35): Tight trailing in trends\n\n📊 BY MARKET:\n• Crypto: 0.25-0.35 (strong trends)\n• Futures: 0.18-0.22 (balanced)\n• Forex: 0.12-0.20 (avoid noise flips)\n\n💡 Algorithms may dynamically adjust effective max.'
+string TT_MIN_BARS = 'MINIMUM BARS BETWEEN FLIPS:\n\nCooldown period after a PSAR flip before another flip is allowed. Prevents rapid-fire reversals in choppy markets.\n\n• 0: Disabled (pure PSAR logic)\n• 3-5: Light filtering\n• 8-15: Heavy filtering (swing trading)\n• 20+: Position trading only\n\n⚠️ Does NOT affect SAR calculation - only flip SIGNALS. Higher values reduce whipsaws but may delay valid reversals.'
+string TT_FLIP_MODE = 'FLIP TRIGGER MODE:\n\nDetermines what price action triggers a PSAR flip/reversal.\n\n• STANDARD: Traditional - any price touch of SAR triggers flip. Fastest response but most whipsaws.\n\n• CLOSE ONLY: Bar must CLOSE beyond SAR to flip. Ignores wicks. Reduces false signals from spikes. RECOMMENDED for most markets.\n\n• CONFIRMED BAR: Requires current bar AND previous bar both beyond SAR. Two-bar confirmation.\n\n• VOLUME CONFIRMED: Price must cross SAR with above-average volume. Ensures conviction behind the move.\n\n💡 \'Close Only\' is the best balance for most markets.'
+string TT_VOL_MULT = 'VOLUME CONFIRMATION MULTIPLIER:\n\nOnly for \'Volume Confirmed\' flip mode. Volume must exceed SMA(20) × this multiplier for flip.\n\n• 1.0: Just above average (loose)\n• 1.2: 20% above average (standard)\n• 1.5: 50% above average (strict)\n\n📊 BY MARKET:\n• Crypto: 1.2-1.3\n• Futures: 1.3-1.5\n• Forex: N/A (volume unreliable)'
+string TT_FILTER = 'NOISE FILTER ENGINE:\n\nApplies smoothing to the SAR output to reduce noise and potentially improve flip timing.\n\n🔹 BASIC FILTERS:\n• SMA/EMA/WMA: Traditional moving averages\n• VWMA: Volume-weighted (for volume data)\n• RMA (Wilder): Original Wilder smoothing\n\n🔹 LOW-LAG FILTERS:\n• DEMA/TEMA: Double/Triple EMA (reduced lag)\n• Hull MA: Minimal lag, fast response\n• ZLEMA: Zero-lag attempt\n• T3: Tillson smooth with adjustable factor\n\n🔹 ADAPTIVE FILTERS:\n• Adaptive KAMA: Speeds in trends, slows in chop\n• VIDYA: Variable index dynamic average\n• FRAMA: Fractal adaptive\n\n🔹 ADVANCED FILTERS:\n• SuperSmoother: Ehlers 2-pole DSP filter\n• Gaussian: Bell curve weighted\n• DAFE Spectral Laguerre: Proprietary adaptive\n• DAFE Hybrid Adaptive: Kalman + Wilder fusion\n\n💡 Use \'None\' for fastest signals, \'Hull MA\' for balanced smoothing.'
+string TT_FILTER_LEN = 'FILTER LENGTH:\n\nSmoothing period for the noise filter. Affects lag vs noise tradeoff.\n\n• Short (4-8): Fast response, some noise\n• Medium (10-14): Balanced\n• Long (18-30): Very smooth, more lag\n\n📊 BY TIMEFRAME:\n• 15Min: 5-8 (need speed)\n• 4HR: 8-12 (balanced)\n• Daily: 10-14 (smooth)\n\n💡 Keep short to preserve SAR responsiveness.'
+string TT_ALMA_OFFSET = 'ALMA OFFSET:\n\nControls the position of the Gaussian curve center.\n\n• 0.0: Centered on oldest data (max smoothing)\n• 0.5: Centered in middle\n• 0.85: Centered on newest data (responsive)\n• 1.0: Pure newest data focus\n\n💡 Default 0.85 provides good balance.'
+string TT_SIGMA = 'GAUSSIAN SIGMA / ALMA SIGMA:\n\nControls the width of the Gaussian/ALMA weighting curve.\n\n• Low (2-4): Sharp, focused weighting\n• Medium (5-7): Balanced\n• High (8-10): Broad, smooth weighting\n\n💡 Higher sigma = smoother output.'
+string TT_T3_FACTOR = 'T3 VOLUME FACTOR:\n\nTillson T3 smoothing aggressiveness.\n\n• 0.0: Pure TEMA behavior\n• 0.7: Standard T3 (recommended)\n• 1.0: Maximum smoothing\n\n💡 0.7 is the sweet spot for most uses.'
+string TT_PERF_ENABLE = 'PERFORMANCE DASHBOARD:\n\nActivates comprehensive trade tracking with real-time analytics.\n\n📊 TRACKS:\n• Win Rate & Profit Factor\n• Net P&L & Max Drawdown\n• Trade count & streaks\n• Position status\n\n⚠️ IMPORTANT LIMITATIONS:\n• Results are HYPOTHETICAL\n• Does NOT account for spread/slippage\n• Commission setting is basic\n• Need 30-50+ trades for significance\n\n💡 Enable when testing algorithms. Disable for cleaner charts.'
+string TT_CAPITAL = 'STARTING CAPITAL:\n\nInitial account balance for P&L calculations.\n\n💡 Use your actual trading account size for realistic metrics.'
+string TT_POS_SIZE = 'POSITION SIZE %:\n\nPercentage of equity per trade.\n\n• Conservative: 1-5%\n• Moderate: 5-15%\n• Aggressive: 15-30%\n\n⚠️ Real trading typically uses 0.5-2% risk per trade.'
+string TT_COMMISSION = 'COMMISSION %:\n\nRound-trip commission percentage.\n\n📊 TYPICAL VALUES:\n• Crypto CEX: 0.10-0.20%\n• Futures: 0.01-0.04%\n• Forex: 0.01-0.03%\n• Stocks: 0.01-0.05%'
+string TT_PSAR_STOP = 'USE PSAR AS STOP:\n\nUses the PSAR line itself as the trailing stop for performance calculations.\n\nThis is the NATURAL use of PSAR - it\'s designed as a stop-and-reverse system.\n\n💡 Recommended: ON for all markets.'
+string TT_USE_TP = 'USE TAKE PROFIT:\n\nEnables fixed take profit exits.\n\n• Trending markets: OFF (let PSAR trail)\n• Ranging markets: ON (lock in profits)\n\n💡 PSAR is a trailing system - usually better to let it trail.'
+string TT_TP_VAL = 'TAKE PROFIT ATR MULTIPLE:\n\nTP distance as ATR multiple from entry.\n\n• Scalping: 1.5-2.0\n• Swing: 2.5-4.0\n• Position: 4.0-6.0'
+string TT_VOL_ATR = 'VOLATILITY ATR LENGTH:\n\nPeriod for ATR calculation used to scale AF based on current vs historical volatility.\n\n• Short (8-10): Fast adaptation to vol changes\n• Standard (14): Balanced\n• Long (20+): Slow, stable vol reading\n\n💡 Standard 14 works well for most markets.'
+string TT_VOL_LOOKBACK = 'VOLATILITY LOOKBACK:\n\nHistorical period for volatility comparison. Current ATR / SMA(ATR, this) gives the volatility ratio.\n\n• 30-40: Short-term vol context\n• 50: Standard (recommended)\n• 100+: Long-term vol context\n\n💡 50 provides good balance.'
+string TT_VOL_SCALE = 'VOLATILITY SCALE FACTOR:\n\nHow aggressively AF scales with volatility.\n\n• Low (1.0-1.3): Mild scaling\n• Medium (1.5): Balanced\n• High (1.8-2.5): Aggressive scaling\n\n📊 BY MARKET:\n• Crypto: 1.8-2.0 (high vol swings)\n• Futures: 1.5\n• Forex: 1.3\n\n💡 Higher for volatile markets.'
+string TT_ER_LEN = 'EFFICIENCY RATIO LENGTH:\n\nLookback for ER calculation. ER = |Net Change| / Sum(|Individual Changes|)\n\nMeasures trend quality: ER→1 = strong trend, ER→0 = chop.\n\n• Short (5-8): Fast adaptation\n• Medium (10): Balanced\n• Long (15-20): Smooth ER\n\n💡 Shorter for faster markets.'
+string TT_ER_FAST = 'FAST AF MULTIPLIER:\n\nAF multiplier when ER is high (strong trend).\n\n• 1.5: Conservative boost\n• 2.0: Standard boost\n• 2.5+: Aggressive trend-following\n\n💡 Higher = more aggressive in clean trends.'
+string TT_ER_SLOW = 'SLOW AF MULTIPLIER:\n\nAF multiplier when ER is low (choppy market).\n\n• 0.3: Very conservative in chop\n• 0.5: Standard reduction\n• 0.7: Mild reduction\n\n💡 Keep at 0.5 to slow down in chop.'
+string TT_ENT_LEN = 'ENTROPY LENGTH:\n\nLookback for entropy calculation. Entropy measures market disorder/predictability.\n\n• Short (10-15): Fast regime detection\n• Medium (20): Balanced\n• Long (30+): Stable entropy reading\n\n💡 Shorter for faster adaptation.'
+string TT_ENT_BINS = 'HISTOGRAM BINS:\n\nNumber of bins for probability distribution in entropy calculation.\n\n• Fewer (5-7): Coarse, stable\n• Standard (10): Balanced\n• More (15-20): Fine, noisy\n\n💡 Keep at 10.'
+string TT_ENT_HIGH = 'HIGH ENTROPY THRESHOLD:\n\nEntropy above this = chaotic/random market = slower AF.\n\n• Lower (0.6): Stricter chaos detection\n• Standard (0.7): Balanced\n• Higher (0.8): Tolerant of disorder\n\n💡 Lower = more conservative.'
+string TT_ENT_LOW = 'LOW ENTROPY THRESHOLD:\n\nEntropy below this = ordered/predictable market = faster AF.\n\n• Lower (0.3): Strict order requirement\n• Standard (0.4): Balanced\n• Higher (0.5): Less strict\n\n💡 Higher = less aggressive in order.'
+string TT_FD_LEN = 'FRACTAL LENGTH:\n\nPeriod for Higuchi fractal dimension calculation.\n\n• Short (5-8): Fast FD estimation\n• Medium (10): Balanced\n• Long (15-20): Stable FD\n\n💡 Shorter for crypto, longer for forex.'
+string TT_FD_TREND = 'TREND THRESHOLD:\n\nFD below this = trending (smooth price path).\n\nFD = 1.0 is perfectly smooth, 1.5 is random walk, 2.0 is space-filling.\n\n• Lower (1.2): Strict trend definition\n• Standard (1.3): Balanced\n• Higher (1.4): Tolerant\n\n💡 Lower = stricter trend requirement.'
+string TT_FD_RANDOM = 'RANDOM THRESHOLD:\n\nFD above this = random/noisy market = very slow AF.\n\n• Lower (1.5): Strict noise detection\n• Standard (1.6): Balanced\n• Higher (1.7): Tolerant\n\n💡 Higher = more tolerant of noise.'
+string TT_ADX_LEN = 'ADX LENGTH:\n\nPeriod for ADX calculation.\n\n• Short (10): Fast ADX\n• Standard (14): Balanced\n• Long (20): Smooth ADX\n\n💡 Standard 14 works well.'
+string TT_ADX_STRONG = 'STRONG TREND ADX:\n\nADX above this = strong trend = AF can increase normally.\n\n• Lower (20): Easier trend qualification\n• Standard (25): Balanced\n• Higher (30): Strict trend requirement\n\n💡 Lower for crypto (trends start fast).'
+string TT_ADX_WEAK = 'WEAK TREND ADX:\n\nADX below this = no trend = AF frozen or reduced.\n\n• Lower (10): Only freeze in dead markets\n• Standard (15): Balanced\n• Higher (20): Aggressive filtering\n\n💡 Keep at 15.'
+string TT_ADX_FREEZE = 'FREEZE AF IN WEAK TREND:\n\nWhen ADX < weak threshold, AF stops increasing even on new EPs.\n\nPrevents overacceleration in ranging markets.\n\n💡 Keep ON to prevent whipsaws in ranges.'
+string TT_KAL_PROCESS = 'KALMAN PROCESS NOISE:\n\nProcess noise (Q) models expected AF change rate. Higher = AF can change faster.\n\n• Low (0.005): Stable AF estimates\n• Standard (0.01): Balanced\n• High (0.02+): Fast adaptation\n\n💡 Keep at 0.01.'
+string TT_KAL_MEASURE = 'KALMAN MEASUREMENT NOISE:\n\nMeasurement noise (R) models observation uncertainty. Higher = smoother AF changes.\n\n• Low (0.05): Fast response, some noise\n• Standard (0.10): Balanced\n• High (0.15+): Very smooth\n\n💡 Lower for faster AF adaptation.'
+string TT_KAL_ADAPTIVE = 'KALMAN VOLATILITY ADAPTIVE:\n\nAdjust Kalman noise parameters based on current volatility.\n\nIncreases responsiveness in high-vol, stability in low-vol.\n\n💡 Keep ON.'
+string TT_VM_VOL_LEN = 'VOLUME MA LENGTH:\n\nPeriod for volume moving average.\n\n• Short (10): Fast vol reference\n• Standard (20): Balanced\n• Long (30): Stable vol reference\n\n💡 Keep at 20.'
+string TT_VM_MOM_LEN = 'MOMENTUM LENGTH:\n\nPeriod for ROC/momentum calculation.\n\n• Short (5-8): Fast momentum\n• Standard (10): Balanced\n• Long (14+): Smooth momentum\n\n💡 Shorter for faster response.'
+string TT_VM_VOL_THRESH = 'VOLUME THRESHOLD:\n\nVolume must be this × average to boost AF.\n\n• Low (1.0): Any above-average volume\n• Standard (1.2): 20% above average\n• High (1.5): 50% above average\n\n💡 Higher = stricter volume confirmation.'
+string TT_VM_CONFIRM = 'REQUIRE MOMENTUM CONFIRMATION:\n\nAF only increases when momentum confirms trend direction.\n\nBullish trend needs positive momentum, bearish needs negative.\n\n💡 Keep ON for cleaner signals.'
+string TT_GK_LEN = 'GK VOLATILITY LENGTH:\n\nPeriod for Garman-Klass volatility calculation using OHLC data.\n\nGK vol is more efficient than close-to-close.\n\n• Short (10): Fast vol estimate\n• Standard (14): Balanced\n• Long (20): Stable vol estimate\n\n💡 14 works well.'
+string TT_GK_LOOKBACK = 'GK LOOKBACK:\n\nHistorical period for GK volatility comparison.\n\n💡 Keep at 50 for stable reference.'
+string TT_GK_HIGH = 'HIGH VOL AF MULTIPLIER:\n\nAF multiplier when volatility is high. Slows down to avoid whipsaws.\n\n• Lower (0.5): Very conservative in high vol\n• Standard (0.7): Balanced\n• Higher (0.85): Mild slowdown\n\n💡 Lower = more conservative in high vol.'
+string TT_GK_LOW = 'LOW VOL AF MLTIPLIER:\n\nAF multiplier when volatility is low. Speeds up to trail tighter.\n\n• Lower (1.1): Mild speedup\n• Standard (1.3): Balanced\n• Higher (1.5): Aggressive in low vol\n\n💡 Keep at 1.3.'
+string TT_RSI_LEN = 'RSI LENGTH:\n\nPeriod for RSI calculation.\n\n💡 Standard 14 works well.'
+string TT_RSI_OB = 'OVERBOUGHT LEVEL:\n\nRSI above this in uptrend = potential reversal = slow AF.\n\n• Lower (65): Conservative\n• Standard (70): Balanced\n• Higher (75-80): For strong trends (crypto)\n\n💡 Higher for crypto, standard for others.'
+string TT_RSI_OS = 'OVERSOLD LEVEL:\n\nRSI below this in downtrend = potential reversal = slow AF.\n\n• Higher (35): Conservative\n• Standard (30): Balanced\n• Lower (20-25): For strong trends (crypto)\n\n💡 Lower for crypto.'
+string TT_RSI_MID = 'BOOST AF IN MID-RANGE:\n\nWhen RSI is 40-60, boost AF (trend momentum phase).\n\nMid-range RSI often indicates trend continuation.\n\n💡 Keep ON.'
+string TT_BB_LEN = 'BOLLINGER LENGTH:\n\nPeriod for Bollinger Bands.\n\n💡 Standard 20 works well.'
+string TT_BB_MULT = 'BOLLINGER MULTIPLIER:\n\nStandard deviation multiplier for band width.\n\n💡 Keep at 2.0 standard.'
+string TT_BB_SQUEEZE = 'SQUEEZE PERCENTILE:\n\nBB width below this percentile = squeeze = prepare for breakout.\n\n• Lower (0.3): Strict squeeze definition\n• Standard (0.5): Median (balanced)\n• Higher (0.7): Looser squeeze\n\n💡 Lower = stricter squeeze detection.'
+string TT_BB_BOOST = 'SQUEEZE AF BOOST:\n\nAF multiplier when in squeeze (anticipating breakout).\n\n• Lower (1.2): Mild anticipation\n• Standard (1.5): Balanced\n• Higher (1.8+): Aggressive breakout capture\n\n💡 Higher for aggressive breakout traders.'
+string TT_KC_LEN = 'KELTNER LENGTH:\n\nEMA period for Keltner Channel center.\n\n💡 Keep at 20.'
+string TT_KC_MULT = 'KC ATR MULTIPLIER:\n\nATR multiplier for channel width.\n\n💡 Keep at 1.5.'
+string TT_KC_OUTSIDE = 'OUTSIDE CHANNEL AF BOOST:\n\nAF multiplier when price is outside Keltner (strong trend).\n\n• Lower (1.3): Mild boost\n• Standard (1.5): Balanced\n• Higher (1.8): Aggressive trend-following\n\n💡 Higher for momentum traders.'
+string TT_KC_INSIDE = 'INSIDE CHANNEL AF SLOW:\n\nAF multiplier when price is inside Keltner (range-bound).\n\n• Lower (0.5): Very conservative in range\n• Standard (0.7): Balanced\n• Higher (0.85): Mild slowdown\n\n💡 Lower = more conservative in ranges.'
+string TT_CHOP_LEN = 'CHOPPINESS LENGTH:\n\nPeriod for Choppiness Index calculation.\n\n💡 Standard 14 works well.'
+string TT_CHOP_TREND = 'TREND THRESHOLD:\n\nChoppiness below this = trending market = normal/boosted AF.\n\n• 38.2: Fibonacci level (standard)\n• Lower (35): Stricter trend requirement\n\n💡 Keep at 38.2.'
+string TT_CHOP_RANGE = 'RANGE THRESHOLD:\n\nChoppiness above this = ranging/choppy = reduced AF.\n\n• 61.8: Fibonacci level (standard)\n• Higher (65): Stricter chop detection\n\n💡 Keep at 61.8.'
+string TT_CHOP_MULT = 'RANGE AF MULTIPLIER:\n\nAF multiplier in choppy conditions.\n\n• Lower (0.3): Very conservative in chop\n• Standard (0.5): Balanced\n• Higher (0.7): Mild reduction\n\n💡 Keep at 0.5.'
+string TT_VIDYA_LEN = 'VIDYA LENGTH:\n\nPeriod for CMO/ER calculation that modulates AF.\n\n• Short (10): Fast adaptation\n• Standard (14): Balanced\n• Long (20): Smooth adaptation\n\n💡 Shorter for faster markets.'
+string TT_VIDYA_FAST = 'FAST SMOOTHING:\n\nMaximum AF scaling factor in strong trends.\n\n• Lower (0.3): Conservative\n• Standard (0.5): Balanced\n• Higher (0.7): Aggressive in trends\n\n💡 Higher = faster in clean trends.'
+string TT_VIDYA_SLOW = 'SLOW SMOOTHING:\n\nMinimum AF scaling factor in weak trends.\n\n💡 Keep at 0.1 to slow down in weak conditions.'
+string TT_HILBERT_MIN = 'MIN CYCLE PERIOD:\n\nMinimum detectable cycle period. Shorter cycles filtered out.\n\n💡 Keep at 8.'
+string TT_HILBERT_MAX = 'MAX CYCLE PERIOD:\n\nMaximum detectable cycle period. Longer cycles filtered out.\n\n• Short (40): For fast markets\n• Standard (50): Balanced\n• Long (60+): For slow, cyclical markets\n\n💡 Longer for markets with larger cycles.'
+string TT_HILBERT_CYCLE = 'CYCLE-ADAPTIVE AF:\n\nAF scales inversely with detected cycle period. Short cycles = faster AF.\n\n💡 Keep ON.'
+string TT_HILBERT_PHASE = 'PHASE-ADAPTIVE AF:\n\nAF modulates based on cycle phase. Faster near extremes, slower mid-cycle.\n\n• ON: For mean-reverting, cyclical markets\n• OFF: For strongly trending markets (crypto)\n\n💡 ON for commodities/forex, OFF for crypto.'
+string TT_VWEP_LEN = 'VOLUME LOOKBACK:\n\nPeriod for volume averaging.\n\n💡 Keep at 20.'
+string TT_VWEP_WEIGHT = 'VOLUME WEIGHTING FACTOR:\n\nHow much volume influences EP significance.\n\n• Lower (0.3): Mild volume influence\n• Standard (0.5): Balanced\n• Higher (0.7): Strong volume influence\n\n💡 Lower for forex (volume unreliable).'
+string TT_VWEP_REQUIRE = 'REQUIRE ABOVE-AVG VOLUME FOR EP:\n\nNew EP only counts if volume is above average.\n\n• ON: Strict mode - fewer but higher quality EPs\n• OFF: Standard - all EPs count\n\n💡 ON for stricter filtering.'
+string TT_WAV_LEVELS = 'DECOMPOSITION LEVELS:\n\nNumber of wavelet decomposition levels for price filtering.\n\n• 1: Minimal smoothing (fast TFs)\n• 2: Balanced (4HR)\n• 3-4: Heavy smoothing (Daily+)\n\n💡 More levels = smoother EP detection but more lag.'
+string TT_WAV_DETAIL = 'DETAIL WEIGHT:\n\nHow much high-frequency detail to keep.\n\n• 0.0: Pure trend (smoothest)\n• 0.3: Balanced\n• 0.5+: More detail included\n\n💡 Lower for smoother EP detection.'
+string TT_WAV_APPLY_AF = 'ALSO APPLY TO AF:\n\nApply wavelet filtering to AF steps, not just EP.\n\n💡 Keep ON for smoother overall behavior.'
+string TT_ATREP_LEN = 'ATR LENGTH:\n\nPeriod for ATR calculation.\n\n💡 Standard 14 works well.'
+string TT_ATREP_MIN = 'MIN ATR MULTIPLE:\n\nNew EP must exceed previous EP by at least this × ATR. Filters noise.\n\n• Lower (0.2): Loose filtering\n• Standard (0.3): Balanced\n• Higher (0.5): Strict filtering\n\n💡 Higher = stricter EP filtering.'
+string TT_ATREP_SCALE = 'SCALE WITH VOLATILITY:\n\nMin ATR multiple adjusts with volatility - higher in low vol, lower in high vol.\n\n💡 Keep ON.'
+string TT_STAT_LEN = 'STATISTICAL LOOKBACK:\n\nPeriod for calculating price change statistics.\n\n💡 Keep at 50 for robust statistics.'
+string TT_STAT_Z = 'Z-SCORE THRESHOLD:\n\nNew EP must be this many standard deviations from mean to count.\n\n• Lower (1.0-1.3): More EPs allowed\n• Standard (1.5): Balanced\n• Higher (2.0+): Only significant moves\n\n💡 Lower = more EPs, higher = fewer but significant.'
+string TT_STAT_ADAPT = 'ADAPTIVE THRESHOLD:\n\nZ-score threshold adapts based on recent hit rate.\n\n💡 Keep ON.'
+string TT_DUAL_FAST_START = 'FAST PSAR START:\n\nAF start for the fast (responsive) PSAR.\n\n💡 Keep higher than main AF start (0.025).'
+string TT_DUAL_FAST_MAX = 'FAST PSAR MAX:\n\nAF max for the fast PSAR.\n\n💡 Keep higher than main AF max (0.25).'
+string TT_DUAL_SLOW_START = 'SLOW PSAR START:\n\nAF start for the slow (stable) PSAR.\n\n💡 Keep lower than main AF start (0.015).'
+string TT_DUAL_SLOW_MAX = 'SLOW PSAR MAX:\n\nAF max for the slow PSAR.\n\n💡 Keep lower than main AF max (0.15).'
+string TT_DUAL_BOTH = 'REQUIRE BOTH TO FLIP:\n\nBoth fast and slow PSAR must flip before signal triggers.\n\n• ON: Fewer but higher quality signals (recommended)\n• OFF: Either can trigger flip\n\n💡 ON for higher quality signals.'
+string TT_MTF_TF1 = 'HIGHER TIMEFRAME 1:\n\nFirst higher timeframe for coherence check.\n\n📊 BASED ON CHART TF:\n• 15Min chart: Use 60\n• 4HR chart: Use D\n• Daily chart: Use W\n\n💡 Use ~4x chart TF.'
+string TT_MTF_TF2 = 'HIGHER TIMEFRAME 2:\n\nSecond higher timeframe for coherence check.\n\n📊 BASED ON CHART TF:\n• 15Min chart: Use 240\n• 4HR chart: Use W\n• Daily chart: Use M\n\n💡 Use ~16x chart TF.'
+string TT_MTF_AGREE = 'AGREEMENT THRESHOLD:\n\nMinimum agreement ratio across timeframes.\n\n• 0.50: Aggressive (any 2 agree)\n• 0.66: Standard (2 of 3 must agree)\n• 1.00: Conservative (all must agree)\n\n💡 0.66 is balanced.'
+string TT_MTF_BOOST = 'COHERENT AF BOOST:\n\nAF boost when all TFs agree on direction.\n\n💡 Keep at 1.3.'
+string TT_MOMFLIP_LEN = 'MOMENTUM LENGTH:\n\nROC/momentum calculation period.\n\n• Short (5-8): Fast momentum\n• Standard (10): Balanced\n• Long (14+): Smooth momentum\n\n💡 Shorter for faster response.'
+string TT_MOMFLIP_THRESH = 'MOMENTUM THRESHOLD (%):\n\nMinimum momentum % required for flip. Filters weak reversals.\n\n• Low (0.3): Loose filtering\n• Standard (0.5): Balanced\n• High (1.0+): Strict filtering\n\n💡 Higher for volatile markets.'
+string TT_MOMFLIP_BARS = 'CONFIRM BARS:\n\nNumber of bars momentum must confirm direction.\n\n• 1: Single bar confirmation\n• 2: Two bars (standard)\n• 3+: Strict confirmation\n\n💡 More bars for lower TFs.'
+string TT_CLOSE_CONFIRM = 'CLOSE CONFIRM BARS:\n\nNumber of consecutive closes beyond SAR required for flip.\n\n• 1: Single close (standard)\n• 2: Two closes (strict)\n• 3: Very strict\n\n💡 More bars for noisy TFs.'
+string TT_CLOSE_HL = 'USE H/L FOR SAR CALC:\n\nSAR calculation still uses High/Low, only flip trigger uses close.\n\n💡 Keep ON for proper trailing behavior.'
+string TT_UCE_TOP_N = 'TOP N ALGORITHMS:\n\nNumber of top-performing algorithms to blend in consensus.\n\n• 2: Aggressive (fewer inputs)\n• 3: Balanced (standard)\n• 5: Conservative (more inputs)\n\n💡 3 is balanced.'
+string TT_UCE_VOTE = 'VOTE THRESHOLD:\n\nHow many algorithms must agree for signal.\n\n• 2 of 3: Standard\n• 3 of 3: Conservative (unanimous)\n\n💡 2 of 3 is balanced.'
+string TT_UCE_ADAPT = 'ADAPTIVE WEIGHTS:\n\nWeight algorithms by recent performance. Better performers get more influence.\n\n💡 Keep ON.'
+string TT_BULL_COLOR = 'BULLISH COLOR:\n\nColor for bullish trend. Used for SAR, labels, and bar coloring.'
+string TT_BEAR_COLOR = 'BEARISH COLOR:\n\nColor for bearish trend. Used for SAR, labels, and bar coloring.'
+string TT_SHOW_LABELS = 'SHOW SIGNAL LABELS:\n\nDisplay BUY/SELL labels at flip points.'
+string TT_SHOW_AF = 'SHOW AF ON CHART:\n\nDisplay current AF and EP values near SAR.'
+string TT_SAR_STYLE = 'SAR STYLE:\n\nVisual style for the SAR line.\n\n• Dots: Circle markers (traditional)\n• Line: Connected line\n• Circles: Larger circles\n• Cross: X markers'
+string TT_SAR_SIZE = 'SAR SIZE:\n\nSize of SAR markers.'
+string TT_COLOR_BARS = 'COLOR PRICE BARS:\n\nColor candles based on trend direction.'
+string TT_SHOW_DASH = 'SHOW DASHBOARD:\n\nDisplay information dashboard with algorithm metrics and performance stats.'
+string TT_DASH_SIZE = 'DASHBOARD SIZE:\n\nText size for dashboard.'
+string TT_DASH_POS = 'DASHBOARD POSITION:\n\nScreen position for dashboard.'
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════
+// INPUTS
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════
+algorithm = input.string('Volatility-Scaled AF', '🧠 Select Algorithm', options = ['Volatility-Scaled AF', 'Efficiency Ratio AF', 'Shannon Entropy AF', 'Fractal Dimension AF', 'ADX-Gated AF', 'Kalman AF Estimator', 'Volume-Momentum AF', 'Garman-Klass AF', 'RSI-Modulated AF', 'Bollinger Squeeze AF', 'Keltner Adaptive AF', 'Choppiness-Gated AF', 'VIDYA-Style AF', 'Hilbert Cycle AF', 'Volume-Weighted EP', 'Wavelet Filtered EP', 'ATR-Validated EP', 'Statistical EP Filter', 'Dual-PSAR Gate', 'MTF Coherence PSAR', 'Momentum-Gated Flip', 'Close-Only PSAR', 'Ultimate PSAR Consensus'], group = g_algo, tooltip = TT_ALGO)
+af_start = input.float(0.02, 'AF Start', minval = 0.001, maxval = 0.1, step = 0.001, group = g_core, tooltip = TT_AF_START)
+af_step = input.float(0.02, 'AF Step', minval = 0.001, maxval = 0.1, step = 0.001, group = g_core, tooltip = TT_AF_STEP)
+af_max = input.float(0.20, 'AF Maximum', minval = 0.05, maxval = 0.5, step = 0.01, group = g_core, tooltip = TT_AF_MAX)
+min_bars_between = input.int(5, 'Min Bars Between Flips', minval = 0, maxval = 50, group = g_core, tooltip = TT_MIN_BARS)
+flip_mode = input.string('Standard', '🔄 Flip Trigger Mode', options = ['Standard', 'Close Only', 'Confirmed Bar', 'Volume Confirmed'], group = g_flip, tooltip = TT_FLIP_MODE)
+vol_mult_flip = input.float(1.2, 'Volume Confirm Multiplier', minval = 1.0, maxval = 3.0, step = 0.1, group = g_flip, tooltip = TT_VOL_MULT)
+filter_type = input.string('None', '🎛️ Filter Type', options = ['None', 'SMA', 'EMA', 'WMA', 'VWMA', 'RMA (Wilder)', 'DEMA', 'TEMA', 'Hull MA', 'ZLEMA', 'ALMA', 'T3', 'FRAMA', 'Adaptive KAMA', 'SuperSmoother', 'Ehlers 2-Pole Filter', 'Ehlers 3-Pole Filter', 'Gaussian Filter', 'Linear Regression', 'Median Filter', 'Sine Weighted MA', 'Triangular MA', 'McGinley Dynamic', 'JMA Approximation', 'DAFE Spectral Laguerre', 'DAFE Hybrid Adaptive', 'VIDYA', 'Variable MA', 'Kaufman AMA', 'Ehlers Instantaneous Trendline', 'Zero Lag EMA (True)', 'Hamming Moving Average', 'Hann Moving Average', 'Blackman Filter'], group = g_filter, tooltip = TT_FILTER)
+filter_length = input.int(8, 'Filter Length', minval = 2, maxval = 100, group = g_filter, tooltip = TT_FILTER_LEN)
+filter_offset = input.float(0.85, 'ALMA Offset', minval = 0.0, maxval = 1.0, step = 0.05, group = g_filter, tooltip = TT_ALMA_OFFSET)
+filter_sigma = input.float(6.0, 'ALMA/Gaussian Sigma', minval = 0.1, maxval = 10.0, step = 0.1, group = g_filter, tooltip = TT_SIGMA)
+filter_t3_factor = input.float(0.7, 'T3 Volume Factor', minval = 0.0, maxval = 1.0, step = 0.05, group = g_filter, tooltip = TT_T3_FACTOR)
+enable_tracking = input.bool(false, '📊 Enable Performance Dashboard', group = g_perf, tooltip = TT_PERF_ENABLE)
+capital = input.float(10000, '💰 Starting Capital', minval = 100, group = g_perf, tooltip = TT_CAPITAL)
+pos_size = input.float(10, '📊 Position Size %', minval = 1, maxval = 100, group = g_perf, tooltip = TT_POS_SIZE)
+commission = input.float(0.04, '💸 Commission %', minval = 0, maxval = 1, step = 0.01, group = g_perf, tooltip = TT_COMMISSION)
+use_psar_stop = input.bool(true, 'Use PSAR as Stop', group = g_perf, tooltip = TT_PSAR_STOP)
+use_tp = input.bool(false, 'Use Take Profit', group = g_perf, tooltip = TT_USE_TP)
+tp_val = input.float(2.0, 'TP Value (ATR Multiple)', minval = 0.5, maxval = 10, step = 0.5, group = g_perf, tooltip = TT_TP_VAL)
+// ═══════════════════ ALGORITHM 1: VOLATILITY-SCALED AF ═══════════════════
+vol_atr_len = input.int(14, 'ATR Length', minval = 5, maxval = 50, group = g_vol, tooltip = TT_VOL_ATR)
+vol_lookback = input.int(50, 'Volatility Lookback', minval = 20, maxval = 200, group = g_vol, tooltip = TT_VOL_LOOKBACK)
+vol_scale_factor = input.float(1.5, 'Scale Factor', minval = 0.5, maxval = 3.0, step = 0.1, group = g_vol, tooltip = TT_VOL_SCALE)
+// ═══════════════════ ALGORITHM 2: EFFICIENCY RATIO AF ═══════════════════
+er_len = input.int(10, 'ER Length', minval = 2, maxval = 50, group = g_er, tooltip = TT_ER_LEN)
+er_fast_af_mult = input.float(2.0, 'Fast AF Multiplier', minval = 1.0, maxval = 4.0, step = 0.1, group = g_er, tooltip = TT_ER_FAST)
+er_slow_af_mult = input.float(0.5, 'Slow AF Multiplier', minval = 0.1, maxval = 1.0, step = 0.1, group = g_er, tooltip = TT_ER_SLOW)
+// ═══════════════════ ALGORITHM 3: SHANNON ENTROPY AF ═══════════════════
+ent_len = input.int(20, 'Entropy Length', minval = 5, maxval = 100, group = g_ent, tooltip = TT_ENT_LEN)
+ent_bins = input.int(10, 'Histogram Bins', minval = 5, maxval = 20, group = g_ent, tooltip = TT_ENT_BINS)
+ent_high_thresh = input.float(0.7, 'High Entropy Threshold', minval = 0.5, maxval = 0.9, step = 0.05, group = g_ent, tooltip = TT_ENT_HIGH)
+ent_low_thresh = input.float(0.4, 'Low Entropy Threshold', minval = 0.2, maxval = 0.5, step = 0.05, group = g_ent, tooltip = TT_ENT_LOW)
+// ═══════════════════ ALGORITHM 4: FRACTAL DIMENSION AF ═══════════════════
+fd_len = input.int(10, 'Fractal Length', minval = 5, maxval = 30, group = g_fd, tooltip = TT_FD_LEN)
+fd_trend_thresh = input.float(1.3, 'Trend Threshold', minval = 1.1, maxval = 1.5, step = 0.05, group = g_fd, tooltip = TT_FD_TREND)
+fd_random_thresh = input.float(1.6, 'Random Threshold', minval = 1.5, maxval = 1.8, step = 0.05, group = g_fd, tooltip = TT_FD_RANDOM)
+// ═══════════════════ ALGORITHM 5: ADX-GATED AF ═══════════════════
+adx_len = input.int(14, 'ADX Length', minval = 5, maxval = 30, group = g_adx, tooltip = TT_ADX_LEN)
+adx_strong = input.int(25, 'Strong Trend ADX', minval = 15, maxval = 40, group = g_adx, tooltip = TT_ADX_STRONG)
+adx_weak = input.int(15, 'Weak Trend ADX', minval = 10, maxval = 25, group = g_adx, tooltip = TT_ADX_WEAK)
+adx_freeze_af = input.bool(true, 'Freeze AF in Weak Trend', group = g_adx, tooltip = TT_ADX_FREEZE)
+// ═══════════════════ ALGORITHM 6: KALMAN AF ESTIMATOR ═══════════════════
+kal_process = input.float(0.01, 'Process Noise', minval = 0.001, maxval = 0.1, step = 0.001, group = g_kal, tooltip = TT_KAL_PROCESS)
+kal_measure = input.float(0.1, 'Measurement Noise', minval = 0.01, maxval = 1.0, step = 0.01, group = g_kal, tooltip = TT_KAL_MEASURE)
+kal_use_vol_adaptive = input.bool(true, 'Volatility Adaptive', group = g_kal, tooltip = TT_KAL_ADAPTIVE)
+// ═══════════════════ ALGORITHM 7: VOLUME-MOMENTUM AF ═══════════════════
+vm_vol_len = input.int(20, 'Volume MA Length', minval = 5, maxval = 50, group = g_vm, tooltip = TT_VM_VOL_LEN)
+vm_mom_len = input.int(10, 'Momentum Length', minval = 3, maxval = 30, group = g_vm, tooltip = TT_VM_MOM_LEN)
+vm_vol_thresh = input.float(1.2, 'Volume Threshold', minval = 1.0, maxval = 2.0, step = 0.1, group = g_vm, tooltip = TT_VM_VOL_THRESH)
+vm_mom_confirm = input.bool(true, 'Require Momentum Confirmation', group = g_vm, tooltip = TT_VM_CONFIRM)
+// ═══════════════════ ALGORITHM 8: GARMAN-KLASS AF ═══════════════════
+gk_len = input.int(14, 'GK Volatility Length', minval = 5, maxval = 50, group = g_gk, tooltip = TT_GK_LEN)
+gk_lookback = input.int(50, 'GK Lookback', minval = 20, maxval = 200, group = g_gk, tooltip = TT_GK_LOOKBACK)
+gk_high_vol_mult = input.float(0.7, 'High Vol AF Multiplier', minval = 0.3, maxval = 1.0, step = 0.1, group = g_gk, tooltip = TT_GK_HIGH)
+gk_low_vol_mult = input.float(1.3, 'Low Vol AF Multiplier', minval = 1.0, maxval = 2.0, step = 0.1, group = g_gk, tooltip = TT_GK_LOW)
+// ═══════════════════ ALGORITHM 9: RSI-MODULATED AF ═══════════════════
+rsi_len = input.int(14, 'RSI Length', minval = 5, maxval = 30, group = g_rsi, tooltip = TT_RSI_LEN)
+rsi_ob = input.int(70, 'Overbought Level', minval = 60, maxval = 85, group = g_rsi, tooltip = TT_RSI_OB)
+rsi_os = input.int(30, 'Oversold Level', minval = 15, maxval = 40, group = g_rsi, tooltip = TT_RSI_OS)
+rsi_mid_boost = input.bool(true, 'Boost AF in Mid-Range', group = g_rsi, tooltip = TT_RSI_MID)
+// ═══════════════════ ALGORITHM 10: BOLLINGER SQUEEZE AF ═══════════════════
+bb_len = input.int(20, 'BB Length', minval = 10, maxval = 50, group = g_bb, tooltip = TT_BB_LEN)
+bb_mult = input.float(2.0, 'BB Multiplier', minval = 1.0, maxval = 3.0, step = 0.1, group = g_bb, tooltip = TT_BB_MULT)
+bb_squeeze_pct = input.float(0.5, 'Squeeze Percentile', minval = 0.1, maxval = 0.8, step = 0.1, group = g_bb, tooltip = TT_BB_SQUEEZE)
+bb_squeeze_af_boost = input.float(1.5, 'Squeeze AF Boost', minval = 1.0, maxval = 2.5, step = 0.1, group = g_bb, tooltip = TT_BB_BOOST)
+// ═══════════════════ ALGORITHM 11: KELTNER ADAPTIVE AF ═══════════════════
+kc_len = input.int(20, 'Keltner Length', minval = 10, maxval = 50, group = g_kc, tooltip = TT_KC_LEN)
+kc_atr_mult = input.float(1.5, 'KC ATR Multiplier', minval = 1.0, maxval = 3.0, step = 0.1, group = g_kc, tooltip = TT_KC_MULT)
+kc_outside_boost = input.float(1.5, 'Outside Channel AF Boost', minval = 1.0, maxval = 2.5, step = 0.1, group = g_kc, tooltip = TT_KC_OUTSIDE)
+kc_inside_slow = input.float(0.7, 'Inside Channel AF Slow', minval = 0.3, maxval = 1.0, step = 0.1, group = g_kc, tooltip = TT_KC_INSIDE)
+// ═══════════════════ ALGORITHM 12: CHOPPINESS-GATED AF ═══════════════════
+chop_len = input.int(14, 'Choppiness Length', minval = 5, maxval = 30, group = g_chop, tooltip = TT_CHOP_LEN)
+chop_trend_thresh = input.float(38.2, 'Trend Threshold', minval = 30, maxval = 45, step = 0.1, group = g_chop, tooltip = TT_CHOP_TREND)
+chop_range_thresh = input.float(61.8, 'Range Threshold', minval = 55, maxval = 70, step = 0.1, group = g_chop, tooltip = TT_CHOP_RANGE)
+chop_range_af_mult = input.float(0.5, 'Range AF Multiplier', minval = 0.2, maxval = 0.8, step = 0.1, group = g_chop, tooltip = TT_CHOP_MULT)
+// ═══════════════════ ALGORITHM 13: VIDYA-STYLE AF ═══════════════════
+vidya_len = input.int(14, 'VIDYA Length', minval = 5, maxval = 50, group = g_vidya, tooltip = TT_VIDYA_LEN)
+vidya_fast_sc = input.float(0.5, 'Fast Smoothing', minval = 0.2, maxval = 0.8, step = 0.05, group = g_vidya, tooltip = TT_VIDYA_FAST)
+vidya_slow_sc = input.float(0.1, 'Slow Smoothing', minval = 0.05, maxval = 0.3, step = 0.05, group = g_vidya, tooltip = TT_VIDYA_SLOW)
+// ═══════════════════ ALGORITHM 14: HILBERT CYCLE AF ═══════════════════
+hilbert_min_period = input.int(8, 'Min Cycle Period', minval = 4, maxval = 20, group = g_hilbert, tooltip = TT_HILBERT_MIN)
+hilbert_max_period = input.int(50, 'Max Cycle Period', minval = 20, maxval = 100, group = g_hilbert, tooltip = TT_HILBERT_MAX)
+hilbert_cycle_af = input.bool(true, 'Cycle-Adaptive AF', group = g_hilbert, tooltip = TT_HILBERT_CYCLE)
+hilbert_phase_af = input.bool(true, 'Phase-Adaptive AF', group = g_hilbert, tooltip = TT_HILBERT_PHASE)
+// ═══════════════════ ALGORITHM 15: VOLUME-WEIGHTED EP ═══════════════════
+vwep_len = input.int(20, 'Volume Lookback', minval = 5, maxval = 50, group = g_vwep, tooltip = TT_VWEP_LEN)
+vwep_vol_weight = input.float(0.5, 'Volume Weighting Factor', minval = 0.1, maxval = 1.0, step = 0.1, group = g_vwep, tooltip = TT_VWEP_WEIGHT)
+vwep_require_vol = input.bool(false, 'Require Above-Avg Volume for EP', group = g_vwep, tooltip = TT_VWEP_REQUIRE)
+// ═══════════════════ ALGORITHM 16: WAVELET FILTERED EP ═══════════════════
+wav_levels = input.int(2, 'Decomposition Levels', minval = 1, maxval = 4, group = g_wavelet, tooltip = TT_WAV_LEVELS)
+wav_detail_weight = input.float(0.3, 'Detail Weight', minval = 0.0, maxval = 0.8, step = 0.1, group = g_wavelet, tooltip = TT_WAV_DETAIL)
+wav_apply_to_af = input.bool(true, 'Also Apply to AF', group = g_wavelet, tooltip = TT_WAV_APPLY_AF)
+// ═══════════════════ ALGORITHM 17: ATR-VALIDATED EP ═══════════════════
+atrep_len = input.int(14, 'ATR Length', minval = 5, maxval = 30, group = g_atrep, tooltip = TT_ATREP_LEN)
+atrep_min_mult = input.float(0.3, 'Min ATR Multiple', minval = 0.1, maxval = 1.0, step = 0.1, group = g_atrep, tooltip = TT_ATREP_MIN)
+atrep_scale_with_vol = input.bool(true, 'Scale with Volatility', group = g_atrep, tooltip = TT_ATREP_SCALE)
+// ═══════════════════ ALGORITHM 18: STATISTICAL EP FILTER ═══════════════════
+statep_len = input.int(50, 'Statistical Lookback', minval = 20, maxval = 200, group = g_statep, tooltip = TT_STAT_LEN)
+statep_zscore = input.float(1.5, 'Z-Score Threshold', minval = 1.0, maxval = 3.0, step = 0.1, group = g_statep, tooltip = TT_STAT_Z)
+statep_adaptive = input.bool(true, 'Adaptive Threshold', group = g_statep, tooltip = TT_STAT_ADAPT)
+// ═══════════════════ ALGORITHM 19: DUAL-PSAR GATE ═══════════════════
+dual_fast_start = input.float(0.025, 'Fast PSAR Start', minval = 0.01, maxval = 0.05, step = 0.005, group = g_dual, tooltip = TT_DUAL_FAST_START)
+dual_fast_max = input.float(0.25, 'Fast PSAR Max', minval = 0.15, maxval = 0.4, step = 0.05, group = g_dual, tooltip = TT_DUAL_FAST_MAX)
+dual_slow_start = input.float(0.015, 'Slow PSAR Start', minval = 0.005, maxval = 0.03, step = 0.005, group = g_dual, tooltip = TT_DUAL_SLOW_START)
+dual_slow_max = input.float(0.15, 'Slow PSAR Max', minval = 0.08, maxval = 0.25, step = 0.01, group = g_dual, tooltip = TT_DUAL_SLOW_MAX)
+dual_require_both = input.bool(true, 'Require Both to Flip', group = g_dual, tooltip = TT_DUAL_BOTH)
+// ═══════════════════ ALGORITHM 20: MTF COHERENCE PSAR ═══════════════════
+mtf_htf1 = input.timeframe('60', 'Higher TF 1', group = g_mtf, tooltip = TT_MTF_TF1)
+mtf_htf2 = input.timeframe('240', 'Higher TF 2', group = g_mtf, tooltip = TT_MTF_TF2)
+mtf_agree_thresh = input.float(0.66, 'Agreement Threshold', minval = 0.5, maxval = 1.0, step = 0.01, group = g_mtf, tooltip = TT_MTF_AGREE)
+mtf_boost_coherent = input.float(1.3, 'Coherent AF Boost', minval = 1.0, maxval = 2.0, step = 0.1, group = g_mtf, tooltip = TT_MTF_BOOST)
+// ═══════════════════ ALGORITHM 21: MOMENTUM-GATED FLIP ═══════════════════
+momflip_len = input.int(10, 'Momentum Length', minval = 3, maxval = 30, group = g_momflip, tooltip = TT_MOMFLIP_LEN)
+momflip_thresh = input.float(0.5, 'Momentum Threshold (%)', minval = 0.1, maxval = 2.0, step = 0.1, group = g_momflip, tooltip = TT_MOMFLIP_THRESH)
+momflip_confirm_bars = input.int(2, 'Confirm Bars', minval = 1, maxval = 5, group = g_momflip, tooltip = TT_MOMFLIP_BARS)
+// ═══════════════════ ALGORITHM 22: CLOSE-ONLY PSAR ═══════════════════
+closeonly_confirm = input.int(1, 'Close Confirm Bars', minval = 1, maxval = 3, group = g_closeonly, tooltip = TT_CLOSE_CONFIRM)
+closeonly_use_hl = input.bool(true, 'Use H/L for SAR Calc', group = g_closeonly, tooltip = TT_CLOSE_HL)
+// ═══════════════════ ALGORITHM 23: ULTIMATE CONSENSUS ═══════════════════
+consensus_top_n = input.int(3, 'Top N Algorithms', minval = 2, maxval = 5, group = g_consensus, tooltip = TT_UCE_TOP_N)
+consensus_vote_thresh = input.int(2, 'Vote Threshold', minval = 1, maxval = 5, group = g_consensus, tooltip = TT_UCE_VOTE)
+consensus_adaptive_weights = input.bool(true, 'Adaptive Weights', group = g_consensus, tooltip = TT_UCE_ADAPT)
+// ═══════════════════ VISUAL SETTINGS ═══════════════════
+bull_color = input.color(#00ffbb, '🟢 Bullish Color', group = g_visual, tooltip = TT_BULL_COLOR)
+bear_color = input.color(#ff0055, '🔴 Bearish Color', group = g_visual, tooltip = TT_BEAR_COLOR)
+show_labels = input.bool(true, '🏷️ Show Signal Labels', group = g_visual, tooltip = TT_SHOW_LABELS)
+show_af_info = input.bool(false, '📊 Show AF on Chart', group = g_visual, tooltip = TT_SHOW_AF)
+sar_style = input.string('Dots', '⚫ SAR Style', options = ['Dots', 'Line', 'Circles', 'Cross'], group = g_visual, tooltip = TT_SAR_STYLE)
+sar_size = input.string('Small', '📏 SAR Size', options = ['Tiny', 'Small', 'Normal'], group = g_visual, tooltip = TT_SAR_SIZE)
+color_bars = input.bool(false, '🎨 Color Price Bars', group = g_visual, tooltip = TT_COLOR_BARS)
+show_dashboard = input.bool(true, '📋 Show Dashboard', group = g_visual, tooltip = TT_SHOW_DASH)
+dash_size = input.string('Normal', 'Dashboard Size', options = ['Small', 'Normal', 'Large'], group = g_visual, tooltip = TT_DASH_SIZE)
+dash_position = input.string('Top Right', 'Dashboard Position', options = ['Top Right', 'Top Left', 'Bottom Right', 'Bottom Left'], group = g_visual, tooltip = TT_DASH_POS)
+// =============================================================================
+// TYPE DEFINITIONS
+// =============================================================================
+type PSARState
+	float sar = na
+	float ep = na
+	float af = na
+	int trend = 1
+	bool just_flipped = false
+type TradeStats
+	int trades = 0
+	int wins = 0
+	int losses = 0
+	float total_pnl = 0.0
+	float win_pnl = 0.0
+	float loss_pnl = 0.0
+	float max_dd = 0.0
+	float peak_equity = 0.0
+	float current_equity = 0.0
+	int win_streak = 0
+	int loss_streak = 0
+	int current_streak = 0
+	bool in_trade = false
+	int direction = 0
+	float entry_price = 0.0
+	float stop_price = 0.0
+	float take_profit = 0.0
+	// =============================================================================
+	// MTF SECURITY CALLS
+	// =============================================================================
+htf1_close = request.security(syminfo.tickerid, mtf_htf1, close)
+htf1_sar = request.security(syminfo.tickerid, mtf_htf1, ta.sar(af_start, af_step, af_max))
+htf2_close = request.security(syminfo.tickerid, mtf_htf2, close)
+htf2_sar = request.security(syminfo.tickerid, mtf_htf2, ta.sar(af_start, af_step, af_max))
+htf1_trend = htf1_close > htf1_sar ? 1 : -1
+htf2_trend = htf2_close > htf2_sar ? 1 : -1
+// =============================================================================
+// WAVELET STATE VARIABLES
+// =============================================================================
+var float wav_approx_0 = na
+var float wav_approx_1 = na
+var float wav_approx_2 = na
+var float wav_approx_3 = na
+var float wav_approx_4 = na
+var float wav_approx_0_prev = na
+var float wav_approx_1_prev = na
+var float wav_approx_2_prev = na
+var float wav_approx_3_prev = na
+// =============================================================================
+// HELPER FUNCTIONS 
+// =============================================================================
+f_efficiency_ratio(src, len) =>
+    change_sum = 0.0
+    for i = 0 to len - 1 by 1
+        change_sum := change_sum + math.abs(src[i] - src[i + 1])
+        change_sum
+    net_change = math.abs(src - src[len])
+    change_sum > 0 ? net_change / change_sum : 0
+f_choppiness(len) =>
+    atr_sum = math.sum(ta.atr(1), len)
+    high_low_range = ta.highest(high, len) - ta.lowest(low, len)
+    100 * math.log10(atr_sum / high_low_range) / math.log10(len)
+f_fractal_dimension(src, len) =>
+    n = len
+    half_n = n / 2
+    sum_full = 0.0
+    sum_half = 0.0
+    for i = 0 to n - 2 by 1
+        sum_full := sum_full + math.abs(src[i] - src[i + 1])
+        sum_full
+    for i = 0 to half_n - 2 by 1
+        sum_half := sum_half + math.abs(src[i] - src[i + 1])
+        sum_half
+    fd = sum_full > 0 ? math.log(sum_half / (sum_full / 2)) / math.log(2) + 1 : 1.5
+    math.max(1.0, math.min(2.0, fd))
+f_shannon_entropy(src, len, bins) =>
+    bin_counts = array.new_float(bins, 0)
+    min_val = ta.lowest(src, len)
+    max_val = ta.highest(src, len)
+    range_val = max_val - min_val
+    if range_val > 0
+        for i = 0 to len - 1 by 1
+            norm = (src[i] - min_val) / range_val
+            bin_idx = math.floor(norm * (bins - 1))
+            bin_idx := math.max(0, math.min(bins - 1, bin_idx))
+            array.set(bin_counts, int(bin_idx), array.get(bin_counts, int(bin_idx)) + 1)
+    entropy = 0.0
+    for i = 0 to bins - 1 by 1
+        p = array.get(bin_counts, i) / len
+        entropy := entropy - (p > 0 ? p * math.log(p) : 0)
+        entropy
+    entropy / math.log(bins)
+f_garman_klass_vol(len) =>
+    gk_vol = 0.0
+    for i = 0 to len - 1 by 1
+        u = math.log(high[i] / open[i])
+        d = math.log(low[i] / open[i])
+        c = math.log(close[i] / open[i])
+        gk_vol := gk_vol + 0.5 * math.pow(u - d, 2) - (2 * math.log(2) - 1) * math.pow(c, 2)
+        gk_vol
+    math.sqrt(gk_vol / len)
+    // =============================================================================
+    // COMPREHENSIVE FILTER FUNCTIONS
+    // =============================================================================
+f_hull(src, len) =>
+    wma1 = ta.wma(src, len / 2)
+    wma2 = ta.wma(src, len)
+    ta.wma(2 * wma1 - wma2, math.round(math.sqrt(len)))
+f_zlema(src, len) =>
+    lag = (len - 1) / 2
+    ta.ema(src + src - src[lag], len)
+f_kama(src, len, fast_sc, slow_sc) =>
+    er = f_efficiency_ratio(src, len)
+    fast_alpha = 2.0 / (fast_sc + 1)
+    slow_alpha = 2.0 / (slow_sc + 1)
+    sc = math.pow(er * (fast_alpha - slow_alpha) + slow_alpha, 2)
+    var float kama = na
+    kama := na(kama) ? src : kama + sc * (src - kama)
+    kama
+f_supersmoother(src, len) =>
+    pi = 3.14159265359
+    a1 = math.exp(-1.414 * pi / len)
+    b1 = 2 * a1 * math.cos(1.414 * pi / len)
+    c2 = b1
+    c3 = -a1 * a1
+    c1 = 1 - c2 - c3
+    var float ss = na
+    ss := na(ss[1]) ? src : c1 * (src + nz(src[1])) / 2 + c2 * nz(ss[1]) + c3 * nz(ss[2])
+    ss
+f_3pole(src, len) =>
+    pi = 3.14159265359
+    a1 = math.exp(-pi / len)
+    b1 = 2 * a1 * math.cos(1.738 * pi / len)
+    c1 = a1 * a1
+    coef2 = b1 + c1
+    coef3 = -(c1 + b1 * c1)
+    coef4 = c1 * c1
+    coef1 = 1 - coef2 - coef3 - coef4
+    var float filt = na
+    filt := na(filt[1]) ? src : coef1 * src + coef2 * nz(filt[1]) + coef3 * nz(filt[2]) + coef4 * nz(filt[3])
+    filt
+f_dema(src, len) =>
+    ema1 = ta.ema(src, len)
+    ema2 = ta.ema(ema1, len)
+    2 * ema1 - ema2
+f_tema(src, len) =>
+    ema1 = ta.ema(src, len)
+    ema2 = ta.ema(ema1, len)
+    ema3 = ta.ema(ema2, len)
+    3 * ema1 - 3 * ema2 + ema3
+f_t3(src, len, vf) =>
+    ema1 = ta.ema(src, len)
+    ema2 = ta.ema(ema1, len)
+    ema3 = ta.ema(ema2, len)
+    ema4 = ta.ema(ema3, len)
+    ema5 = ta.ema(ema4, len)
+    ema6 = ta.ema(ema5, len)
+    c1 = -vf * vf * vf
+    c2 = 3 * vf * vf + 3 * vf * vf * vf
+    c3 = -6 * vf * vf - 3 * vf - 3 * vf * vf * vf
+    c4 = 1 + 3 * vf + vf * vf * vf + 3 * vf * vf
+    c1 * ema6 + c2 * ema5 + c3 * ema4 + c4 * ema3
+f_frama(src, len) =>
+    half_len = len / 2
+    hh1 = ta.highest(high, half_len)
+    ll1 = ta.lowest(low, half_len)
+    hh2 = ta.highest(high[half_len], half_len)
+    ll2 = ta.lowest(low[half_len], half_len)
+    hh_full = ta.highest(high, len)
+    ll_full = ta.lowest(low, len)
+    n1 = (hh1 - ll1) / half_len
+    n2 = (hh2 - ll2) / half_len
+    n3 = (hh_full - ll_full) / len
+    dimen = n1 > 0 and n2 > 0 and n3 > 0 ? (math.log(n1 + n2) - math.log(n3)) / math.log(2) : 1.5
+    alpha = math.exp(-4.6 * (dimen - 1))
+    alpha := math.max(0.01, math.min(1, alpha))
+    var float frama = na
+    frama := na(frama) ? src : alpha * src + (1 - alpha) * nz(frama[1])
+    frama
+f_gaussian(src, len, sigma) =>
+    sum_w = 0.0
+    sum_val = 0.0
+    for i = 0 to len - 1 by 1
+        weight = math.exp(-0.5 * math.pow(i / sigma, 2))
+        sum_w := sum_w + weight
+        sum_val := sum_val + weight * src[i]
+        sum_val
+    sum_w > 0 ? sum_val / sum_w : src
+f_swma(src, len) =>
+    pi = 3.14159265359
+    sum_w = 0.0
+    sum_val = 0.0
+    for i = 0 to len - 1 by 1
+        weight = math.sin(pi * (i + 1) / (len + 1))
+        sum_w := sum_w + weight
+        sum_val := sum_val + weight * src[i]
+        sum_val
+    sum_w > 0 ? sum_val / sum_w : src
+f_tma(src, len) =>
+    ta.sma(ta.sma(src, math.ceil(len / 2)), math.floor(len / 2) + 1)
+f_mcginley(src, len) =>
+    var float md = na
+    md := na(md) ? src : md + (src - md) / (len * math.pow(src / md, 4))
+    md
+f_linreg(src, len) =>
+    ta.linreg(src, len, 0)
+f_median(src, len) =>
+    ta.median(src, len)
+f_vidya(src, len) =>
+    cmo = ta.cmo(src, len)
+    cmo_abs = math.abs(cmo) / 100
+    alpha = 2 / (len + 1)
+    var float vidya = na
+    vidya := na(vidya) ? src : alpha * cmo_abs * src + (1 - alpha * cmo_abs) * nz(vidya[1])
+    vidya
+f_jma_approx(src, len) =>
+    phase = 0.5
+    power = 2.0
+    beta = 0.45 * (len - 1) / (0.45 * (len - 1) + 2)
+    alpha = math.pow(beta, power)
+    var float e0 = na
+    var float e1 = na
+    var float e2 = na
+    var float jma = na
+    e0 := (1 - alpha) * src + alpha * nz(e0[1])
+    e1 := (src - e0) * (1 - beta) + beta * nz(e1[1])
+    e2 := (e0 + phase * e1 - nz(jma[1])) * math.pow(1 - alpha, 2) + math.pow(alpha, 2) * nz(e2[1])
+    jma := e2 + nz(jma[1])
+    jma
+f_kaufman_ama(src, len) =>
+    er = f_efficiency_ratio(src, len)
+    fast_alpha = 2 / 3.0
+    slow_alpha = 2 / 31.0
+    sc = math.pow(er * (fast_alpha - slow_alpha) + slow_alpha, 2)
+    var float ama = na
+    ama := na(ama) ? src : ama + sc * (src - ama)
+    ama
+f_ehlers_it(src, len) =>
+    pi = 3.14159265359
+    a1 = 2 / (len + 1)
+    var float it = na
+    var float it1 = na
+    it1 := nz(it)
+    it := (a1 - 0.25 * a1 * a1) * src + 0.5 * a1 * a1 * nz(src[1]) - (a1 - 0.75 * a1 * a1) * nz(src[2]) + 2 * (1 - a1) * nz(it1) - (1 - a1) * (1 - a1) * nz(it[1])
+    it
+f_true_zlema(src, len) =>
+    ema1 = ta.ema(src, len)
+    ema2 = ta.ema(ema1, len)
+    diff = ema1 - ema2
+    ema1 + diff
+f_vma(src, len) =>
+    k = 1.0 / len
+    pdm = math.max(src - src[1], 0)
+    mdm = math.max(src[1] - src, 0)
+    var float pdmS = na
+    var float mdmS = na
+    pdmS := na(pdmS) ? pdm : (1 - k) * nz(pdmS[1]) + k * pdm
+    mdmS := na(mdmS) ? mdm : (1 - k) * nz(mdmS[1]) + k * mdm
+    sum_dm = pdmS + mdmS
+    vI = sum_dm != 0 ? math.abs(pdmS - mdmS) / sum_dm : 0
+    var float vma = na
+    vma := na(vma) ? src : (1 - k * vI) * nz(vma[1]) + k * vI * src
+    vma
+f_hamming(src, len) =>
+    pi = 3.14159265359
+    sum_w = 0.0
+    sum_val = 0.0
+    for i = 0 to len - 1 by 1
+        weight = 0.54 - 0.46 * math.cos(2 * pi * i / (len - 1))
+        sum_w := sum_w + weight
+        sum_val := sum_val + weight * src[i]
+        sum_val
+    sum_w > 0 ? sum_val / sum_w : src
+f_hann(src, len) =>
+    pi = 3.14159265359
+    sum_w = 0.0
+    sum_val = 0.0
+    for i = 0 to len - 1 by 1
+        weight = 0.5 * (1 - math.cos(2 * pi * i / (len - 1)))
+        sum_w := sum_w + weight
+        sum_val := sum_val + weight * src[i]
+        sum_val
+    sum_w > 0 ? sum_val / sum_w : src
+f_blackman(src, len) =>
+    pi = 3.14159265359
+    sum_w = 0.0
+    sum_val = 0.0
+    for i = 0 to len - 1 by 1
+        weight = 0.42 - 0.5 * math.cos(2 * pi * i / (len - 1)) + 0.08 * math.cos(4 * pi * i / (len - 1))
+        sum_w := sum_w + weight
+        sum_val := sum_val + weight * src[i]
+        sum_val
+    sum_w > 0 ? sum_val / sum_w : src
+    // DAFE Laguerre
+f_dafe_laguerre(src) =>
+    vol_ratio = ta.atr(10) / ta.sma(ta.atr(10), 50)
+    gamma = math.min(0.9, math.max(0.1, 0.5 / vol_ratio))
+    var float L0 = na
+    var float L1 = na
+    var float L2 = na
+    var float L3 = na
+    L0 := (1 - gamma) * src + gamma * nz(L0[1])
+    L1 := -gamma * L0 + nz(L0[1]) + gamma * nz(L1[1])
+    L2 := -gamma * L1 + nz(L1[1]) + gamma * nz(L2[1])
+    L3 := -gamma * L2 + nz(L2[1]) + gamma * nz(L3[1])
+    (L0 + 2 * L1 + 2 * L2 + L3) / 6
+    // DAFE Hybrid Adaptive
+f_dafe_hybrid(src, len) =>
+    vol_ratio = ta.atr(10) / ta.sma(ta.atr(10), 50)
+    var float kal = na
+    kal := na(kal) ? src : kal + 0.1 * (src - kal)
+    wilder = ta.rma(src, len)
+    0.6 * kal + 0.4 * wilder
+    // =============================================================================
+    // COMPREHENSIVE FILTER APPLICATION
+    // =============================================================================
+apply_noise_filter(src, ftype, flen) =>
+    result = src
+    if ftype == 'SMA'
+        result := ta.sma(src, flen)
+        result
+    else if ftype == 'EMA'
+        result := ta.ema(src, flen)
+        result
+    else if ftype == 'WMA'
+        result := ta.wma(src, flen)
+        result
+    else if ftype == 'VWMA'
+        result := ta.vwma(src, flen)
+        result
+    else if ftype == 'RMA (Wilder)'
+        result := ta.rma(src, flen)
+        result
+    else if ftype == 'DEMA'
+        result := f_dema(src, flen)
+        result
+    else if ftype == 'TEMA'
+        result := f_tema(src, flen)
+        result
+    else if ftype == 'Hull MA'
+        result := f_hull(src, flen)
+        result
+    else if ftype == 'ZLEMA'
+        result := f_zlema(src, flen)
+        result
+    else if ftype == 'ALMA'
+        result := ta.alma(src, flen, filter_offset, filter_sigma)
+        result
+    else if ftype == 'T3'
+        result := f_t3(src, flen, filter_t3_factor)
+        result
+    else if ftype == 'FRAMA'
+        result := f_frama(src, flen)
+        result
+    else if ftype == 'Adaptive KAMA'
+        result := f_kama(src, flen, 2, 30)
+        result
+    else if ftype == 'SuperSmoother'
+        result := f_supersmoother(src, flen)
+        result
+    else if ftype == 'Ehlers 2-Pole Filter'
+        result := f_supersmoother(src, flen)
+        result
+    else if ftype == 'Ehlers 3-Pole Filter'
+        result := f_3pole(src, flen)
+        result
+    else if ftype == 'Gaussian Filter'
+        result := f_gaussian(src, flen, filter_sigma)
+        result
+    else if ftype == 'Linear Regression'
+        result := f_linreg(src, flen)
+        result
+    else if ftype == 'Median Filter'
+        result := f_median(src, flen)
+        result
+    else if ftype == 'Sine Weighted MA'
+        result := f_swma(src, flen)
+        result
+    else if ftype == 'Triangular MA'
+        result := f_tma(src, flen)
+        result
+    else if ftype == 'McGinley Dynamic'
+        result := f_mcginley(src, flen)
+        result
+    else if ftype == 'JMA Approximation'
+        result := f_jma_approx(src, flen)
+        result
+    else if ftype == 'DAFE Spectral Laguerre'
+        result := f_dafe_laguerre(src)
+        result
+    else if ftype == 'DAFE Hybrid Adaptive'
+        result := f_dafe_hybrid(src, flen)
+        result
+    else if ftype == 'VIDYA'
+        result := f_vidya(src, flen)
+        result
+    else if ftype == 'Variable MA'
+        result := f_vma(src, flen)
+        result
+    else if ftype == 'Kaufman AMA'
+        result := f_kaufman_ama(src, flen)
+        result
+    else if ftype == 'Ehlers Instantaneous Trendline'
+        result := f_ehlers_it(src, flen)
+        result
+    else if ftype == 'Zero Lag EMA (True)'
+        result := f_true_zlema(src, flen)
+        result
+    else if ftype == 'Hamming Moving Average'
+        result := f_hamming(src, flen)
+        result
+    else if ftype == 'Hann Moving Average'
+        result := f_hann(src, flen)
+        result
+    else if ftype == 'Blackman Filter'
+        result := f_blackman(src, flen)
+        result
+    result
+    // =============================================================================
+    // WAVELET CALCULATION
+    // =============================================================================
+wav_approx_0_prev := wav_approx_0
+wav_approx_1_prev := wav_approx_1
+wav_approx_2_prev := wav_approx_2
+wav_approx_3_prev := wav_approx_3
+wav_approx_0 := close
+wav_approx_1 := (wav_approx_0 + nz(wav_approx_0_prev, close)) / 2
+wav_approx_2 := (wav_approx_1 + nz(wav_approx_1_prev, close)) / 2
+wav_approx_3 := (wav_approx_2 + nz(wav_approx_2_prev, close)) / 2
+wav_approx_4 := (wav_approx_3 + nz(wav_approx_3_prev, close)) / 2
+get_wavelet_filtered(levels, detail_wt) =>
+    trend_comp = levels == 1 ? wav_approx_1 : levels == 2 ? wav_approx_2 : levels == 3 ? wav_approx_3 : wav_approx_4
+    detail_comp = close - trend_comp
+    trend_comp + detail_wt * detail_comp
+    // =============================================================================
+    // ALGORITHM AF CALCULATIONS
+    // =============================================================================
+atr_val = ta.atr(14)
+calc_adaptive_af(base_af, base_step, base_max, trend_dir) =>
+    adapted_af = base_af
+    adapted_step = base_step
+    adapted_max = base_max
+    if algorithm == 'Volatility-Scaled AF'
+        vol_ratio = ta.atr(vol_atr_len) / ta.sma(ta.atr(vol_atr_len), vol_lookback)
+        scale = 1 + (vol_ratio - 1) * vol_scale_factor
+        adapted_step := base_step * scale
+        adapted_max := base_max * scale
+        adapted_max
+    else if algorithm == 'Efficiency Ratio AF'
+        er = f_efficiency_ratio(close, er_len)
+        mult = er_slow_af_mult + er * (er_fast_af_mult - er_slow_af_mult)
+        adapted_step := base_step * mult
+        adapted_max := base_max * mult
+        adapted_max
+    else if algorithm == 'Shannon Entropy AF'
+        ent = f_shannon_entropy(close, ent_len, ent_bins)
+        mult = ent > ent_high_thresh ? 0.5 : ent < ent_low_thresh ? 1.5 : 1.0
+        adapted_step := base_step * mult
+        adapted_max := base_max * mult
+        adapted_max
+    else if algorithm == 'Fractal Dimension AF'
+        fd = f_fractal_dimension(close, fd_len)
+        mult = fd < fd_trend_thresh ? 1.5 : fd > fd_random_thresh ? 0.5 : 1.0
+        adapted_step := base_step * mult
+        adapted_max := base_max * mult
+        adapted_max
+    else if algorithm == 'ADX-Gated AF'
+        [diplus, diminus, adx_val] = ta.dmi(adx_len, adx_len)
+        if adx_val > adx_strong
+            adapted_step := base_step * 1.3
+            adapted_step
+        else if adx_val < adx_weak and adx_freeze_af
+            adapted_step := 0
+            adapted_step
+    else if algorithm == 'Kalman AF Estimator'
+        vol_ratio = kal_use_vol_adaptive ? ta.atr(10) / ta.sma(ta.atr(10), 50) : 1.0
+        proc = kal_process * vol_ratio
+        meas = kal_measure / vol_ratio
+        var float kal_af = base_af
+        error = base_af - kal_af
+        k_gain = proc / (proc + meas)
+        kal_af := kal_af + k_gain * error
+        adapted_af := kal_af
+        adapted_af
+    else if algorithm == 'Volume-Momentum AF'
+        vol_above = volume > ta.sma(volume, vm_vol_len) * vm_vol_thresh
+        mom = ta.roc(close, vm_mom_len)
+        mom_confirms = trend_dir == 1 and mom > 0 or trend_dir == -1 and mom < 0
+        if vol_above and (not vm_mom_confirm or mom_confirms)
+            adapted_step := base_step * 1.5
+            adapted_step
+        else
+            adapted_step := base_step * 0.8
+            adapted_step
+    else if algorithm == 'Garman-Klass AF'
+        gk_vol = f_garman_klass_vol(gk_len)
+        gk_avg = ta.sma(gk_vol, gk_lookback)
+        vol_ratio = gk_vol / gk_avg
+        mult = vol_ratio > 1.2 ? gk_high_vol_mult : vol_ratio < 0.8 ? gk_low_vol_mult : 1.0
+        adapted_step := base_step * mult
+        adapted_max := base_max * mult
+        adapted_max
+    else if algorithm == 'RSI-Modulated AF'
+        rsi_val = ta.rsi(close, rsi_len)
+        in_extreme = trend_dir == 1 and rsi_val > rsi_ob or trend_dir == -1 and rsi_val < rsi_os
+        in_mid = rsi_val >= 40 and rsi_val <= 60
+        if in_extreme
+            adapted_step := base_step * 0.5
+            adapted_step
+        else if in_mid and rsi_mid_boost
+            adapted_step := base_step * 1.3
+            adapted_step
+    else if algorithm == 'Bollinger Squeeze AF'
+        basis = ta.sma(close, bb_len)
+        dev = ta.stdev(close, bb_len) * bb_mult
+        bb_width = dev / basis
+        width_percentile = ta.percentile_linear_interpolation(bb_width, 100, bb_squeeze_pct * 100)
+        in_squeeze = bb_width < width_percentile
+        if in_squeeze
+            adapted_step := base_step * bb_squeeze_af_boost
+            adapted_max := base_max * bb_squeeze_af_boost
+            adapted_max
+    else if algorithm == 'Keltner Adaptive AF'
+        kc_mid = ta.ema(close, kc_len)
+        kc_range = ta.atr(kc_len) * kc_atr_mult
+        above_kc = close > kc_mid + kc_range
+        below_kc = close < kc_mid - kc_range
+        if above_kc or below_kc
+            adapted_step := base_step * kc_outside_boost
+            adapted_step
+        else
+            adapted_step := base_step * kc_inside_slow
+            adapted_step
+    else if algorithm == 'Choppiness-Gated AF'
+        chop = f_choppiness(chop_len)
+        if chop < chop_trend_thresh
+            adapted_step := base_step * 1.3
+            adapted_step
+        else if chop > chop_range_thresh
+            adapted_step := base_step * chop_range_af_mult
+            adapted_step
+    else if algorithm == 'VIDYA-Style AF'
+        cmo = ta.cmo(close, vidya_len)
+        cmo_abs = math.abs(cmo) / 100
+        sc = vidya_slow_sc + cmo_abs * (vidya_fast_sc - vidya_slow_sc)
+        adapted_step := base_step * (sc / 0.3)
+        adapted_max := base_max * (sc / 0.3)
+        adapted_max
+    else if algorithm == 'Hilbert Cycle AF'
+        var float smooth = na
+        var float detrender = na
+        var float period = 20.0
+        smooth := (4 * close + 3 * nz(close[1]) + 2 * nz(close[2]) + nz(close[3])) / 10
+        detrender := (0.0962 * smooth + 0.5769 * nz(smooth[2]) - 0.5769 * nz(smooth[4]) - 0.0962 * nz(smooth[6])) * 0.075
+        raw_period = hilbert_min_period + (hilbert_max_period - hilbert_min_period) * 0.5
+        period := 0.8 * nz(period[1]) + 0.2 * raw_period
+        period := math.max(hilbert_min_period, math.min(hilbert_max_period, period))
+        if hilbert_cycle_af
+            cycle_mult = hilbert_max_period / period
+            adapted_step := base_step * cycle_mult
+            adapted_step
+        if hilbert_phase_af
+            phase = 2 * 3.14159 * bar_index / period
+            phase_mult = 1 + 0.3 * math.abs(math.sin(phase))
+            adapted_step := adapted_step * phase_mult
+            adapted_step
+    [adapted_af, adapted_step, adapted_max]
+    // =============================================================================
+    // EP CALCULATION ALGORITHMS
+    // =============================================================================
+calc_enhanced_ep(current_ep, trend_dir) =>
+    new_high = high
+    new_low = low
+    ep_valid = true
+    if algorithm == 'Volume-Weighted EP'
+        vol_ratio = volume / ta.sma(volume, vwep_len)
+        weight = 1 + (vol_ratio - 1) * vwep_vol_weight
+        if vwep_require_vol and vol_ratio < 1
+            ep_valid := false
+            ep_valid
+        new_high := high * (trend_dir == 1 ? weight : 1)
+        new_low := low * (trend_dir == -1 ? 2 - weight : 1)
+        new_low
+    else if algorithm == 'Wavelet Filtered EP'
+        filtered = get_wavelet_filtered(wav_levels, wav_detail_weight)
+        new_high := trend_dir == 1 ? math.max(high, filtered) : high
+        new_low := trend_dir == -1 ? math.min(low, filtered) : low
+        new_low
+    else if algorithm == 'ATR-Validated EP'
+        atr_threshold = ta.atr(atrep_len) * atrep_min_mult
+        if atrep_scale_with_vol
+            vol_ratio = ta.atr(10) / ta.sma(ta.atr(10), 50)
+            atr_threshold := atr_threshold / vol_ratio
+            atr_threshold
+        if trend_dir == 1
+            if high - current_ep < atr_threshold
+                ep_valid := false
+                ep_valid
+        else
+            if current_ep - low < atr_threshold
+                ep_valid := false
+                ep_valid
+    else if algorithm == 'Statistical EP Filter'
+        changes = close - close[1]
+        mean_change = ta.sma(changes, statep_len)
+        std_change = ta.stdev(changes, statep_len)
+        current_change = close - close[1]
+        z_score = std_change > 0 ? math.abs(current_change - mean_change) / std_change : 0
+        if z_score < statep_zscore
+            ep_valid := false
+            ep_valid
+    [new_high, new_low, ep_valid]
+    // =============================================================================
+    // DUAL PSAR & CONFIRMATION STATE
+    // =============================================================================
+var float fast_sar = na
+var float fast_ep = na
+var float fast_af = dual_fast_start
+var int fast_trend = 1
+var float slow_sar = na
+var float slow_ep = na
+var float slow_af = dual_slow_start
+var int slow_trend = 1
+var int mom_confirm_count = 0
+var int close_confirm_count = 0
+// =============================================================================
+// DUAL PSAR CALCULATIONS
+// =============================================================================
+if na(fast_sar)
+    fast_sar := close
+    fast_ep := high
+    fast_ep
+fast_ep := fast_trend == 1 ? math.max(fast_ep, high) : math.min(fast_ep, low)
+fast_sar := fast_sar + fast_af * (fast_ep - fast_sar)
+if fast_trend == 1 and low < fast_sar
+    fast_trend := -1
+    fast_sar := fast_ep
+    fast_ep := low
+    fast_af := dual_fast_start
+    fast_af
+else if fast_trend == -1 and high > fast_sar
+    fast_trend := 1
+    fast_sar := fast_ep
+    fast_ep := high
+    fast_af := dual_fast_start
+    fast_af
+else
+    fast_af := math.min(dual_fast_max, fast_af + dual_fast_start)
+    fast_af
+if na(slow_sar)
+    slow_sar := close
+    slow_ep := high
+    slow_ep
+slow_ep := slow_trend == 1 ? math.max(slow_ep, high) : math.min(slow_ep, low)
+slow_sar := slow_sar + slow_af * (slow_ep - slow_sar)
+if slow_trend == 1 and low < slow_sar
+    slow_trend := -1
+    slow_sar := slow_ep
+    slow_ep := low
+    slow_af := dual_slow_start
+    slow_af
+else if slow_trend == -1 and high > slow_sar
+    slow_trend := 1
+    slow_sar := slow_ep
+    slow_ep := high
+    slow_af := dual_slow_start
+    slow_af
+else
+    slow_af := math.min(dual_slow_max, slow_af + dual_slow_start)
+    slow_af
+    // =============================================================================
+    // MOMENTUM & CLOSE CONFIRMATION
+    // =============================================================================
+mom_val = ta.roc(close, momflip_len)
+mom_strong = math.abs(mom_val) > momflip_thresh
+// =============================================================================
+// FLIP LOGIC FUNCTION
+// =============================================================================
+calc_flip_allowed(price_crossed, trend_dir, sar_val, p_fast_trend, p_slow_trend, p_mom_confirm, p_close_confirm) =>
+    flip_ok = price_crossed
+    new_mom_confirm = p_mom_confirm
+    new_close_confirm = p_close_confirm
+    if algorithm == 'Dual-PSAR Gate'
+        if dual_require_both
+            flip_ok := p_fast_trend != trend_dir and p_slow_trend != trend_dir
+            flip_ok
+        else
+            flip_ok := p_fast_trend != trend_dir or p_slow_trend != trend_dir
+            flip_ok
+    else if algorithm == 'MTF Coherence PSAR'
+        new_trend = trend_dir == 1 ? -1 : 1
+        agree_count = (new_trend == htf1_trend ? 1 : 0) + (new_trend == htf2_trend ? 1 : 0) + 1
+        coherence = agree_count / 3.0
+        flip_ok := coherence >= mtf_agree_thresh
+        flip_ok
+    else if algorithm == 'Momentum-Gated Flip'
+        mom_dir_ok = trend_dir == 1 and mom_val < 0 or trend_dir == -1 and mom_val > 0
+        if mom_dir_ok
+            new_mom_confirm := p_mom_confirm + 1
+            new_mom_confirm
+        else
+            new_mom_confirm := 0
+            new_mom_confirm
+        flip_ok := price_crossed and mom_strong and new_mom_confirm >= momflip_confirm_bars
+        flip_ok
+    else if algorithm == 'Close-Only PSAR'
+        close_crossed = trend_dir == 1 ? close < sar_val : close > sar_val
+        if close_crossed
+            new_close_confirm := p_close_confirm + 1
+            new_close_confirm
+        else
+            new_close_confirm := 0
+            new_close_confirm
+        flip_ok := new_close_confirm >= closeonly_confirm
+        flip_ok
+    [flip_ok, new_mom_confirm, new_close_confirm]
+    // =============================================================================
+    // MAIN PSAR ENGINE
+    // =============================================================================
+var float sar = na
+var float ep = na
+var float af = af_start
+var int trend = 1
+var int bars_since_flip = 999
+if na(sar)
+    sar := close
+    ep := trend == 1 ? high : low
+    af := af_start
+    af
+[adapted_af, adapted_step, adapted_max] = calc_adaptive_af(af, af_step, af_max, trend)
+[enhanced_high, enhanced_low, ep_valid] = calc_enhanced_ep(ep, trend)
+if trend == 1
+    if enhanced_high > ep and ep_valid
+        ep := enhanced_high
+        af := math.min(adapted_max, af + adapted_step)
+        af
+else
+    if enhanced_low < ep and ep_valid
+        ep := enhanced_low
+        af := math.min(adapted_max, af + adapted_step)
+        af
+new_sar = sar + adapted_af * (ep - sar)
+if trend == 1
+    new_sar := math.min(new_sar, low[1])
+    if bar_index > 1
+        new_sar := math.min(new_sar, low[2])
+        new_sar
+else
+    new_sar := math.max(new_sar, high[1])
+    if bar_index > 1
+        new_sar := math.max(new_sar, high[2])
+        new_sar
+sar_filtered = filter_type != 'None' ? apply_noise_filter(new_sar, filter_type, filter_length) : new_sar
+price_cross = trend == 1 ? low < sar_filtered : high > sar_filtered
+flip_confirmed = switch flip_mode
+    'Standard' => price_cross
+    'Close Only' => trend == 1 ? close < sar_filtered : close > sar_filtered
+    'Confirmed Bar' => price_cross and (trend == 1 ? close[1] < sar_filtered : close[1] > sar_filtered)
+    'Volume Confirmed' => price_cross and volume > ta.sma(volume, 20) * vol_mult_flip
+    => price_cross
+[flip_allowed, new_mom_count, new_close_count] = calc_flip_allowed(flip_confirmed, trend, sar_filtered, fast_trend, slow_trend, mom_confirm_count, close_confirm_count)
+mom_confirm_count := new_mom_count
+close_confirm_count := new_close_count
+flip_allowed := flip_allowed and bars_since_flip >= min_bars_between
+just_flipped = false
+if flip_allowed
+    trend := trend == 1 ? -1 : 1
+    sar := ep
+    ep := trend == 1 ? high : low
+    af := af_start
+    bars_since_flip := 0
+    just_flipped := true
+    mom_confirm_count := 0
+    close_confirm_count := 0
+    close_confirm_count
+else
+    sar := new_sar
+    bars_since_flip := bars_since_flip + 1
+    bars_since_flip
+sar_display = sar_filtered
+// =============================================================================
+// SIGNAL GENERATION
+// =============================================================================
+buy_signal = just_flipped and trend == 1
+sell_signal = just_flipped and trend == -1
+// =============================================================================
+// PERFORMANCE TRACKING
+// =============================================================================
+var TradeStats stats = TradeStats.new()
+stats.current_equity := capital
+if enable_tracking
+    current_atr = ta.atr(14)
+    if buy_signal and not stats.in_trade
+        stats.in_trade := true
+        stats.direction := 1
+        stats.entry_price := close
+        stats.stop_price := sar_display
+        if use_tp
+            stats.take_profit := close + tp_val * current_atr
+            stats.take_profit
+    if sell_signal and not stats.in_trade
+        stats.in_trade := true
+        stats.direction := -1
+        stats.entry_price := close
+        stats.stop_price := sar_display
+        if use_tp
+            stats.take_profit := close - tp_val * current_atr
+            stats.take_profit
+    if stats.in_trade
+        pos_value = stats.current_equity * (pos_size / 100)
+        exit_trade = false
+        exit_price = close
+        if use_psar_stop
+            if stats.direction == 1
+                stats.stop_price := sar_display
+                stats.stop_price
+            else
+                stats.stop_price := sar_display
+                stats.stop_price
+        if stats.direction == 1
+            if low <= stats.stop_price
+                exit_trade := true
+                exit_price := stats.stop_price
+                exit_price
+            if use_tp and high >= stats.take_profit
+                exit_trade := true
+                exit_price := stats.take_profit
+                exit_price
+            if sell_signal
+                exit_trade := true
+                exit_trade
+        else
+            if high >= stats.stop_price
+                exit_trade := true
+                exit_price := stats.stop_price
+                exit_price
+            if use_tp and low <= stats.take_profit
+                exit_trade := true
+                exit_price := stats.take_profit
+                exit_price
+            if buy_signal
+                exit_trade := true
+                exit_trade
+        if exit_trade
+            pnl_pct = stats.direction == 1 ? (exit_price - stats.entry_price) / stats.entry_price : (stats.entry_price - exit_price) / stats.entry_price
+            gross_pnl = pos_value * pnl_pct
+            comm = pos_value * (commission / 100)
+            net_pnl = gross_pnl - comm
+            stats.trades := stats.trades + 1
+            stats.total_pnl := stats.total_pnl + net_pnl
+            stats.current_equity := stats.current_equity + net_pnl
+            if net_pnl > 0
+                stats.wins := stats.wins + 1
+                stats.win_pnl := stats.win_pnl + net_pnl
+                stats.current_streak := stats.current_streak > 0 ? stats.current_streak + 1 : 1
+                stats.win_streak := math.max(stats.win_streak, stats.current_streak)
+                stats.win_streak
+            else
+                stats.losses := stats.losses + 1
+                stats.loss_pnl := stats.loss_pnl + math.abs(net_pnl)
+                stats.current_streak := stats.current_streak < 0 ? stats.current_streak - 1 : -1
+                stats.loss_streak := math.max(stats.loss_streak, math.abs(stats.current_streak))
+                stats.loss_streak
+            stats.peak_equity := math.max(stats.peak_equity, stats.current_equity)
+            dd = (stats.peak_equity - stats.current_equity) / stats.peak_equity * 100
+            stats.max_dd := math.max(stats.max_dd, dd)
+            stats.in_trade := false
+            stats.direction := 0
+            stats.direction
+            // =============================================================================
+            // ALGORITHM-SPECIFIC DASHBOARD METRICS
+            // =============================================================================
+vol_ratio_current = ta.atr(vol_atr_len) / ta.sma(ta.atr(vol_atr_len), vol_lookback)
+vol_regime = vol_ratio_current > 1.2 ? 'HIGH' : vol_ratio_current < 0.8 ? 'LOW' : 'NORMAL'
+er_current = f_efficiency_ratio(close, er_len)
+er_regime = er_current > 0.6 ? 'TRENDING' : er_current < 0.3 ? 'CHOPPY' : 'MIXED'
+ent_current = f_shannon_entropy(close, ent_len, ent_bins)
+ent_regime = ent_current > ent_high_thresh ? 'CHAOTIC' : ent_current < ent_low_thresh ? 'ORDERED' : 'NEUTRAL'
+fd_current = f_fractal_dimension(close, fd_len)
+fd_regime = fd_current < fd_trend_thresh ? 'TRENDING' : fd_current > fd_random_thresh ? 'RANDOM' : 'MIXED'
+[diplus_val, diminus_val, adx_current] = ta.dmi(adx_len, adx_len)
+adx_regime = adx_current > adx_strong ? 'STRONG' : adx_current < adx_weak ? 'WEAK' : 'MODERATE'
+var float kal_uncertainty_track = 1.0
+kal_uncertainty_track := 0.9 * nz(kal_uncertainty_track[1], 1.0) + 0.1 * math.abs(close - close[1]) / (atr_val + syminfo.mintick)
+kal_confidence = 100 - math.min(kal_uncertainty_track * 50, 100)
+vol_ratio_vm = volume / ta.sma(volume, vm_vol_len)
+mom_current = ta.roc(close, vm_mom_len)
+vm_signal = vol_ratio_vm > vm_vol_thresh and math.abs(mom_current) > 0.5 ? 'ACTIVE' : 'QUIET'
+gk_vol_current = f_garman_klass_vol(gk_len)
+gk_vol_avg = ta.sma(gk_vol_current, gk_lookback)
+gk_ratio = gk_vol_current / gk_vol_avg
+gk_regime = gk_ratio > 1.2 ? 'ELEVATED' : gk_ratio < 0.8 ? 'SUBDUED' : 'NORMAL'
+rsi_current = ta.rsi(close, rsi_len)
+rsi_zone = rsi_current > rsi_ob ? 'OVERBOUGHT' : rsi_current < rsi_os ? 'OVERSOLD' : 'NEUTRAL'
+bb_basis = ta.sma(close, bb_len)
+bb_dev = ta.stdev(close, bb_len) * bb_mult
+bb_width = bb_dev / bb_basis * 100
+bb_width_pct = ta.percentrank(bb_width, 100)
+bb_squeeze = bb_width_pct < bb_squeeze_pct * 100 ? 'SQUEEZE' : 'EXPANDED'
+kc_mid = ta.ema(close, kc_len)
+kc_range = ta.atr(kc_len) * kc_atr_mult
+kc_position = close > kc_mid + kc_range ? 'ABOVE' : close < kc_mid - kc_range ? 'BELOW' : 'INSIDE'
+chop_current = f_choppiness(chop_len)
+chop_regime = chop_current < chop_trend_thresh ? 'TRENDING' : chop_current > chop_range_thresh ? 'CHOPPY' : 'MIXED'
+cmo_current = ta.cmo(close, vidya_len)
+vidya_speed = math.abs(cmo_current) / 100
+vidya_regime = vidya_speed > 0.6 ? 'FAST' : vidya_speed < 0.3 ? 'SLOW' : 'MODERATE'
+var float hilbert_period = 20.0
+var float hilbert_smooth_src = na
+hilbert_smooth_src := (4 * close + 3 * nz(close[1]) + 2 * nz(close[2]) + nz(close[3])) / 10
+hilbert_period := 0.8 * nz(hilbert_period[1], 20) + 0.2 * ((hilbert_min_period + hilbert_max_period) / 2)
+hilbert_period := math.max(hilbert_min_period, math.min(hilbert_max_period, hilbert_period))
+hilbert_phase = bar_index % math.round(hilbert_period) / hilbert_period * 360
+vwep_ratio = volume / ta.sma(volume, vwep_len)
+vwep_significance = vwep_ratio > 1.5 ? 'HIGH' : vwep_ratio < 0.7 ? 'LOW' : 'NORMAL'
+wav_trend_strength = math.abs(close - get_wavelet_filtered(wav_levels, 0)) / atr_val * 100
+wav_noise_level = math.abs(close - get_wavelet_filtered(wav_levels, wav_detail_weight)) / atr_val * 100
+atrep_threshold_current = ta.atr(atrep_len) * atrep_min_mult
+atrep_validation = 'ACTIVE'
+stat_changes = close - close[1]
+stat_mean = ta.sma(stat_changes, statep_len)
+stat_std = ta.stdev(stat_changes, statep_len)
+stat_zscore_current = stat_std > 0 ? math.abs(stat_changes - stat_mean) / stat_std : 0
+stat_significance = stat_zscore_current > statep_zscore ? 'SIGNIFICANT' : 'NORMAL'
+dual_agreement = fast_trend == slow_trend ? 'ALIGNED' : 'DIVERGED'
+dual_fast_dir = fast_trend == 1 ? '▲' : '▼'
+dual_slow_dir = slow_trend == 1 ? '▲' : '▼'
+mtf_agreement_count = (trend == htf1_trend ? 1 : 0) + (trend == htf2_trend ? 1 : 0) + 1
+mtf_coherence_pct = mtf_agreement_count / 3.0 * 100
+mtf_status = mtf_coherence_pct >= mtf_agree_thresh * 100 ? 'COHERENT' : 'MIXED'
+mom_flip_current = ta.roc(close, momflip_len)
+mom_flip_strength = math.abs(mom_flip_current)
+mom_flip_status = mom_flip_strength > momflip_thresh ? 'STRONG' : 'WEAK'
+close_vs_sar = trend == 1 ? close - sar_display : sar_display - close
+close_buffer_pct = close_vs_sar / close * 100
+var int consensus_bull_votes = 0
+var int consensus_bear_votes = 0
+consensus_bull_votes := (er_current > 0.5 ? 1 : 0) + (adx_current > 20 ? 1 : 0) + (trend == 1 ? 1 : 0)
+consensus_bear_votes := (er_current < 0.3 ? 1 : 0) + (chop_current > 50 ? 1 : 0) + (trend == -1 ? 1 : 0)
+consensus_strength = math.max(consensus_bull_votes, consensus_bear_votes)
+// =============================================================================
+// ALGORITHM-SPECIFIC COLORS
+// =============================================================================
+get_algo_colors() =>
+    switch algorithm
+        'Volatility-Scaled AF' => [#00ffbb, #ff0055, #ffaa00, #00ffbb]
+        'Efficiency Ratio AF' => [#00ff88, #ff3366, #00aaff, #00ff88]
+        'Shannon Entropy AF' => [#aa00ff, #ff6600, #00ffff, #aa00ff]
+        'Fractal Dimension AF' => [#00ccff, #ff0088, #ffff00, #00ccff]
+        'ADX-Gated AF' => [#00ff44, #ff4400, #ffffff, #00ff44]
+        'Kalman AF Estimator' => [#44ffaa, #ff4477, #aaaaff, #44ffaa]
+        'Volume-Momentum AF' => [#ffff00, #ff00ff, #00ffff, #ffff00]
+        'Garman-Klass AF' => [#00ffcc, #ff3300, #ff9900, #00ffcc]
+        'RSI-Modulated AF' => [#33ff99, #ff3399, #9933ff, #33ff99]
+        'Bollinger Squeeze AF' => [#00ff00, #ff0000, #0088ff, #00ff00]
+        'Keltner Adaptive AF' => [#22ffcc, #ff2266, #ffcc00, #22ffcc]
+        'Choppiness-Gated AF' => [#66ff66, #ff6666, #6666ff, #66ff66]
+        'VIDYA-Style AF' => [#00ffaa, #ff0066, #ff8800, #00ffaa]
+        'Hilbert Cycle AF' => [#0099ff, #ff0099, #99ff00, #0099ff]
+        'Volume-Weighted EP' => [#11ff88, #ff1188, #ffff11, #11ff88]
+        'Wavelet Filtered EP' => [#00ddff, #ff00dd, #ddff00, #00ddff]
+        'ATR-Validated EP' => [#55ffaa, #ff5555, #55aaff, #55ffaa]
+        'Statistical EP Filter' => [#00ee99, #ee0066, #ee9900, #00ee99]
+        'Dual-PSAR Gate' => [#00ffdd, #dd00ff, #ffdd00, #00ffdd]
+        'MTF Coherence PSAR' => [#88ff00, #ff0088, #0088ff, #88ff00]
+        'Momentum-Gated Flip' => [#00ff99, #ff9900, #9900ff, #00ff99]
+        'Close-Only PSAR' => [#44ff88, #ff4488, #4488ff, #44ff88]
+        'Ultimate PSAR Consensus' => [#00ffff, #ff00ff, #ffff00, #00ffff]
+        => [#00ffbb, #ff0055, #ffaa00, #00ffbb]
+[algo_bull, algo_bear, algo_accent, algo_glow] = get_algo_colors()
+trend_color = trend == 1 ? algo_bull : algo_bear
+// =============================================================================
+// ALGORITHM-SPECIFIC SAR SHAPES
+// =============================================================================
+get_algo_visual_style() =>
+    switch algorithm
+        'Volatility-Scaled AF' => [true, true, vol_ratio_current, false]
+        'Garman-Klass AF' => [true, true, gk_ratio, false]
+        'Keltner Adaptive AF' => [false, true, 1.0, true]
+        'Bollinger Squeeze AF' => [bb_squeeze == 'SQUEEZE', true, 1.0, false]
+        'Efficiency Ratio AF' => [er_current > 0.5, false, 1.0, true]
+        'ADX-Gated AF' => [adx_current > adx_strong, false, 1.0, true]
+        'Choppiness-Gated AF' => [chop_current < 50, false, 1.0, false]
+        'Shannon Entropy AF' => [ent_current < 0.5, true, ent_current, false]
+        'Fractal Dimension AF' => [fd_current < 1.5, false, 1.0, true]
+        'VIDYA-Style AF' => [vidya_speed > 0.5, false, 1.0, false]
+        'Kalman AF Estimator' => [kal_confidence > 70, false, 1.0, true]
+        'Hilbert Cycle AF' => [true, false, 1.0, true]
+        'Volume-Momentum AF' => [vol_ratio_vm > 1.2, false, 1.0, false]
+        'Volume-Weighted EP' => [vwep_ratio > 1.0, false, 1.0, false]
+        'Wavelet Filtered EP' => [false, true, 0.5, false]
+        'ATR-Validated EP' => [true, false, 1.0, false]
+        'Statistical EP Filter' => [stat_zscore_current > 1.5, false, 1.0, false]
+        'Dual-PSAR Gate' => [dual_agreement == 'ALIGNED', false, 1.0, true]
+        'MTF Coherence PSAR' => [mtf_coherence_pct > 66, false, 1.0, true]
+        'Momentum-Gated Flip' => [mom_flip_strength > momflip_thresh, false, 1.0, false]
+        'Close-Only PSAR' => [false, false, 1.0, false]
+        'Ultimate PSAR Consensus' => [consensus_strength >= 2, true, 1.0, true]
+        => [false, false, 1.0, false]
+[use_glow, use_bands, band_mult_visual, use_secondary] = get_algo_visual_style()
+// =============================================================================
+// SECONDARY LINE CALCULATION 
+// =============================================================================
+ema_er = ta.ema(close, er_len)
+ema_adx = ta.ema(close, adx_len)
+ema_fd = ta.ema(close, fd_len)
+ema_20 = ta.ema(close, 20)
+ema_14 = ta.ema(close, 14)
+var float hilbert_ema_adaptive = na
+hilbert_alpha = 2.0 / (hilbert_period + 1.0)
+hilbert_ema_adaptive := na(hilbert_ema_adaptive[1]) ? close : hilbert_alpha * close + (1.0 - hilbert_alpha) * nz(hilbert_ema_adaptive[1])
+dual_sar_avg = (fast_sar + slow_sar) / 2
+secondary_line = switch algorithm
+    'Efficiency Ratio AF' => ema_er
+    'ADX-Gated AF' => ema_adx
+    'Fractal Dimension AF' => ema_fd
+    'Kalman AF Estimator' => ema_20
+    'Hilbert Cycle AF' => hilbert_ema_adaptive
+    'Dual-PSAR Gate' => dual_sar_avg
+    'MTF Coherence PSAR' => ema_20
+    'Keltner Adaptive AF' => kc_mid
+    'Ultimate PSAR Consensus' => ema_14
+    => float(na)
+    // =============================================================================
+    // VISUAL PLOTTING
+    // =============================================================================
+plot(sar_display, 'PSAR', color = trend_color, style = plot.style_circles, linewidth = 2)
+glow_color_plot = color.new(algo_glow, 70)
+plot(use_glow ? sar_display : na, 'SAR Glow', color = glow_color_plot, style = plot.style_circles, linewidth = 4)
+band_upper = sar_display + atr_val * band_mult_visual * 0.5
+band_lower = sar_display - atr_val * band_mult_visual * 0.5
+band_color = color.new(algo_accent, 80)
+p_band_upper = plot(use_bands ? band_upper : na, 'Upper Band', color = band_color, style = plot.style_line)
+p_band_lower = plot(use_bands ? band_lower : na, 'Lower Band', color = band_color, style = plot.style_line)
+fill(p_band_upper, p_band_lower, color = color.new(algo_accent, 92), title = 'Band Fill')
+plot(use_secondary ? secondary_line : na, 'Secondary Ref', color = color.new(algo_accent, 50), style = plot.style_line, linewidth = 1)
+label_bull_color = algo_bull
+label_bear_color = algo_bear
+plotshape(show_labels and buy_signal, 'Buy', shape.labelup, location.belowbar, label_bull_color, text = 'LONG', textcolor = color.white, size = size.small)
+plotshape(show_labels and sell_signal, 'Sell', shape.labeldown, location.abovebar, label_bear_color, text = 'SHORT', textcolor = color.white, size = size.small)
+if show_af_info and barstate.islast
+    af_label_color = color.new(algo_accent, 50)
+    label.new(bar_index + 2, sar_display, 'AF: ' + str.tostring(af, '#.###') + '\nEP: ' + str.tostring(ep, '#.##'), color = af_label_color, textcolor = color.white, style = label.style_label_left, size = size.small)
+barcolor(color_bars ? trend_color : na)
+// =============================================================================
+// DASHBOARD
+// =============================================================================
+if show_dashboard
+    dash_pos = switch dash_position
+        'Top Right' => position.top_right
+        'Top Left' => position.top_left
+        'Bottom Right' => position.bottom_right
+        'Bottom Left' => position.bottom_left
+        => position.top_right
+    text_sz = switch dash_size
+        'Small' => size.tiny
+        'Normal' => size.small
+        'Large' => size.normal
+        => size.small
+    var table dash = table.new(dash_pos, 2, 24, border_width = 1, border_color = color.gray, bgcolor = color.new(color.black, 80))
+    if barstate.islast
+        row = 0
+        table.cell(dash, 0, row, '╔═══ PSAR LABORATORY ═══╗', text_color = color.white, text_size = text_sz, bgcolor = color.new(color.purple, 60))
+        table.merge_cells(dash, 0, row, 1, row)
+        row := row + 1
+        algo_short = str.replace(algorithm, ' AF', '')
+        algo_short := str.replace(algo_short, ' PSAR', '')
+        algo_short := str.replace(algo_short, 'Adaptive', 'Adp')
+        algo_short := str.replace(algo_short, 'Filter', 'Filt')
+        table.cell(dash, 0, row, 'Algo:', text_color = color.gray, text_size = text_sz)
+        table.cell(dash, 1, row, algo_short, text_color = color.yellow, text_size = text_sz)
+        row := row + 1
+        trend_txt = trend == 1 ? 'BULLISH ▲' : 'BEARISH ▼'
+        table.cell(dash, 0, row, 'Trend:', text_color = color.gray, text_size = text_sz)
+        table.cell(dash, 1, row, trend_txt, text_color = trend_color, text_size = text_sz)
+        row := row + 1
+        filt_short = str.replace(filter_type, 'Moving Average', 'MA')
+        filt_short := str.replace(filt_short, 'Approximation', 'Aprx')
+        table.cell(dash, 0, row, 'Filter:', text_color = color.gray, text_size = text_sz)
+        table.cell(dash, 1, row, filt_short, text_color = color.aqua, text_size = text_sz)
+        row := row + 1
+        af_pct = (af - af_start) / (af_max - af_start) * 100
+        af_bar = af_pct > 80 ? '████████' : af_pct > 60 ? '██████░░' : af_pct > 40 ? '████░░░░' : af_pct > 20 ? '██░░░░░░' : '░░░░░░░░'
+        af_col = af_pct > 80 ? color.red : af_pct > 50 ? color.yellow : color.green
+        table.cell(dash, 0, row, 'AF:', text_color = color.gray, text_size = text_sz)
+        table.cell(dash, 1, row, str.tostring(af, '#.###') + ' ' + af_bar, text_color = af_col, text_size = text_sz)
+        row := row + 1
+        table.cell(dash, 0, row, '╔══ ALGO METRICS ══╗', text_color = color.white, text_size = text_sz, bgcolor = color.new(algo_accent, 60))
+        table.merge_cells(dash, 0, row, 1, row)
+        row := row + 1
+        if algorithm == 'Volatility-Scaled AF'
+            table.cell(dash, 0, row, 'Vol Ratio:', text_color = color.gray, text_size = text_sz)
+            vol_col = vol_ratio_current > 1.2 ? color.red : vol_ratio_current < 0.8 ? color.green : color.yellow
+            table.cell(dash, 1, row, str.tostring(vol_ratio_current, '#.##') + ' ' + vol_regime, text_color = vol_col, text_size = text_sz)
+            row := row + 1
+            row
+        else if algorithm == 'Efficiency Ratio AF'
+            table.cell(dash, 0, row, 'Efficiency:', text_color = color.gray, text_size = text_sz)
+            er_col = er_current > 0.6 ? algo_bull : er_current < 0.3 ? algo_bear : color.yellow
+            table.cell(dash, 1, row, str.tostring(er_current, '#.##') + ' ' + er_regime, text_color = er_col, text_size = text_sz)
+            row := row + 1
+            row
+        else if algorithm == 'Shannon Entropy AF'
+            table.cell(dash, 0, row, 'Entropy:', text_color = color.gray, text_size = text_sz)
+            ent_col = ent_current < ent_low_thresh ? algo_bull : ent_current > ent_high_thresh ? algo_bear : color.yellow
+            table.cell(dash, 1, row, str.tostring(ent_current, '#.##') + ' ' + ent_regime, text_color = ent_col, text_size = text_sz)
+            row := row + 1
+            row
+        else if algorithm == 'Fractal Dimension AF'
+            table.cell(dash, 0, row, 'Fractal D:', text_color = color.gray, text_size = text_sz)
+            fd_col = fd_current < fd_trend_thresh ? algo_bull : fd_current > fd_random_thresh ? algo_bear : color.yellow
+            table.cell(dash, 1, row, str.tostring(fd_current, '#.##') + ' ' + fd_regime, text_color = fd_col, text_size = text_sz)
+            row := row + 1
+            row
+        else if algorithm == 'ADX-Gated AF'
+            table.cell(dash, 0, row, 'ADX:', text_color = color.gray, text_size = text_sz)
+            adx_col = adx_current > adx_strong ? algo_bull : adx_current < adx_weak ? algo_bear : color.yellow
+            table.cell(dash, 1, row, str.tostring(adx_current, '#.#') + ' ' + adx_regime, text_color = adx_col, text_size = text_sz)
+            row := row + 1
+            table.cell(dash, 0, row, 'DI+/DI-:', text_color = color.gray, text_size = text_sz)
+            di_txt = str.tostring(diplus_val, '#.#') + '/' + str.tostring(diminus_val, '#.#')
+            table.cell(dash, 1, row, di_txt, text_color = diplus_val > diminus_val ? algo_bull : algo_bear, text_size = text_sz)
+            row := row + 1
+            row
+        else if algorithm == 'Kalman AF Estimator'
+            table.cell(dash, 0, row, 'Confidence:', text_color = color.gray, text_size = text_sz)
+            kal_col = kal_confidence > 70 ? algo_bull : kal_confidence < 40 ? algo_bear : color.yellow
+            table.cell(dash, 1, row, str.tostring(kal_confidence, '#.#') + '%', text_color = kal_col, text_size = text_sz)
+            row := row + 1
+            row
+        else if algorithm == 'Volume-Momentum AF'
+            table.cell(dash, 0, row, 'Vol Ratio:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, str.tostring(vol_ratio_vm, '#.##'), text_color = vol_ratio_vm > vm_vol_thresh ? algo_bull : color.gray, text_size = text_sz)
+            row := row + 1
+            table.cell(dash, 0, row, 'Momentum:', text_color = color.gray, text_size = text_sz)
+            mom_col = mom_current > 0 ? algo_bull : algo_bear
+            table.cell(dash, 1, row, str.tostring(mom_current, '#.##') + '% ' + vm_signal, text_color = mom_col, text_size = text_sz)
+            row := row + 1
+            row
+        else if algorithm == 'Garman-Klass AF'
+            table.cell(dash, 0, row, 'GK Vol:', text_color = color.gray, text_size = text_sz)
+            gk_col = gk_ratio > 1.2 ? color.red : gk_ratio < 0.8 ? color.green : color.yellow
+            table.cell(dash, 1, row, str.tostring(gk_ratio, '#.##') + ' ' + gk_regime, text_color = gk_col, text_size = text_sz)
+            row := row + 1
+            row
+        else if algorithm == 'RSI-Modulated AF'
+            table.cell(dash, 0, row, 'RSI:', text_color = color.gray, text_size = text_sz)
+            rsi_col = rsi_current > rsi_ob ? algo_bear : rsi_current < rsi_os ? algo_bull : color.yellow
+            table.cell(dash, 1, row, str.tostring(rsi_current, '#.#') + ' ' + rsi_zone, text_color = rsi_col, text_size = text_sz)
+            row := row + 1
+            row
+        else if algorithm == 'Bollinger Squeeze AF'
+            table.cell(dash, 0, row, 'BB Width:', text_color = color.gray, text_size = text_sz)
+            sq_col = bb_squeeze == 'SQUEEZE' ? color.yellow : algo_bull
+            table.cell(dash, 1, row, str.tostring(bb_width, '#.##') + '% ' + bb_squeeze, text_color = sq_col, text_size = text_sz)
+            row := row + 1
+            row
+        else if algorithm == 'Keltner Adaptive AF'
+            table.cell(dash, 0, row, 'KC Zone:', text_color = color.gray, text_size = text_sz)
+            kc_col = kc_position == 'ABOVE' ? algo_bull : kc_position == 'BELOW' ? algo_bear : color.yellow
+            table.cell(dash, 1, row, kc_position, text_color = kc_col, text_size = text_sz)
+            row := row + 1
+            row
+        else if algorithm == 'Choppiness-Gated AF'
+            table.cell(dash, 0, row, 'Chop Index:', text_color = color.gray, text_size = text_sz)
+            chop_col = chop_current < chop_trend_thresh ? algo_bull : chop_current > chop_range_thresh ? algo_bear : color.yellow
+            table.cell(dash, 1, row, str.tostring(chop_current, '#.#') + ' ' + chop_regime, text_color = chop_col, text_size = text_sz)
+            row := row + 1
+            row
+        else if algorithm == 'VIDYA-Style AF'
+            table.cell(dash, 0, row, 'CMO:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, str.tostring(cmo_current, '#.#'), text_color = cmo_current > 0 ? algo_bull : algo_bear, text_size = text_sz)
+            row := row + 1
+            table.cell(dash, 0, row, 'Speed:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, str.tostring(vidya_speed * 100, '#.#') + '% ' + vidya_regime, text_color = vidya_speed > 0.5 ? algo_bull : color.yellow, text_size = text_sz)
+            row := row + 1
+            row
+        else if algorithm == 'Hilbert Cycle AF'
+            table.cell(dash, 0, row, 'Period:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, str.tostring(hilbert_period, '#.#') + ' bars', text_color = algo_accent, text_size = text_sz)
+            row := row + 1
+            table.cell(dash, 0, row, 'Phase:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, str.tostring(hilbert_phase, '#') + '°', text_color = algo_accent, text_size = text_sz)
+            row := row + 1
+            row
+        else if algorithm == 'Volume-Weighted EP'
+            table.cell(dash, 0, row, 'Vol Weight:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, str.tostring(vwep_ratio, '#.##') + ' ' + vwep_significance, text_color = vwep_ratio > 1.0 ? algo_bull : color.gray, text_size = text_sz)
+            row := row + 1
+            row
+        else if algorithm == 'Wavelet Filtered EP'
+            table.cell(dash, 0, row, 'Trend Str:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, str.tostring(wav_trend_strength, '#.#') + '%', text_color = wav_trend_strength > 50 ? algo_bull : color.yellow, text_size = text_sz)
+            row := row + 1
+            table.cell(dash, 0, row, 'Levels:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, str.tostring(wav_levels), text_color = algo_accent, text_size = text_sz)
+            row := row + 1
+            row
+        else if algorithm == 'ATR-Validated EP'
+            table.cell(dash, 0, row, 'ATR Thresh:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, str.tostring(atrep_threshold_current, '#.##'), text_color = algo_accent, text_size = text_sz)
+            row := row + 1
+            row
+        else if algorithm == 'Statistical EP Filter'
+            table.cell(dash, 0, row, 'Z-Score:', text_color = color.gray, text_size = text_sz)
+            stat_col = stat_zscore_current > statep_zscore ? algo_bull : color.gray
+            table.cell(dash, 1, row, str.tostring(stat_zscore_current, '#.##') + ' ' + stat_significance, text_color = stat_col, text_size = text_sz)
+            row := row + 1
+            row
+        else if algorithm == 'Dual-PSAR Gate'
+            table.cell(dash, 0, row, 'Fast/Slow:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, dual_fast_dir + '/' + dual_slow_dir + ' ' + dual_agreement, text_color = dual_agreement == 'ALIGNED' ? algo_bull : color.yellow, text_size = text_sz)
+            row := row + 1
+            row
+        else if algorithm == 'MTF Coherence PSAR'
+            table.cell(dash, 0, row, 'Coherence:', text_color = color.gray, text_size = text_sz)
+            mtf_col = mtf_coherence_pct >= 66 ? algo_bull : mtf_coherence_pct >= 33 ? color.yellow : algo_bear
+            table.cell(dash, 1, row, str.tostring(mtf_coherence_pct, '#') + '% ' + mtf_status, text_color = mtf_col, text_size = text_sz)
+            row := row + 1
+            table.cell(dash, 0, row, 'TF Agree:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, str.tostring(mtf_agreement_count) + '/3', text_color = mtf_col, text_size = text_sz)
+            row := row + 1
+            row
+        else if algorithm == 'Momentum-Gated Flip'
+            table.cell(dash, 0, row, 'Momentum:', text_color = color.gray, text_size = text_sz)
+            mom_f_col = mom_flip_strength > momflip_thresh ? algo_bull : color.gray
+            table.cell(dash, 1, row, str.tostring(mom_flip_current, '#.##') + '% ' + mom_flip_status, text_color = mom_f_col, text_size = text_sz)
+            row := row + 1
+            table.cell(dash, 0, row, 'Confirms:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, str.tostring(mom_confirm_count) + '/' + str.tostring(momflip_confirm_bars), text_color = mom_confirm_count >= momflip_confirm_bars ? algo_bull : color.yellow, text_size = text_sz)
+            row := row + 1
+            row
+        else if algorithm == 'Close-Only PSAR'
+            table.cell(dash, 0, row, 'Buffer:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, str.tostring(close_buffer_pct, '#.##') + '%', text_color = close_buffer_pct > 0 ? algo_bull : algo_bear, text_size = text_sz)
+            row := row + 1
+            table.cell(dash, 0, row, 'Confirms:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, str.tostring(close_confirm_count) + '/' + str.tostring(closeonly_confirm), text_color = close_confirm_count >= closeonly_confirm ? algo_bull : color.yellow, text_size = text_sz)
+            row := row + 1
+            row
+        else if algorithm == 'Ultimate PSAR Consensus'
+            table.cell(dash, 0, row, 'Votes:', text_color = color.gray, text_size = text_sz)
+            cons_col = consensus_strength >= consensus_vote_thresh ? algo_bull : color.yellow
+            vote_txt = 'Bull:' + str.tostring(consensus_bull_votes) + ' Bear:' + str.tostring(consensus_bear_votes)
+            table.cell(dash, 1, row, vote_txt, text_color = cons_col, text_size = text_sz)
+            row := row + 1
+            table.cell(dash, 0, row, 'Strength:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, str.tostring(consensus_strength) + '/' + str.tostring(consensus_top_n) + ' needed', text_color = cons_col, text_size = text_sz)
+            row := row + 1
+            row
+        table.cell(dash, 0, row, '╔══ SAR STATUS ══╗', text_color = color.white, text_size = text_sz, bgcolor = color.new(color.blue, 60))
+        table.merge_cells(dash, 0, row, 1, row)
+        row := row + 1
+        sar_dist = math.abs(close - sar_display)
+        sar_dist_pct = sar_dist / close * 100
+        table.cell(dash, 0, row, 'SAR Dist:', text_color = color.gray, text_size = text_sz)
+        table.cell(dash, 1, row, str.tostring(sar_dist_pct, '#.##') + '%', text_color = color.white, text_size = text_sz)
+        row := row + 1
+        table.cell(dash, 0, row, 'Bars:', text_color = color.gray, text_size = text_sz)
+        table.cell(dash, 1, row, str.tostring(bars_since_flip), text_color = bars_since_flip < min_bars_between ? color.yellow : color.white, text_size = text_sz)
+        row := row + 1
+        table.cell(dash, 0, row, 'Flip Mode:', text_color = color.gray, text_size = text_sz)
+        table.cell(dash, 1, row, flip_mode, text_color = color.aqua, text_size = text_sz)
+        row := row + 1
+        if enable_tracking
+            table.cell(dash, 0, row, '╔══ PERFORMANCE ══╗', text_color = color.white, text_size = text_sz, bgcolor = color.new(color.orange, 60))
+            table.merge_cells(dash, 0, row, 1, row)
+            row := row + 1
+            table.cell(dash, 0, row, 'Trades:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, str.tostring(stats.trades), text_color = color.white, text_size = text_sz)
+            row := row + 1
+            win_rate = stats.trades > 0 ? stats.wins / stats.trades * 100 : 0
+            wr_color = win_rate > 55 ? algo_bull : win_rate > 45 ? color.yellow : algo_bear
+            table.cell(dash, 0, row, 'Win Rate:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, str.tostring(win_rate, '#.#') + '%', text_color = wr_color, text_size = text_sz)
+            row := row + 1
+            pf = stats.loss_pnl > 0 ? stats.win_pnl / stats.loss_pnl : stats.win_pnl > 0 ? 999 : 0
+            pf_color = pf > 1.5 ? algo_bull : pf > 1.0 ? color.yellow : algo_bear
+            table.cell(dash, 0, row, 'Profit Fac:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, str.tostring(pf, '#.##'), text_color = pf_color, text_size = text_sz)
+            row := row + 1
+            pnl_color = stats.total_pnl > 0 ? algo_bull : stats.total_pnl < 0 ? algo_bear : color.gray
+            table.cell(dash, 0, row, 'Net P&L:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, str.tostring(stats.total_pnl, '#.##'), text_color = pnl_color, text_size = text_sz)
+            row := row + 1
+            dd_color = stats.max_dd > 20 ? algo_bear : stats.max_dd > 10 ? color.yellow : algo_bull
+            table.cell(dash, 0, row, 'Max DD:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, str.tostring(stats.max_dd, '#.#') + '%', text_color = dd_color, text_size = text_sz)
+            row := row + 1
+            pos_txt = stats.in_trade ? stats.direction == 1 ? '🟢 LONG' : '🔴 SHORT' : '⚪ FLAT'
+            table.cell(dash, 0, row, 'Position:', text_color = color.gray, text_size = text_sz)
+            table.cell(dash, 1, row, pos_txt, text_color = color.white, text_size = text_sz)
+            row := row + 1
+            row
+        table.cell(dash, 0, row, 'DAFE Trading Systems', text_color = color.new(color.gray, 40), text_size = size.tiny)
+        table.merge_cells(dash, 0, row, 1, row)
+        // =============================================================================
+        // ALERTS 
+        // =============================================================================
+alertcondition(buy_signal, 'PSAR Lab Long Signal', 'PSAR Laboratory: LONG signal on {{ticker}} {{interval}}')
+alertcondition(sell_signal, 'PSAR Lab Short Signal', 'PSAR Laboratory: SHORT signal on {{ticker}} {{interval}}')
+alertcondition(just_flipped, 'PSAR Lab Flip', 'PSAR Laboratory: Trend FLIPPED on {{ticker}} {{interval}}')
+alertcondition(trend == 1, 'PSAR Lab Bullish', 'PSAR Laboratory: Bullish trend on {{ticker}} {{interval}}')
+alertcondition(trend == -1, 'PSAR Lab Bearish', 'PSAR Laboratory: Bearish trend on {{ticker}} {{interval}}')
+alertcondition(af >= af_max * 0.9, 'PSAR Lab AF High', 'PSAR Laboratory: AF near maximum on {{ticker}} {{interval}}')
+// ╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+// ║                                                                                                               ║
+// ║                           DAFE PSAR LABORATORY - THEORY GUIDE                                                 ║
+// ║                                                                                                               ║
+// ╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+//
+// ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+// │ 1. THE PHYSICS OF ACCELERATION (Why Standard PSAR Fails)                                                      │
+// └───────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+//
+//   Standard PSAR uses a fixed acceleration step (0.02). This assumes price trends move at a constant rate
+//   of acceleration regardless of market conditions. This is physically impossible in liquid markets.
+//
+//   DAFE Logic: Trends behave like physical objects. They have inertia, friction, and momentum.
+//   • High Volatility = High Friction -> PSAR should accelerate slower to give price room to breathe.
+//   • Low Entropy (Order) = High Momentum -> PSAR should accelerate faster to lock in profit.
+//
+// ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+// │ 2. DAFE PROPRIETARY ALGORITHMS                                                                                │
+// └───────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+//
+//   A. DAFE KALMAN ESTIMATOR
+//      Instead of reacting to price, this algorithm PREDICTS the optimal AF. It treats price noise as
+//      "Measurement Error" and the true trend as the "Process State."
+//      Result: An AF that ignores wicks but sticks like glue to the true trend.
+//
+//   B. SHANNON ENTROPY AF
+//      Uses Information Theory to measure market disorder.
+//      • High Entropy (Chaos/Chop): The algorithm reduces acceleration to avoid false flips.
+//      • Low Entropy (Clean Trend): The algorithm maximizes acceleration to trail tight.
+//
+//   C. ULTIMATE CONSENSUS
+//      A "Voting Machine." It checks Efficiency Ratio, Volatility, ADX, and Structure simultaneously.
+//      The AF only increases if the majority of physics engines agree the trend is healthy.
+//
+//   D. HILBERT CYCLE AF
+//      Uses the Hilbert Transform to extract the dominant cycle period of the market.
+//      It synchronizes the PSAR acceleration with the natural heartbeat (phase) of the asset.
+//
+// ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+// │ 3. ADVANCED SIGNAL PROCESSING FILTERS                                                                         │
+// └───────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+//
+//   Most traders get stopped out by "Noise" (wicks that touch the PSAR but don't close beyond it).
+//   We solve this by filtering the PSAR line itself *before* calculation logic is applied.
+//
+//   • DAFE SPECTRAL LAGUERRE: A non-linear filter that uses volatility to "time travel."
+//     In high volatility, it lags slightly to allow for wicks. In low volatility, it syncs perfectly.
+//
+//   • DAFE NEURAL PROXY: Mimics the behavior of a JMA (Jurik Moving Average) without the lag.
+//     It uses a phase-shifted calculation to track price tips precisely.
+//
+// ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+// │ 4. TUNING & STRATEGY                                                                                          │
+// └───────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+//
+//   SCALPING (1m - 5m)
+//   • Algorithm: "Fractal Dimension AF" or "Volume-Momentum AF"
+//   • Filter: "DAFE Neural Proxy" (Length 5-8)
+//   • Settings: AF Start 0.02, Max 0.25
+//
+//   SWING TRADING (1H - 4H)
+//   • Algorithm: "Volatility-Scaled AF" or "DAFE Kalman Estimator"
+//   • Filter: "DAFE Spectral Laguerre" (Length 14)
+//   • Settings: AF Start 0.015, Max 0.15 (Gives trades room to run)
+//
+//   THE QUANTUM GLOW:
+//   The visualization features a "Glow" effect around the PSAR dots.
+//   • Dim Glow: Weak acceleration/Trend is stalling.
+//   • Bright Glow: High acceleration/Trend is powerful.
+//
+// ══════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+//                                         DAFE TRADING SYSTEMS
+//                                       "Quantifying the Unseen"
+// ══════════════════════════════════════════════════════════════════════════════════════════════════════════════════

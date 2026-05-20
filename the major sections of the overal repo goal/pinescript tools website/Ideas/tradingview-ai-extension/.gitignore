@@ -1,0 +1,21 @@
+# Extension files
+*.log
+.DS_Store
+Thumbs.db
+
+# Icons (if not committed)
+# icons/*.png
+
+# Node modules (if you add build tools later)
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+

@@ -1,0 +1,90 @@
+//@version=6
+indicator("CCI with Conditional Coloring", overlay=false)
+
+// Inputs
+sc = input.source(hlc3, 'source')
+L1 = input.int(6, title='l1', minval=1, maxval=500, step=1, tooltip='length1', group='length')
+L2 = input.int(14, title='l2', minval=1, maxval=500, step=1, tooltip='length2', group='length')
+L3 = input.int(28, title='l3', minval=1, maxval=500, step=1, tooltip='length3', group='length')
+L4 = input.int(56, title='l4', minval=1, maxval=500, step=1, tooltip='length4', group='length')
+bool c1diff()
+// CCI calculations
+c1 = ta.cci(sc, L1)
+c2 = ta.cci(sc, L2)
+c3 = ta.cci(sc, L3)
+c4 = ta.cci(sc, L4)
+
+
+
+
+// Optional: Plot zero line for reference
+z = plot(0  , "Zero Line", color=color.gray, linestyle=plot.linestyle_dotted )
+o =plot(100  , "Zero Line", color=color.gray, linestyle=plot.linestyle_dotted )
+no = plot(-100, "Zero Line", color=color.gray, linestyle=plot.linestyle_dotted )
+t = plot(250  , "Zero Line", color=color.gray, linestyle=plot.linestyle_dotted )
+nt = plot(-250  , "Zero Line", color=color.gray, linestyle=plot.linestyle_dotted )
+
+
+
+// Conditional color logic for c1
+c1Color = c1 > 0 and c1 > c1[2] ? #45a9d4 : 
+          c1 > 0 and c1 < c1[2] ? #455dd4af : 
+          c1 < 0 and c1 < c1[2] ? #d445b9 : 
+          c1 < 0 and c1 > c1[2] ? #d44577af : 
+          color.gray
+
+c2Color = c2 > 0 and c2 > c2[2] ? #1aa901 : 
+          c2 > 0 and c2 < c2[2] ? #00620b : 
+          c2 < 0 and c2 < c2[2] ? #50005c : 
+          c2 < 0 and c2 > c2[2] ? #d445cdaf : 
+          color.gray
+
+c3Color = c3 > 0 and c3 > c3[2] ? #ffd500 : 
+          c3 > 0 and c3 < c3[2] ? #d06f00 : 
+          c3 < 0 and c3 < c3[2] ? #c55353 : 
+          c3 < 0 and c3 > c3[2] ? #d7370f :
+         color.gray
+
+c4Color = c4 > 0 and c4 > c4[1] ? #ffffff:
+          c4 > 0 and c4 < c4[1] ? #ffffff:
+          //below 0 line
+          c4 < 0 and c4 < c4[1] ? #000000 :
+          c4 < 0 and c4 > c4[1] ? #000000 :
+          color.gray
+// Plot c1 with conditional coloring
+c4bg = plot(c4,  title='CCI4 back',color= c4 < 0 ? color.new(#000000, 0) : #ffffff , linewidth=2)
+c4p = plot(c4,'cci4', color=c4 > 0 ? color.new(#000000, 0) : #ffffff, linewidth=2 )
+fill(c4p, z, 100, 0, #ffffff, na , ' c4 fill top' )
+//fill(z, c4bg, 100, 0, #ffffff, na , ' c4 fill top' )
+//fill(c4p,c4bg, 0,-100, na,#ffffff, ' c4 bottom fill')
+// plot(c3,title='CCI3 back',color= color.new(#000000,60), linewidth=6)
+// plot(c3, 'cci3', color=c3Color, linewidth=2)
+
+plot(c2, title='CCI2 back',color= color.new(#000000,60), linewidth=6)
+c14 = plot(c2, 'cci2', color=c2Color, linewidth=2)
+
+// plot(c1, title='CCI1 back',color= color.new(#000000,60), linewidth=6)
+// turbo = plot(c1, 'cci1', color=c1Color, linewidth=2)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,77 @@
+a//@version=6
+indicator("Reverse Stochastic - Simple", shorttitle="RevStoch", overlay=true)
+
+// === INPUTS ===
+k_length = input.int(14, title="Stochastic %K Length", minval=1, maxval=100)
+d_length = input.int(3, title="Stochastic %D Length", minval=1, maxval=20)
+target_j = input.float(80.0, title="Target %J Value", minval=-50, maxval=150, step=5.0)
+
+// === CURRENT STOCHASTIC CALCULATION ===
+// Standard Stochastic calculation for reference
+k_percent = ta.stoch(close, high, low, k_length)
+d_percent = ta.sma(k_percent, d_length)
+j_percent = 3 * k_percent - 2 * d_percent
+
+// === REVERSE CALCULATION ===
+// Get the price range for the lookback period
+highest_high = ta.highest(high, k_length)
+lowest_low = ta.lowest(low, k_length)
+price_range = highest_high - lowest_low
+
+// Calculate what close price would give us the target %J
+// Simplified approach: assume %D stays roughly the same
+// %J = 3*%K - 2*%D, so %K = (%J + 2*%D) / 3
+target_k = (target_j + 2 * d_percent) / 3
+
+// Convert target %K back to price
+// %K = (close - lowest_low) / (highest_high - lowest_low) * 100
+// So: close = lowest_low + (%K/100) * (highest_high - lowest_low)
+required_close = price_range > 0 ? lowest_low + (target_k / 100) * price_range : close
+
+// Check if the required price is achievable (within current range)
+is_achievable = required_close >= lowest_low and required_close <= highest_high
+
+// === PLOTTING ===
+// Plot the required close price as a line
+plot(required_close, title="Required Close for Target %J", 
+     color=is_achievable ? color.orange : color.red, 
+     linewidth=2, style=plot.style_line)
+
+// Plot current price for reference
+plot(close, title="Current Close", color=color.white, linewidth=1)
+
+// Plot the range boundaries
+plot(highest_high, title="Period High", color=color.red, linewidth=1, style=plot.style_stepline)
+plot(lowest_low, title="Period Low", color=color.green, linewidth=1, style=plot.style_stepline)
+
+// Background color to show feasibility
+bgcolor(is_achievable ? color.new(color.green, 95) : color.new(color.red, 95))
+
+// === LABELS FOR KEY INFORMATION ===
+if barstate.islast
+    // Create label showing the required price
+    label.new(bar_index, required_close, 
+              text="Need: " + str.tostring(required_close, format.mintick) + 
+                   "\nFor %J: " + str.tostring(target_j, "#.#") + 
+                   "\nCurrent: " + str.tostring(close, format.mintick) + 
+                   "\nDiff: " + str.tostring(required_close - close, format.mintick),
+              style=label.style_label_left, 
+              color=is_achievable ? color.orange : color.red,
+              textcolor=color.white,
+              size=size.normal)
+
+// === ALERTS ===
+// Alert when price gets close to required level
+price_diff = math.abs(close - required_close)
+close_to_target = price_diff < (price_range * 0.01) // Within 1% of range
+alertcondition(close_to_target and is_achievable, 
+               title="Close to Target Price", 
+               message="Price is near required level: " + str.tostring(required_close, format.mintick) + 
+                      " for %J target: " + str.tostring(target_j))
+
+// Alert when target is achieved
+target_achieved = math.abs(j_percent - target_j) < 2.0 // Within 2 points of target
+alertcondition(target_achieved, 
+               title="Target %J Achieved", 
+               message="%J reached target: " + str.tostring(target_j) + 
+                      " (Current: " + str.tostring(j_percent, "#.##") + ")")

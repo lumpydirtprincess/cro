@@ -1,0 +1,11 @@
+# Local MESS and Archive
+MESS/
+deprecated_brain_dumps/
+misc debris/
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+env/
+.env

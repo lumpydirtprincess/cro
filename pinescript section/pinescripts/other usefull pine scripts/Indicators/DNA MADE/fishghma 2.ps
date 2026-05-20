@@ -1,0 +1,114 @@
+// The MIT License (MIT)
+// © mihakralj
+//@version=6
+indicator("Fisher Transform", "FISHER", overlay=false)
+
+//@function Calculates the Fisher Transform oscillator
+//@doc https://github.com/mihakralj/pinescript/blob/main/indicators/oscillators/fisher.md
+//@param source Source price (typically hl2)
+//@param period Lookback period for min/max normalization
+//@returns [fisher, signal] Fisher Transform value and signal line
+fisher(series float source, simple int period) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+    if period > 500
+        runtime.error("Period exceeds maximum of 500")
+
+    var float value = 0.0
+    var float fisher = 0.0
+    var float signal = 0.0
+
+    float highest = ta.highest(source, period)
+    float lowest = ta.lowest(source, period)
+
+    float price_range = highest - lowest
+    float normalized = price_range > 0 ? (source - lowest) / price_range : 0.5
+    normalized := 2.0 * normalized - 1.0
+
+    float alpha = 0.33
+    value := alpha * normalized + (1.0 - alpha) * value
+
+    value := math.max(-0.999, math.min(0.999, value))
+
+    fisher := 0.5 * math.log((1.0 + value) / (1.0 - value))
+
+    signal := alpha * fisher + (1.0 - alpha) * signal
+
+    [fisher, signal]
+
+// ---------- Main loop ----------
+
+i_period = input.int(10, "Period", minval=1, maxval=500)
+i_source = input.source(hl2, "Source")
+
+[fisher_line, signal_line] = fisher(i_source, i_period)
+
+plot(fisher_line, "Fisher", color=color.yellow, linewidth=2)
+plot(signal_line, "Signal", color=color.orange, linewidth=1)
+hline(0, "Zero", color=color.gray, linestyle=hline.style_dotted)
+hline(2, "Overbought", color=color.red, linestyle=hline.style_dashed)
+hline(-2, "Oversold", color=color.green, linestyle=hline.style_dashed)
+
+
+//@function Calculates WMA using circular buffer with O(1) complexity
+//@param source Series to calculate WMA from
+//@param period Lookback period
+//@returns WMA value
+wma_helper(series float source, simple int period) =>
+    var array<float> buffer = array.new_float(period, na)
+    var int head = 0
+    var float sum = 0.0
+    var float weighted_sum = 0.0
+    var int count = 0
+    var float norm = 0.0
+    
+    float oldest = array.get(buffer, head)
+    float current = nz(source)
+    
+    if not na(oldest)
+        float old_sum = sum
+        sum -= oldest
+        sum += current
+        weighted_sum := weighted_sum - old_sum + (period * current)
+    else
+        count += 1
+        sum += current
+        weighted_sum := weighted_sum + (count * current)
+        norm := count * (count + 1) * 0.5
+    
+    array.set(buffer, head, current)
+    head := (head + 1) % period
+    
+    weighted_sum / norm
+
+//@function Calculates HMA using optimized WMA helper function
+//@doc https://github.com/mihakralj/pinescript/blob/main/indicators/trends_FIR/hma.md
+//@param source Series to calculate HMA from
+//@param period Lookback period - FIR window size
+//@returns HMA value, calculates from first bar using available data
+//@optimized Uses three O(1) WMA calculations for combined O(1) complexity per bar
+hma(series float source, simple int period) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+    
+    int half_period = math.max(1, math.round(period / 2.0))
+    int sqrt_period = math.max(1, math.round(math.sqrt(period)))
+    
+    float wma_half = wma_helper(source, half_period)
+    float wma_full = wma_helper(source, period)
+    float diff = 2.0 * wma_half - wma_full
+    float hma_value = wma_helper(diff, sqrt_period)
+    
+    hma_value
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_source = input.source(close, "Source")
+
+// Calculation
+hma_value = hma(i_source, i_period)
+
+// Plot
+plot(hma_value, "HMA", color=color.yellow, linewidth=2)

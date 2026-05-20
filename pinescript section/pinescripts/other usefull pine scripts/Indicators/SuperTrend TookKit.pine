@@ -1,0 +1,116 @@
+// This Pine Script™ code is subject to the terms of the Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0) https://creativecommons.org/licenses/by-nc-sa/4.0/
+// © EliCobra
+
+//@version=6
+indicator('SuperTrend Toolkit', '[Ʌ] -‌ Super Kit', false)
+
+type bar
+	float o = na
+	float h = na
+	float l = na
+	float c = na
+
+type supertrend
+	float s = na
+	int d = na
+
+type alerts
+	bool s = false
+	bool b = false
+
+type prompt
+	string s = ''
+	bool c = false
+
+method notify(prompt p) =>
+    if p.c
+        alert(p.s, alert.freq_once_per_bar_close)
+
+method any(alerts a) =>
+    string s = switch 
+        a.s => 'Bearish Signal'
+        a.b => 'Bullish Signal'
+        => na
+
+    prompt.new(syminfo.ticker + ' Timeframe, ' + s, not na(s))
+
+method src(bar b, simple string src) =>
+    float x = switch src
+        'oc2' => math.avg(b.o, b.c)
+        'hl2' => math.avg(b.h, b.l)
+        'hlc3' => math.avg(b.h, b.l, b.c)
+        'ohlc4' => math.avg(b.o, b.h, b.l, b.c)
+        'hlcc4' => math.avg(b.h, b.l, b.c, b.c)
+
+    x
+
+method atr(bar b, simple int len) =>
+    field_0 = b.h
+    field_1 = b.c
+    field_2 = b.c
+    float tr = na(field_0[1]) ? b.h - b.l : math.max(math.max(b.h - b.l, math.abs(b.h - field_1[1])), math.abs(b.l - field_2[1]))
+
+    len == 1 ? tr : ta.rma(tr, len)
+
+method st(bar b, simple float factor, simple int len) =>
+    float atr = b.atr(len)
+    float up = b.src('hl2') + factor * atr
+    field_3 = b.c
+    up := up < nz(up[1]) or field_3[1] > nz(up[1]) ? up : nz(up[1])
+    float dn = b.src('hl2') - factor * atr
+    field_4 = b.c
+    dn := dn > nz(dn[1]) or field_4[1] < nz(dn[1]) ? dn : nz(dn[1])
+
+    float st = na
+    int dir = na
+    dir := switch 
+        na(atr[1]) => 1
+        st[1] == nz(up[1]) => 
+    	    dir := b.c > up ? -1 : +1
+    	    dir
+        => 
+    	    dir := b.c < dn ? +1 : -1
+    	    dir
+    st := dir == -1 ? dn : up
+    supertrend.new(st, dir)
+
+const string tp = 'Choose an indicator source of which to base the SuperTrend on.'
+
+
+const string g1 = 'SuperTrend Settings'
+const string gu = 'UI Options'
+src = input.source(close, 'Source', tp, group = g1)
+len = input.int(10, 'Length', inline = '1', group = g1)
+mlt = input.float(5., 'Factor', 1, 20, 0.5, inline = '1', group = g1)
+clbl = input.bool(false, 'Contrarian Signals', group = gu)
+colu = input.color(#008cff, 'Colors', inline = '2', group = gu)
+cold = input.color(#ff4800, '', inline = '2', group = gu)
+bar b = bar.new(nz(src[1]), math.max(nz(src[1]), src), math.min(nz(src[1]), src), src)
+
+
+float tr = b.atr(len)
+supertrend st = b.st(mlt, len)
+color cst = switch st.d
+
+
+    +1 => cold
+    -1 => colu
+t = plot(st.d > 0 ? st.s : na, 'Bear ST', cst, 1, plot.style_linebr)
+
+d = plot(st.d < 0 ? st.s : na, 'Bull ST', cst, 1, plot.style_linebr)
+i = plot(st.d, 'Direction', display = display.none)
+c = plot(b.src('oc2'), 'Filler', display = display.none)
+fill(t, c, color.new(cold, 90))
+
+fill(d, c, color.new(colu, 90))
+alerts a = alerts.new(math.sign(ta.change(st.d)) == 1, math.sign(ta.change(st.d)) == -1)
+
+plotshape(clbl and a.s ? st.s + tr / 3 : na, 'Sell Signal', shape.labeldown, location.absolute, color.new(cold, 60), 0, '𝓢', chart.fg_color)
+
+plotshape(clbl and a.b ? st.s - tr / 3 : na, 'Buy Signal', shape.labelup, location.absolute, color.new(colu, 60), 0, '𝓑', chart.fg_color)
+alertcondition(a.s, 'Down Trend', 'Bearish Signal')
+
+
+alertcondition(a.b, 'Up   Trend', 'Bullish Signal')
+a.any().notify()
+

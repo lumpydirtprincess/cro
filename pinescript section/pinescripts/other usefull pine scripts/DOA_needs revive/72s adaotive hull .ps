@@ -1,0 +1,52 @@
+//@version=6
+indicator('72s: Adaptive Hull Moving Average+', shorttitle = '72s: Adaptive HMA+', overlay = true)
+//Optional Inputs
+charger = input.string('Volatility', title = 'Choose which charger to adapt to:', options = ['Volatility', 'Volume'])
+src = input(close, title = 'Source:')
+minLength = input(172, title = 'Minimum period:')
+maxLength = input(233, title = 'Maximum period:')
+adaptPct = 0.03141 //input(3.141, minval = 0, maxval = 100, title="Adapting Percentage:") / 100.0
+var float dynamicLength = math.avg(minLength, maxLength)
+plugged = charger == 'Volume' ? volBreak : highVolatility
+dynamicLength := plugged ? math.max(minLength, dynamicLength * (1 - adaptPct)) : math.min(maxLength, dynamicLength * (1 + adaptPct))
+
+//Slope calculation to determine whether market is in trend, or in consolidation or choppy, or might about to change current trend
+slope_period = 34
+range_1 = 25
+pi = math.atan(1) * 4
+highestHigh = ta.highest(slope_period)
+lowestLow = ta.lowest(slope_period)
+slope_range = range_1 / (highestHigh - lowestLow) * lowestLow
+calcslope(_ma) =>
+    dt = (_ma[2] - _ma) / src * slope_range
+    c = math.sqrt(1 + dt * dt)
+    xAngle = math.round(180 * math.acos(1 / c) / pi)
+    maAngle = dt > 0 ? -xAngle : xAngle
+    maAngle
+
+//MA coloring to mark market dynamics 
+dynColor(_ma, _col1a, _col1b, _col2a, _col2b, _col0) =>
+    slope = calcslope(_ma)
+    slope >= flat ? plugged ? _col1a : _col1b : slope < flat and slope > -flat ? _col0 : slope <= -flat ? plugged ? _col2a : _col2b : _col0
+
+//Adaptive HMA 
+xhma(_src, _length) =>
+    _return = ta.wma(2 * ta.wma(_src, _length / 2) - ta.wma(_src, _length), math.floor(math.sqrt(_length)))
+    _return
+
+dynamicHMA = xhma(src, int(dynamicLength)) //<--Batman - Our main xHMA+
+minorHMA = xhma(src, int(minorLength)) //<--Robin  - Faster minor xHMA+ (Optional). Can be use to assist for 
+//            faster entry, slower exit point, or pullbacks info too.
+
+//Plot
+plot(dynamicHMA, 'Dynamic HMA+', dynColor(dynamicHMA, #6fbf73, #c0f5ae, #eb4d5c, #f2b1d4, color.yellow), 3)
+plot(showMinor ? minorHMA : na, 'minor HMA+', dynColor(minorHMA, #6fbf73, #c0f5ae, #eb4d5c, #f2b1d4, color.yellow), 1)
+
+//Backgroud coloring
+notgreat = calcslope(dynamicHMA) < flat and calcslope(dynamicHMA) > -flat
+bgcolor(useBg ? plugged ? na : notgreat ? #757779 : #afb4b9 : na)
+
+Comparative study
+staticHMA = hma(close, 200)
+plot(staticHMA,  "Static HMA")
+plotchar(dynamicLength, "dynamicLengthgth", "", location.top) //check output the calculated Dynamic Length in the Data Window.

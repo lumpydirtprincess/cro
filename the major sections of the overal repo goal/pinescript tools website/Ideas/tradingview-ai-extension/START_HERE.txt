@@ -1,0 +1,64 @@
+═══════════════════════════════════════════════════════════════
+  TRADINGVIEW AI EXTENSION - START HERE
+═══════════════════════════════════════════════════════════════
+
+NEVER USED A BROWSER EXTENSION BEFORE?
+───────────────────────────────────────
+
+Read this file first, then choose a guide:
+
+1. QUICK_START.md      → Fast 5-minute setup (recommended)
+2. STEP_BY_STEP.md    → Detailed instructions with explanations
+
+═══════════════════════════════════════════════════════════════
+
+WHAT YOU NEED TO DO:
+────────────────────
+
+STEP 1: Create 3 icon files (5 minutes)
+   → See QUICK_START.md for easiest methods
+   → Put them in the "icons" folder
+
+STEP 2: Load extension in Chrome/Brave (2 minutes)
+   → Go to chrome://extensions/
+   → Turn on "Developer mode"
+   → Click "Load unpacked"
+   → Select this folder
+
+STEP 3: Get Anthropic API key (5 minutes)
+   → Go to https://console.anthropic.com/
+   → Sign up, create API key
+   → Add $5-10 in credits
+
+STEP 4: Configure extension (1 minute)
+   → Click extension icon
+   → Paste API key
+   → Click "Save"
+
+STEP 5: Test on TradingView (2 minutes)
+   → Go to TradingView.com
+   → Open any chart
+   → Look for "🤖 Analyze Chart" button
+
+═══════════════════════════════════════════════════════════════
+
+QUICK LINKS:
+────────────
+
+📖 QUICK_START.md          → Start here! (5 min setup)
+📖 STEP_BY_STEP.md         → Detailed guide
+📖 README.md               → Full documentation
+📖 TROUBLESHOOTING.md      → If something breaks
+📖 INSTALLATION.md         → Alternative installation methods
+
+═══════════════════════════════════════════════════════════════
+
+NEED HELP?
+──────────
+
+1. Check TROUBLESHOOTING.md
+2. Look at browser console (F12) for errors
+3. Make sure all files are in correct folders
+
+═══════════════════════════════════════════════════════════════
+

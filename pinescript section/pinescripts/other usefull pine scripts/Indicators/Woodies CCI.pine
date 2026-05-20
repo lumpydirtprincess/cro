@@ -1,0 +1,61 @@
+//@version=6
+indicator(title="Woodies CCI", timeframe="", timeframe_gaps=true)
+cciTurboLength = input.int(title="CCI Turbo Length", defval=6, minval=3, maxval=14)
+cci14Length = input.int(title="CCI 14 Length", defval=14, minval=7, maxval=20)
+L3 = input.int(28, title='l3', minval=1, maxval=500, step=1, tooltip='length3', group='length')
+L4 = input.int(56, title='l4', minval=1, maxval=500, step=1, tooltip='length4', group='length')
+
+sc = input.source(hlc3, 'source')
+cciTurbo = ta.cci(sc, cciTurboLength)
+cci14 = ta.cci(sc , cci14Length)
+last5IsDown = cci14[5] < 0 and cci14[4] < 0 and cci14[3] < 0 and cci14[2] < 0 and cci14[1] < 0
+last5IsUp = cci14[5] m > 0 and cci14[4] > 0 and cci14[3] > 0 and cci14[2] > 0 and cci14[1] > 0
+histogramColor = last5IsUp ? #009688 : last5IsDown ? #F44336 : cci14 < 0 ? #009688 : #F44336
+c3 = ta.cci(sc, L3)
+c4 = ta.cci(sc, L4)
+
+
+// Conditional color logic for c1
+c1Color = c1 > 0 and c1 > c1[2] ? #45a9d4 : 
+          c1 > 0 and c1 < c1[2] ? #455dd4af : 
+          c1 < 0 and c1 < c1[2] ? #d445b9 : 
+          c1 < 0 and c1 > c1[2] ? #d44577af : 
+          color.gray
+
+c2Color = c2 > 0 and c2 > c2[2] ? #1aa901 : 
+          c2 > 0 and c2 < c2[2] ? #00620b : 
+          c2 < 0 and c2 < c2[2] ? #50005c : 
+          c2 < 0 and c2 > c2[2] ? #d445cdaf : 
+          color.gray
+
+c3Color = c3 > 0 and c3 > c3[2] ? #ffd500 : 
+          c3 > 0 and c3 < c3[2] ? #d06f00 : 
+          c3 < 0 and c3 < c3[2] ? #be1d1d : 
+          c3 < 0 and c3 > c3[2] ? rgb(255, 0, 0)
+
+
+c4Color = c4 > 0 and c4 > c4[2] ? #fafafa :
+          c4 > 0 and c4 < c4[2] ? #666666 :
+          c4 < 0 and c4 < c4[2] ? #000000 :
+          c4 < 0 and c4 > c4[2] ? #444444 :
+          color.gray
+
+          // Plot c1 with conditional coloring
+plot(c4,  title='CCI4 back',color= color.new(#000000,60), linewidth=6)
+plot(c4,'cci4', color=c4Color, linewidth=2)
+
+plot(c3,title='CCI3 back',color= color.new(#000000,60), linewidth=6)
+plot(c3, 'cci3', color=c3Color, linewidth=2)
+
+
+
+
+plot(cci14, title="CCI Turbo Histogram", color=histogramColor, style=plot.style_histogram)
+plot(cciTurbo, title="CCI Turbo", color=#009688 , style=plot.style_line)
+plot(cci14, title="CCI 14", color= #F44336, style=plot.style_line)
+plot(0, title="Zero Line", color=#787B86, linestyle=plot.style_solid)
+plot(100, title="Hundred Line", color=#787B86, linestyle=plot.style_dotted)
+plot(-100, title="Minus Line", color=#787B86, linestyle= plot.style_dotted)
+
+
+ 

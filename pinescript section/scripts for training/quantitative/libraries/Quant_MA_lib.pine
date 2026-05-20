@@ -1,0 +1,4427 @@
+//@version=6
+library("Quant_MA_lib", overlay=false)
+
+// ============================================================
+// IIR MOVING AVERAGES
+// ============================================================
+
+//@function Calculates ADXVMA using ADX as adaptive smoothing constant for a variable moving average
+//@param source Series to calculate ADXVMA from
+//@param period Length of the ADX calculation period
+//@returns ADXVMA value that adapts smoothing based on trend strength measured by ADX
+//@optimized O(1) per bar using Wilder's RMA with warmup compensation for all smoothed components
+export adxvma(series float source, simple int period) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+    float alpha = 1.0 / float(period)
+    float beta = 1.0 - alpha
+    float EPSILON = 1e-10
+
+
+    var float raw_tr = 0.0
+    var float raw_pdm = 0.0
+    var float raw_ndm = 0.0
+    var float raw_dx = 0.0
+    var float e_tr = 1.0
+    var float e_pdm = 1.0
+    var float e_ndm = 1.0
+    var float e_dx = 1.0
+    var float result = na
+
+    if not na(source)
+        float prev_close = nz(close[1], close)
+        float prev_high = nz(high[1], high)
+        float prev_low = nz(low[1], low)
+
+        float tr = math.max(high - low, math.max(math.abs(high - prev_close), math.abs(low - prev_close)))
+        float up_move = high - prev_high
+        float down_move = prev_low - low
+        float plus_dm = up_move > down_move and up_move > 0 ? up_move : 0.0
+        float minus_dm = down_move > up_move and down_move > 0 ? down_move : 0.0
+
+        raw_tr := raw_tr * beta + tr * alpha
+        raw_pdm := raw_pdm * beta + plus_dm * alpha
+        raw_ndm := raw_ndm * beta + minus_dm * alpha
+        e_tr *= beta
+        e_pdm *= beta
+        e_ndm *= beta
+
+        float comp_tr = e_tr > EPSILON ? raw_tr / (1.0 - e_tr) : raw_tr
+        float comp_pdm = e_pdm > EPSILON ? raw_pdm / (1.0 - e_pdm) : raw_pdm
+        float comp_ndm = e_ndm > EPSILON ? raw_ndm / (1.0 - e_ndm) : raw_ndm
+
+        float plus_di = comp_tr != 0.0 ? 100.0 * comp_pdm / comp_tr : 0.0
+        float minus_di = comp_tr != 0.0 ? 100.0 * comp_ndm / comp_tr : 0.0
+        float di_sum = plus_di + minus_di
+        float dx = di_sum != 0.0 ? 100.0 * math.abs(plus_di - minus_di) / di_sum : 0.0
+
+        raw_dx := raw_dx * beta + dx * alpha
+        e_dx *= beta
+        float adx_val = e_dx > EPSILON ? raw_dx / (1.0 - e_dx) : raw_dx
+
+        float sc = math.max(0.0, math.min(adx_val / 100.0, 1.0))
+        result := na(result) ? source : result + sc * (source - result)
+    result
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(14, "Period", minval=1)
+i_source = input.source(close, "Source")
+
+// Calculation
+adxvma_value = adxvma(i_source, i_period)
+
+// Plot
+// plot(adxvma_value, "ADXVMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates Ahrens Moving Average using midpoint correction between current and lagged MA values
+//@param source Series to smooth
+//@param period Lookback length for the lag component and smoothing divisor
+//@returns Ahrens MA value — a recursive IIR filter that adjusts toward source minus the midpoint of its current and lagged states
+//@algorithm ahma = ahma[1] + (source - (ahma[1] + ahma[period]) / 2) / period
+//@reference Richard D. Ahrens, "Build A Better Moving Average" (Stocks & Commodities V.31:11, October 2013)
+//@optimized O(1) per bar via circular buffer for lagged MA state; O(period) memory for the ring buffer
+export ahrens(series float source, simple int period) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+
+
+    // Circular buffer to store past ahma values for period-bar lookback
+    var array<float> buffer = array.new_float(period, na)
+    var int head = 0
+    var float result = na
+
+    if not na(source)
+        float prev = nz(result, source)
+        float lagged = nz(array.get(buffer, head), source)
+
+        // Ahrens formula: ahma = prev + (source - midpoint(prev, lagged)) / period
+        float midpoint = (prev + lagged) * 0.5
+        result := prev + (source - midpoint) / float(period)
+
+        // Store current result in circular buffer and advance head
+        array.set(buffer, head, result)
+        head := (head + 1) % period
+    result
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(9, "Period", minval=1)
+i_source = input.source(close, "Source")
+
+// Calculation
+ahrens_value = ahrens(i_source, i_period)
+
+// Plot
+// plot(ahrens_value, "AHRENS", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates the Coral trend filter using 6 cascaded EMAs with polynomial combination
+//@param source Series to smooth
+//@param period Smoothing period (determines EMA alpha via di = (period-1)/2 + 1)
+//@param cd Constant D — controls the polynomial weighting of cascaded EMAs (default 0.4)
+//@returns Coral filter value from first bar
+//@description The Coral filter (LazyBear, adapted from MT4) chains 6 EMA passes and linearly
+//  combines stages 3-6 using polynomial coefficients derived from 'cd'. This creates a smooth,
+//  low-lag trend line. Structure: 6× cascaded EMA → polynomial combination.
+//  di  = (period - 1) / 2 + 1
+//  c1  = 2 / (di + 1)                     (EMA alpha)
+//  c2  = 1 - c1                            (EMA complement)
+//  c3  = 3*(cd² + cd³)
+//  c4  = -3*(2*cd² + cd + cd³)
+//  c5  = 3*cd + 1 + cd³ + 3*cd²
+//  bfr = -cd³*i6 + c3*i5 + c4*i4 + c5*i3
+//  Note: c3 + c4 + c5 + (-cd³) = 1 (unity DC gain).
+export coral(series float source, simple int period, simple float cd = 0.4) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+    float di = (period - 1.0) / 2.0 + 1.0
+    float c1 = 2.0 / (di + 1.0)
+    float c2 = 1.0 - c1
+
+
+    // Polynomial combination coefficients from Constant D
+    float cd2 = cd * cd
+    float cd3 = cd2 * cd
+    float c3 = 3.0 * (cd2 + cd3)
+    float c4 = -3.0 * (2.0 * cd2 + cd + cd3)
+    float c5 = 3.0 * cd + 1.0 + cd3 + 3.0 * cd2
+
+    // 6 cascaded EMAs
+    var float i1 = 0.0
+    var float i2 = 0.0
+    var float i3 = 0.0
+    var float i4 = 0.0
+    var float i5 = 0.0
+    var float i6 = 0.0
+
+    i1 := c1 * source + c2 * i1
+    i2 := c1 * i1 + c2 * i2
+    i3 := c1 * i2 + c2 * i3
+    i4 := c1 * i3 + c2 * i4
+    i5 := c1 * i4 + c2 * i5
+    i6 := c1 * i5 + c2 * i6
+
+    // Polynomial combination of stages 3-6
+    float bfr = -cd3 * i6 + c3 * i5 + c4 * i4 + c5 * i3
+    bfr
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(21, "Smoothing Period", minval=1)
+i_cd     = input.float(0.4, "Constant D", minval=0, maxval=1, step=0.01)
+i_source = input.source(close, "Source")
+
+// Calculation
+coral_value = coral(i_source, period=i_period, cd=i_cd)
+
+// Plot
+// plot(coral_value, "CORAL", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates Ehlers Decycler by subtracting a 2-pole Butterworth high-pass filter from price
+//@param source Series to calculate Decycler from
+//@param period Cutoff period for the high-pass filter (>= 1)
+//@returns Decycler value (source minus high-pass filtered component)
+//@optimized Uses 2-pole Butterworth HP with O(1) complexity per bar
+export decycler(series float source, simple int period) =>
+    if period <= 0
+        runtime.error("Period must be positive")
+
+
+    float src = na(source) ? 0.0 : source
+
+    // Butterworth 2-pole HP coefficient: alpha = (cos(x) + sin(x) - 1) / cos(x)
+    // where x = 0.707 * 2pi / period
+    float arg = 0.707 * 2.0 * math.pi / period
+    float alpha = (math.cos(arg) + math.sin(arg) - 1.0) / math.cos(arg)
+    float omah = 1.0 - alpha * 0.5
+    float oma = 1.0 - alpha
+    float a1 = omah * omah
+    float b1 = 2.0 * oma
+    float c1 = -(oma * oma)
+
+    // 2-pole HP: HP[n] = a1*(x - 2*x[1] + x[2]) + b1*HP[1] + c1*HP[2]
+    float diff_src = nz(src) - 2.0 * nz(src[1]) + nz(src[2])
+
+    var float hp = 0.0
+    var float hp1 = 0.0
+
+    float new_hp = bar_index < 2 ? 0.0 : a1 * diff_src + b1 * hp + c1 * hp1
+
+    hp1 := hp
+    hp := new_hp
+
+    // Decycler = price - high-pass
+    na(source) ? na : src - new_hp
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(60, "Period", minval=1, tooltip="Cutoff period for the high-pass filter")
+i_source = input.source(close, "Source")
+
+// Calculation
+decycler_value = decycler(i_source, i_period)
+
+// Plot
+// plot(decycler_value, "DECYCLER", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates DEMA using double exponential smoothing with compensator
+//@param source Series to calculate DEMA from
+//@param period Lookback period for DEMA calculation
+//@param alpha Optional smoothing factor (overrides period if provided)
+//@returns DEMA value from first bar with proper compensation
+//@optimized Uses exponential warmup compensator on both EMA stages for O(1) complexity
+export dema(series float source, simple int period=0, simple float alpha=0) =>
+    if alpha <= 0 and period <= 0
+        runtime.error("Alpha or period must be provided")
+    float a = alpha > 0 ? alpha : 2.0 / (period + 1)
+    float beta = 1.0 - a
+    var bool warmup = true
+    var float e = 1.0
+    var float ema1_raw = 0.0
+    var float ema2_raw = 0.0
+    var float ema1 = source
+    var float ema2 = source
+    ema1_raw := a * (source - ema1_raw) + ema1_raw
+    if warmup
+        e *= beta
+        float c = 1.0 / (1.0 - e)
+        ema1 := c * ema1_raw
+        ema2_raw := a * (ema1 - ema2_raw) + ema2_raw
+        ema2 := c * ema2_raw
+        warmup := e > 1e-10
+    else
+        ema1 := ema1_raw
+        ema2_raw := a * (ema1 - ema2_raw) + ema2_raw
+        ema2 := ema2_raw
+    2 * ema1 - ema2
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_source = input.source(close, "Source")
+
+// Calculation
+dema_value = dema(i_source, period=i_period)
+
+// Plot
+// plot(dema_value, "DEMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates DSMA using standard deviation to scale the averaging factor
+//@param source Series to calculate DSMA from
+//@param period Length of the lookback period for both average and deviation calculation
+//@param scaleFactor Combined scaling/smoothing factor (0.01-0.9)
+//@returns DSMA value that adapts to market volatility through deviation scaling
+//@optimized Uses circular buffer for RMS calculation and adaptive alpha for O(1) complexity
+export dsma(series float source, simple int period, simple float scaleFactor=0.5) =>
+    float a1 = math.exp(-1.414 * math.pi / (period * 0.5))
+    float b1 = 2.0 * a1 * math.cos(1.414 * math.pi / (period * 0.5))
+    float c1 = 1.0 - b1 + (a1 * a1)
+    float c1Half = c1 * 0.5
+    float periodRecip = 1.0 / period
+    float scaleAdjustment = scaleFactor * 5.0 * periodRecip
+    var float result = na
+    var float filt = 0.0
+    var float filt1 = 0.0
+    var float filt2 = 0.0
+    var float zeros1 = 0.0
+    var float sumSquared = 0.0
+    var array<float> filtSquared = array.new_float(period, 0.0)
+    var int bufferIndex = 0
+    if na(source)
+        result
+    else
+        if na(result)
+            result := source
+        else
+            float zeros = source - result
+            filt := c1Half * (zeros + zeros1) + b1 * filt1 - (a1 * a1) * filt2
+            float filtSq = filt * filt
+            sumSquared := sumSquared + filtSq - array.get(filtSquared, bufferIndex)
+            array.set(filtSquared, bufferIndex, filtSq)
+            bufferIndex := (bufferIndex + 1) % period
+            float rms = math.sqrt(math.max(sumSquared * periodRecip, 1e-10))
+            float alpha = math.min(scaleAdjustment * math.abs(filt / rms), 1.0)
+            result := alpha * source + (1 - alpha) * result
+            zeros1 := zeros
+            filt2 := filt1
+            filt1 := filt
+        result
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_source = input.source(close, "Source")
+i_period = input.int(25, "Period", minval=2)
+i_scale = input.float(0.9, "Scale Factor", minval=0.01, maxval=0.9, step=0.01)
+
+// Calculation
+dsma_value = dsma(i_source, i_period, i_scale)
+
+// Plot
+// plot(dsma_value, "DSMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates EMA using exponential smoothing with compensator
+//@param source Series to calculate EMA from
+//@param period Lookback period for EMA calculation
+//@param alpha Optional smoothing factor (overrides period if provided)
+//@returns EMA value from first bar with proper compensation
+//@optimized Uses exponential warmup compensator for O(1) complexity and valid output from bar 1
+export ema(series float source, simple int period=0, simple float alpha=0) =>
+    if alpha <= 0 and period <= 0
+        runtime.error("Alpha or period must be provided")
+    float a = alpha > 0 ? alpha : 2.0 / (period + 1)
+    float beta = 1.0 - a
+    var bool warmup = true
+    var float e = 1.0
+    var float ema = 0.0
+    var float result = source
+    ema := a * (source - ema) + ema
+    if warmup
+        e *= beta
+        float c = 1.0 / (1.0 - e)
+        result := c * ema
+        warmup := e > 1e-10
+    else
+        result := ema
+    result
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_source = input.source(close, "Source")
+
+// Calculation
+ema_value = ema(i_source, period=i_period)
+
+// Plot
+// plot(ema_value, "EMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates FRAMA using fractal dimension to determine the optimal alpha
+//@param source Series to calculate FRAMA from
+//@param period Number of bars used in the calculation
+//@returns FRAMA value with fractal-based adaptive smoothing
+//@optimized Uses fractal dimension calculation for adaptive alpha, achieving O(n) per bar due to lookback requirements
+export frama(series float src, simple int period) =>
+    int p = math.max(2, period)
+    int p_adj = p % 2 == 0 ? p : p + 1
+    int i_h_p = int(p_adj / 2)
+    float n1 = na
+    float n2 = na
+    float n3 = na
+    bool data_available = bar_index >= (p_adj - 1) and not na(src[p_adj - 1])
+    if data_available
+        float hh1 = src
+        float ll1 = src
+        for i = 1 to i_h_p - 1
+            float val = src[i]
+            if not na(val)
+                hh1 := math.max(hh1, val)
+                ll1 := math.min(ll1, val)
+        float hh2_calc = src[i_h_p]
+        float ll2_calc = src[i_h_p]
+        bool second_half_na = na(hh2_calc)
+        if not second_half_na
+            for i = i_h_p + 1 to p_adj - 1
+                float val = src[i]
+                if not na(val)
+                    hh2_calc := math.max(hh2_calc, val)
+                    ll2_calc := math.min(ll2_calc, val)
+                else
+                    second_half_na := true
+                    break
+        float hh3 = src
+        float ll3 = src
+        for i = 1 to p_adj - 1
+            float val = src[i]
+            if not na(val)
+                hh3 := math.max(hh3, val)
+                ll3 := math.min(ll3, val)
+        if not na(hh1) and not na(ll1) and i_h_p > 0
+            n1 := (hh1 - ll1) / i_h_p
+        if not second_half_na and i_h_p > 0
+            n2 := (hh2_calc - ll2_calc) / i_h_p
+        if not na(hh3) and not na(ll3) and p_adj > 0
+            n3 := (hh3 - ll3) / p_adj
+    var float result = na
+    float alpha = 1.0
+    if n1 > 0 and n2 > 0 and n3 > 0
+        float dimen = (math.log(n1 + n2) - math.log(n3)) / math.log(2.0)
+        alpha := math.exp(-4.6 * (dimen - 1.0))
+        alpha := math.max(0.01, math.min(1.0, alpha))
+    if not na(src)
+        float prev_f = nz(result[1], src)
+        result := alpha * src + (1.0 - alpha) * prev_f
+    else
+        result := na
+    data_available ? result : na
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(16, "Period", minval=2)
+i_source = input.source(close, "Source")
+
+// Calculation
+frama_value = frama(i_source, i_period)
+
+// Plot
+// plot(frama_value, "FRAMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Computes Generalized DEMA — extends standard DEMA with a tunable volume factor
+//          that controls the aggressiveness of lag compensation.
+//          GDEMA = (1 + v) * EMA1 - v * EMA2, where EMA2 = EMA(EMA1).
+//          When v=1 → standard DEMA; v=0 → plain EMA; v>1 → more aggressive lag removal.
+//@param source Series to analyze
+//@param period Lookback period for both EMA stages
+//@param vfactor Volume/gain factor controlling lag compensation aggressiveness
+//@returns Generalized DEMA value from first bar with proper warmup compensation
+//@reference Patrick G. Mulloy, "Smoothing Data with Faster Moving Averages" (TASC, Feb 1994)
+//@optimized O(1) per bar; two cascaded EMA states with shared warmup compensator
+export gdema(series float source, simple int period, simple float vfactor) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+
+
+    float a = 2.0 / (period + 1)
+    float beta = 1.0 - a
+
+    var bool warmup = true
+    var float e = 1.0
+    var float ema1_raw = 0.0
+    var float ema2_raw = 0.0
+    var float ema1 = source
+    var float ema2 = source
+
+    ema1_raw := a * (source - ema1_raw) + ema1_raw
+
+    if warmup
+        e *= beta
+        float c = 1.0 / (1.0 - e)
+        ema1 := c * ema1_raw
+        ema2_raw := a * (ema1 - ema2_raw) + ema2_raw
+        ema2 := c * ema2_raw
+        warmup := e > 1e-10
+    else
+        ema1 := ema1_raw
+        ema2_raw := a * (ema1 - ema2_raw) + ema2_raw
+        ema2 := ema2_raw
+
+    // Generalized DEMA: (1 + v) * EMA1 - v * EMA2
+    // v=0 → EMA, v=1 → standard DEMA, v>1 → more lag reduction (more overshoot)
+    (1.0 + vfactor) * ema1 - vfactor * ema2
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period  = input.int(10, "Period", minval=1)
+i_vfactor = input.float(1.0, "Volume Factor (v)", minval=0.0, maxval=3.0, step=0.1,
+     tooltip="0=EMA, 1=standard DEMA, >1=more aggressive lag removal")
+i_source  = input.source(close, "Source")
+
+// Calculation
+gdema_value = gdema(i_source, i_period, i_vfactor)
+
+// Plot
+// plot(gdema_value, "GDEMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates the Hilbert Transform Instantaneous Trendline (HTIT)
+//@param source Series to calculate HTIT from
+//@returns HTIT value using Hilbert Transform with adaptive period estimation
+//@optimized Uses Hilbert Transform quadrature components for O(1) complexity per bar
+export htit(series float source) =>
+    var float price = na
+    var float smooth = na
+    var float detrender = 0.0
+    var float I1 = 0.0
+    var float Q1 = 0.0
+    var float I2 = 0.0
+    var float Q2 = 0.0
+    var float Re = 0.0
+    var float Im = 0.0
+    var float periodEst = 10.0
+    var float iTrend = na
+    var float iTrend1 = na
+    var float iTrend2 = na
+    float result = na
+    price := (4 * source + 3 * source[1] + 2 * source[2] + source[3]) / 10
+    smooth := (4 * price + 3 * price[1] + 2 * price[2] + price[3]) / 10
+    float padAdj = 0.075 * periodEst + 0.54
+    detrender := (0.0962 * smooth + 0.5769 * smooth[2] - 0.5769 * smooth[4] - 0.0962 * smooth[6]) * padAdj
+    I1 := nz(detrender[3])
+    Q1 := (0.0962 * detrender + 0.5769 * detrender[2] - 0.5769 * detrender[4] - 0.0962 * detrender[6]) * padAdj
+    float jI = (0.0962 * I1 + 0.5769 * I1[2] - 0.5769 * I1[4] - 0.0962 * I1[6]) * padAdj
+    float jQ = (0.0962 * Q1 + 0.5769 * Q1[2] - 0.5769 * Q1[4] - 0.0962 * Q1[6]) * padAdj
+    I2 := 0.2 * (I1 - jQ) + 0.8 * nz(I2[1])
+    Q2 := 0.2 * (Q1 + jI) + 0.8 * nz(Q2[1])
+    Re := 0.2 * (I2 * nz(I2[1]) + Q2 * nz(Q2[1])) + 0.8 * nz(Re[1])
+    Im := 0.2 * (I2 * nz(Q2[1]) - Q2 * nz(I2[1])) + 0.8 * nz(Im[1])
+    float newP = Im != 0 and Re != 0 ? 2 * math.pi / math.atan(Im / Re) : periodEst
+    periodEst := math.max(6, math.min(50, 0.2 * newP + 0.8 * periodEst))
+    float angle = I1 != 0 ? math.atan(Q1 / I1) : math.pi / 2 * math.sign(Q1)
+    angle += I1 < 0 ? math.pi : Q1 < 0 and I1 > 0 ? 2 * math.pi : 0
+    angle := angle % (2 * math.pi)
+    float trendPower = math.sqrt(I1 * I1 + Q1 * Q1)
+    float newITrendComponent = smooth + 0.07 * trendPower * math.sin(angle)
+    float currentITrend2 = nz(iTrend1[1], smooth)
+    float currentITrend1 = nz(iTrend[1], smooth)
+    float currentITrend = 0.9 * newITrendComponent + 1.1 * currentITrend1 - 1.0 * currentITrend2
+    iTrend2 := currentITrend1
+    iTrend1 := currentITrend
+    iTrend := currentITrend
+    result := currentITrend
+    result
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_source = input.source(close, "Source")
+
+// Calculation
+htit_value = htit(i_source)
+
+// Plot
+// plot(htit_value, "HTIT", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates Holt EMA using double exponential smoothing (level + trend)
+//@param source Series to smooth
+//@param period Lookback period (determines alpha = 2/(period+1))
+//@param gamma Trend smoothing factor (0..1). Default: same as alpha
+//@returns Holt EMA value (level + trend) from first bar
+//@description Holt's (1957) double exponential smoothing tracks both level and trend.
+//  Level equation:  L_t = alpha * y_t + (1 - alpha) * (L_{t-1} + B_{t-1})
+//  Trend equation:  B_t = gamma * (L_t - L_{t-1}) + (1 - gamma) * B_{t-1}
+//  Output:          HOLT_t = L_t + B_t   (1-step-ahead forecast)
+//  When gamma=0, degenerates to standard EMA (no trend correction).
+//  When gamma=alpha, provides balanced level/trend tracking.
+export holt(series float source, simple int period, simple float gamma=0) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+    float alpha = 2.0 / (period + 1)
+    float g = gamma > 0 ? gamma : alpha
+    var float level = na
+    var float trend = 0.0
+    float result = na
+
+
+    if na(level)
+        // First bar: initialize level to source, trend to 0
+        level := source
+        trend := 0.0
+        result := source
+    else
+        float prevLevel = level
+        // Level: alpha * source + (1 - alpha) * (prevLevel + trend)
+        level := alpha * source + (1.0 - alpha) * (prevLevel + trend)
+        // Trend: gamma * (level - prevLevel) + (1 - gamma) * trend
+        trend := g * (level - prevLevel) + (1.0 - g) * trend
+        // Output: level + trend (1-step-ahead forecast)
+        result := level + trend
+    result
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_gamma  = input.float(0, "Gamma (0 = auto)", minval=0, maxval=1, step=0.01)
+i_source = input.source(close, "Source")
+
+// Calculation
+holt_value = holt(i_source, period=i_period, gamma=i_gamma)
+
+// Plot
+// plot(holt_value, "HOLT", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates HEMA (Hull Exponential Moving Average) combining multiple EMA calculations
+//@param source Series to calculate HEMA from
+//@param period Lookback period for calculation
+//@returns HEMA value that combines fast and slow EMAs with logarithmic weighting
+//@optimized Uses three-stage exponential warmup compensators for O(1) complexity
+export hema(series float src, simple int N) =>
+    float alphaSlow = 3.0 / (2.0 * N - 1.0)
+    float lambdaSlow = -math.log(1.0 - alphaSlow)
+    float ratio = math.log(2.0) / (1.0 + math.log(2.0))
+    float alphaFast = 1.0 - math.exp(-lambdaSlow / ratio)
+    float alphaSmooth = 2.0 / (math.sqrt(N) / 2.0 + 1.0)
+    float betaSlow = 1.0 - alphaSlow
+    float betaFast = 1.0 - alphaFast
+    float betaSmooth = 1.0 - alphaSmooth
+    float chkSlow = nz(alphaSlow, 1.0)
+    float chkFast = nz(alphaFast, 1.0)
+    float chkSmth = nz(alphaSmooth, 1.0)
+    float alphaMin = math.min(chkSlow, chkFast, chkSmth, 0.000001)
+    var bool warmup = true
+    var float decaySlow = 1.0
+    var float decayFast = 1.0
+    var float decaySmooth = 1.0
+    var float emaSlowRaw = 0.0
+    var float emaFastRaw = 0.0
+    var float emaSmoothRaw = 0.0
+    float emaSlow = na
+    float emaFast = na
+    float hemaVal = na
+    emaSlowRaw := alphaSlow * (src - emaSlowRaw) + emaSlowRaw
+    emaFastRaw := alphaFast * (src - emaFastRaw) + emaFastRaw
+    if warmup
+        decaySlow *= betaSlow
+        decayFast *= betaFast
+        decaySmooth *= betaSmooth
+        emaSlow := (1.0 / (1.0 - decaySlow)) * emaSlowRaw
+        emaFast := (1.0 / (1.0 - decayFast)) * emaFastRaw
+        float deLag = emaFast / (1.0 - ratio) - ratio * emaSlow / (1.0 - ratio)
+        emaSmoothRaw := alphaSmooth * (deLag - emaSmoothRaw) + emaSmoothRaw
+        hemaVal := (1.0 / (1.0 - decaySmooth)) * emaSmoothRaw
+        warmup := decaySlow > 1e-10
+    else
+        emaSlow := emaSlowRaw
+        emaFast := emaFastRaw
+        float deLag = emaFast / (1.0 - ratio) - ratio * emaSlow / (1.0 - ratio)
+        emaSmoothRaw := alphaSmooth * (deLag - emaSmoothRaw) + emaSmoothRaw
+        hemaVal := emaSmoothRaw
+    hemaVal
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_source = input.source(close, "Source")
+
+// Calculation
+hema_value = hema(i_source, i_period)
+
+// Plot
+// plot(hema_value, "HEMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates HWMA using triple exponential smoothing with level, velocity, and acceleration components
+//@param source Series to calculate HWMA from
+//@param alpha Level smoothing factor
+//@param beta Velocity smoothing factor
+//@param gamma Acceleration smoothing factor
+//@param period When used, calculate alpha/beta/gamma from period
+//@returns HWMA value from first bar with proper compensation
+//@optimized Uses triple exponential smoothing with O(1) complexity per bar
+export hwma(series float source, float alpha=0.0, float beta=0.0, float gamma=0.0, simple int period=0) =>
+    float a = period > 0 ? 2.0 / (float(period) + 1.0) : alpha
+    float b = period > 0 ? 1.0 / float(period) : beta
+    float g = period > 0 ? 1.0 / float(period) : gamma
+    var float F = na
+    var float V = 0.0
+    var float A = 0.0
+    if na(source)
+        if na(F)
+            na
+        else
+            float prevF = F
+            float prevV = V
+            float prevA = A
+            F := prevF + prevV + 0.5 * prevA
+            V := prevV + prevA
+            A := 0.9 * prevA
+            F
+    else
+        if na(F)
+            F := source
+            F
+        else
+            float prevF = F
+            float prevV = V
+            float prevA = A
+            F := a * source + (1.0 - a) * (prevF + prevV + 0.5 * prevA)
+            V := b * (F - prevF) + (1.0 - b) * (prevV + prevA)
+            A := g * (V - prevV) + (1.0 - g) * prevA
+            F + V + 0.5 * A
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_source = input.source(close, "Source")
+
+// Calculation
+hwma_value = hwma(i_source, period=i_period)
+
+// Plot
+// plot(hwma_value, "HWMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates JMA using adaptive techniques to adjust to market volatility
+//@param source Series to calculate JMA from
+//@param period Number of bars used in the calculation
+//@param phase Phase shift (-100 to 100). Negative values reduce lag but may cause overshoot
+//@param power Smoothing factor (0.1-1.0). Lower values create smoother curves
+//@returns JMA value with adaptive smoothing and reduced lag
+//@optimized Uses adaptive volatility adjustment and phase control for O(1) complexity per bar
+export jma(series float source, simple int period, simple int phase=0, simple float power=0.45) =>
+    simple float PHASE_VALUE = math.min(math.max((phase * 0.01) + 1.5, 0.5), 2.5)
+    simple float BETA = power * (period - 1) / ((power * (period - 1)) + 2)
+    simple float LEN1 = math.max((math.log(math.sqrt(0.5 * (period - 1))) / math.log(2.0)) + 2.0, 0)
+    simple float POW1 = math.max(LEN1 - 2.0, 0.5)
+    simple float LEN2 = math.sqrt(0.5 * (period - 1)) * LEN1
+    simple float POW1_RECIPROCAL = 1.0 / POW1
+    simple float AVG_VOLTY_ALPHA = 2.0 / (math.max(4.0 * period, 65) + 1.0)
+    simple float DIV = 1.0 / (10.0 + 10.0 * (math.min(math.max(period - 10, 0), 100)) / 100.0)
+    var float upperBand_state = na
+    var float lowerBand_state = na
+    var float ma1_state = na
+    var float jma_state = na
+    var float vSum_state = 0.0
+    var float det0_state = 0.0
+    var float det1_state = 0.0
+    var float avgVolty_state = na
+    var array<float> volty_array_state = array.new_float(11, 0.0)
+    float current_jma = na
+    if not na(source)
+        float del1 = source - nz(upperBand_state, source)
+        float del2 = source - nz(lowerBand_state, source)
+        float volty = math.abs(del1) == math.abs(del2) ? 0.0 : math.max(math.abs(del1), math.abs(del2))
+        array.unshift(volty_array_state, nz(volty, 0.0))
+        array.pop(volty_array_state)
+        if not na(volty)
+            vSum_state := vSum_state + (volty - array.get(volty_array_state, 10)) * DIV
+            avgVolty_state := nz(avgVolty_state, vSum_state) + AVG_VOLTY_ALPHA * (vSum_state - nz(avgVolty_state, vSum_state))
+        float rvolty = math.min(math.max(nz(avgVolty_state, 0) > 0 ? nz(volty, 0.0) / nz(avgVolty_state, 1.0) : 1.0, 1.0), math.pow(LEN1, POW1_RECIPROCAL))
+        float pow2 = math.pow(rvolty, POW1)
+        float Kv = math.pow(LEN2 / (LEN2 + 1), math.sqrt(pow2))
+        upperBand_state := del1 > 0 ? source : source - Kv * del1
+        lowerBand_state := del2 < 0 ? source : source - Kv * del2
+        float alpha = math.pow(BETA, pow2)
+        float alphaSquared = alpha * alpha
+        float oneMinusAlpha = 1.0 - alpha
+        float oneMinusAlphaSquared = oneMinusAlpha * oneMinusAlpha
+        ma1_state := source + (alpha * (nz(ma1_state, source) - source))
+        det0_state := (source - ma1_state) * (1 - BETA) + BETA * nz(det0_state, 0)
+        float ma2 = ma1_state + (PHASE_VALUE * det0_state)
+        det1_state := ((ma2 - nz(jma_state, source)) * oneMinusAlphaSquared) + (alphaSquared * nz(det1_state, 0))
+        jma_state := nz(jma_state, source) + det1_state
+        current_jma := jma_state
+    current_jma
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1, tooltip="Number of bars used in the calculation")
+i_phase = input.int(0, "Phase", tooltip="Phase shift (-100 to 100). Negative values reduce lag but may cause overshoot", minval=-100, maxval=100, step=10)
+i_power = input.float(0.45, "Power", tooltip="Smoothing factor (0.1-1.0). Lower values create smoother curves", minval=0.1, maxval=1.0, step=0.01)
+i_source = input.source(close, "Source")
+
+// Calculation
+jma_value = jma(i_source, i_period, i_phase, i_power)
+
+// Plot
+// plot(jma_value, "JMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates KAMA using adaptive smoothing based on market volatility
+//@param source Series to calculate KAMA from
+//@param period Length of the efficiency ratio lookback period
+//@param fast_alpha Fastest EMA constant (2/(2+1))
+//@param slow_alpha Slowest EMA constant (2/(30+1))
+//@returns KAMA value with efficiency ratio-based adaptive smoothing
+//@optimized Uses efficiency ratio calculation for O(n) complexity per bar due to lookback sum
+export kama(series float source, simple int period, simple float fast_alpha=0.666667, simple float slow_alpha=0.0645) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+    if fast_alpha <= 0 or slow_alpha <= 0
+        runtime.error("Alpha values must be greater than 0")
+    if fast_alpha <= slow_alpha
+        runtime.error("Fast alpha must be greater than slow alpha")
+    var float kama_state = na
+    float current_kama = na
+    if not na(source)
+        float change_val = math.abs(source - source[period])
+        float volatility_val = math.sum(math.abs(source - source[1]), period)
+        float er = 0.0
+        if not na(change_val) and not na(volatility_val) and volatility_val != 0.0
+            er := change_val / volatility_val
+        float sc = math.pow(er * (fast_alpha - slow_alpha) + slow_alpha, 2)
+        kama_state := na(kama_state) ? source : kama_state + sc * (source - kama_state)
+        current_kama := kama_state
+    current_kama
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_source = input.source(close, "Source")
+i_fast = input.int(2, "Fast EMA Period", minval=2)
+i_slow = input.int(30, "Slow EMA Period", minval=2)
+
+// Calculation
+float fast_alpha = 2.0 / (float(i_fast) + 1.0)
+float slow_alpha = 2.0 / (float(i_slow) + 1.0)
+kama_value = kama(i_source, i_period, fast_alpha, slow_alpha)
+
+// Plot
+// plot(kama_value, "KAMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates LTMA using linear time-weighted values (not linear regression)
+//@param source Series to calculate LTMA from
+//@param period Lookback period for calculation
+//@returns LTMA value with linearly increasing weights based on recency (weight = period - i)
+//@optimized Uses linear weighting with O(n) complexity per bar due to lookback loop
+export ltma(series float source, simple int period) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+    float sum = 0.0
+    float weight_sum = 0.0
+    int count = 0
+    for i = 0 to period - 1
+        if not na(source[i])
+            float weight = float(period - i)
+            sum += source[i] * weight
+            weight_sum += weight
+            count += 1
+    count > 0 and weight_sum > 0 ? sum / weight_sum : source
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_source = input.source(close, "Source")
+
+// Calculation
+ltma_value = ltma(i_source, i_period)
+
+// Plot
+// plot(ltma_value, "LTMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Computes Leader EMA — Siligardos' leading exponential moving average.
+//          Adds a smoothed error correction to the standard EMA, making it respond
+//          faster than EMA while maintaining smoothness.
+//          Formula: Leader = EMA(source, N) + EMA(source - EMA(source, N), N)
+//          The second term smooths the estimation error and adds it back, creating
+//          a "leading" effect that anticipates price movement.
+//@param source Series to smooth
+//@param period Lookback period (determines alpha = 2/(period+1))
+//@returns Leader EMA value from first bar (with warmup compensation)
+//@reference Siligardos, G.E. (2008). "Leader of the MACD." Technical Analysis of
+//           Stocks & Commodities, 26(7), 30-37.
+//@optimized O(1) per bar — two IIR state variables with warmup compensation
+export lema(series float source, simple int period) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+
+
+    float price = nz(source)
+    float alpha = 2.0 / (period + 1)
+    float beta = 1.0 - alpha
+
+    // --- EMA1: standard EMA of source ---
+    var float ema1 = 0.0
+    var float e1 = 1.0
+    var bool warmup1 = true
+
+    ema1 := alpha * (price - ema1) + ema1
+    float comp_ema1 = ema1
+    if warmup1
+        e1 *= beta
+        comp_ema1 := ema1 / (1.0 - e1)
+        warmup1 := e1 > 1e-10
+
+    // --- Error: source - EMA(source) ---
+    float error = price - comp_ema1
+
+    // --- EMA2: EMA of the error series ---
+    var float ema2 = 0.0
+    var float e2 = 1.0
+    var bool warmup2 = true
+
+    ema2 := alpha * (error - ema2) + ema2
+    float comp_ema2 = ema2
+    if warmup2
+        e2 *= beta
+        comp_ema2 := ema2 / (1.0 - e2)
+        warmup2 := e2 > 1e-10
+
+    // --- Leader EMA = EMA(source) + EMA(error) ---
+    comp_ema1 + comp_ema2
+
+// ── Inputs ──────────────────────────────────────────────────────────────
+src = input.source(close, "Source")
+per = input.int(14, "Period", minval=1)
+
+// ── Plot ────────────────────────────────────────────────────────────────
+// plot(lema(src, per), "LEMA", color.new(color.yellow, 0), 2)  // Disabled in library
+
+
+
+//@function Calculates MGDI using dynamic factor based on price movement
+//@param source Series to calculate MGDI from
+//@param period Lookback period for initial SMA value
+//@param factor McGinley factor (default 0.6)
+//@returns MGDI value that tracks price movements more closely than EMAs
+//@optimized Uses adaptive smoothing with O(1) complexity after initialization
+export mgdi(series float source, simple int period, simple float factor=0.6) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+    if factor <= 0
+        runtime.error("Factor must be greater than 0")
+    var float mgdi_val = na
+    if not na(source)
+        if na(mgdi_val)
+            float sum = 0.0
+            int count = 0
+            for i = 0 to period - 1
+                if not na(source[i])
+                    sum += source[i]
+                    count += 1
+            mgdi_val := count > 0 ? sum / count : source
+        else
+            if math.abs(mgdi_val) < 1e-10
+                mgdi_val := source
+            else
+                float ratio = source / mgdi_val
+                float denom = factor * period * math.pow(ratio, 4)
+                denom := math.sign(denom) * math.max(0.001, math.abs(denom))
+                mgdi_val := mgdi_val + (source - mgdi_val) / denom
+    mgdi_val
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_factor = input.float(0.6, "Factor", minval=0.01, maxval=5.0, step=0.01)
+i_source = input.source(close, "Source")
+
+// Calculation
+mgdi_value = mgdi(i_source, i_period, i_factor)
+
+// Plot
+// plot(mgdi_value, "MGDI", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates MAMA and FAMA using Ehlers' MESA adaptive algorithm
+//@param source Series to calculate MAMA from
+//@param fastLimit Maximum rate of adaptation (0.5 typical)
+//@param slowLimit Minimum rate of adaptation (0.05 typical)
+//@returns [mama, fama] array containing MAMA and FAMA values
+//@optimized Uses Hilbert Transform phase detection for O(1) complexity per bar
+export mama(series float source, float fastLimit=0.5, float slowLimit=0.05) =>
+    if fastLimit < slowLimit or fastLimit <= 0 or slowLimit < 0
+        runtime.error("MAMA: fastLimit must be > slowLimit > 0")
+    var float mama_val = na
+    var float fama_val = na
+    var float period = 0.0
+    var float phase = 0.0
+    var float smooth = na
+    var float dt = na
+    var float I1 = 0.0
+    var float Q1 = 0.0
+    var float I2 = 0.0
+    var float Q2 = 0.0
+    var float Re = 0.0
+    var float Im = 0.0
+    float TWOPI = 2.0 * math.pi
+    float c1 = 0.0962
+    float c2 = 0.5769
+    float price = not na(source[3]) ? (4.0 * source + 3.0 * source[1] + 2.0 * source[2] + source[3]) / 10.0 : not na(source[2]) ? (4.0 * source + 3.0 * source[1] + 2.0 * source[2]) / 9.0 : not na(source[1]) ? (4.0 * source + 3.0 * source[1]) / 7.0 : source
+    if na(mama_val)
+        mama_val := price
+        fama_val := price
+        smooth := price
+    else
+        smooth := (4.0 * price + 3.0 * price[1] + 2.0 * price[2] + price[3]) / 10.0
+        float padj = 0.075 * period + 0.54
+        dt := (c1 * smooth + c2 * smooth[2] - c2 * smooth[4] - c1 * smooth[6]) * padj
+        I1 := dt[3]
+        Q1 := (c1 * dt + c2 * dt[2] - c2 * dt[4] - c1 * dt[6]) * padj
+        float jI = (c1 * I1 + c2 * I1[2] - c2 * I1[4] - c1 * I1[6]) * padj
+        float jQ = (c1 * Q1 + c2 * Q1[2] - c2 * Q1[4] - c1 * Q1[6]) * padj
+        I2 := 0.2 * (I1 - jQ) + 0.8 * I2[1]
+        Q2 := 0.2 * (Q1 + jI) + 0.8 * Q2[1]
+        Re := 0.2 * (I2 * I2[1] + Q2 * Q2[1]) + 0.8 * Re[1]
+        Im := 0.2 * (I2 * Q2[1] - Q2 * I2[1]) + 0.8 * Im[1]
+        if Im != 0.0 and Re != 0.0
+            period := TWOPI / math.atan(Im / Re)
+        period := 0.2 * math.max(6.0, math.min(50.0, period)) + 0.8 * period[1]
+        if I1 != 0.0
+            phase := math.atan(Q1 / I1)
+        float deltaPhase = phase[1] - phase
+        if deltaPhase >= 1.0
+            deltaPhase := 0.0
+        if deltaPhase < 0.0
+            deltaPhase += TWOPI
+        float alpha = math.min(fastLimit, math.max(slowLimit, fastLimit / math.pow(deltaPhase / 0.5, 2)))
+        float oneMinusAlpha = 1.0 - alpha
+        mama_val := alpha * price + oneMinusAlpha * mama_val[1]
+        fama_val := 0.5 * alpha * mama_val + (1.0 - 0.5 * alpha) * fama_val[1]
+    [mama_val, fama_val]
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_source = input.source(close, "Source")
+i_fastLimit = input.float(0.5, "Fast Limit", minval=0.01, maxval=0.99, step=0.01)
+i_slowLimit = input.float(0.05, "Slow Limit", minval=0.001, maxval=0.5, step=0.01)
+
+// Calculation
+[mama_value, fama_value] = mama(i_source, i_fastLimit, i_slowLimit)
+
+// Plot
+// plot(mama_value, "MAMA", color=color.yellow, linewidth=2)  // Disabled in library
+// plot(fama_value, "FAMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates the McNicholl EMA (Zero-Lag TEMA).
+//  Dennis McNicholl, "Better Bollinger Bands," Futures Magazine, October 1998.
+//  MCNMA = 2·TEMA(src,N) − TEMA(TEMA(src,N),N)
+//  TEMA(x,N) = 3·EMA1 − 3·EMA2 + EMA3
+//  Six cascaded EMA stages; na-guard init to source eliminates warmup bias.
+//@param source Series to smooth
+//@param period Lookback period (must be > 0)
+//@returns McNicholl EMA value from bar 1
+export mcnma(series float source, simple int period) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+
+
+    float src   = nz(source)
+    float alpha = 2.0 / (period + 1)
+    float beta  = 1.0 - alpha
+
+    var float e1 = na
+    var float e2 = na
+    var float e3 = na
+    var float e4 = na
+    var float e5 = na
+    var float e6 = na
+
+    if na(e1)
+        e1 := src
+        e2 := src
+        e3 := src
+        e4 := src
+        e5 := src
+        e6 := src
+    else
+        e1 := alpha * src  + beta * e1
+        e2 := alpha * e1   + beta * e2
+        e3 := alpha * e2   + beta * e3
+
+        float tema1 = 3.0 * e1 - 3.0 * e2 + e3
+
+        e4 := alpha * tema1 + beta * e4
+        e5 := alpha * e4    + beta * e5
+        e6 := alpha * e5    + beta * e6
+
+        float tema2 = 3.0 * e4 - 3.0 * e5 + e6
+
+        // result is assigned below — but we need it outside the else
+        // Pine requires expression, so use a different structure:
+
+    // recompute after update (valid on all bars after init)
+    float tema1 = 3.0 * e1 - 3.0 * e2 + e3
+    float tema2 = 3.0 * e4 - 3.0 * e5 + e6
+    2.0 * tema1 - tema2
+
+// ── Inputs ─────────────────────────────────────────────────────────────
+int    i_period = input.int(14, "Period", minval=1)
+float i_source = input.source(close, "Source")
+
+// ── Calculation ────────────────────────────────────────────────────────
+float value = mcnma(i_source, i_period)
+
+// ── Plot ───────────────────────────────────────────────────────────────
+// plot(value, "MCNMA", color.yellow, 2)  // Disabled in library
+
+
+
+//@function Calculates EMA with per-bar variable period (TA-Lib MAVP concept)
+//@param source Series to smooth
+//@param period Per-bar effective period (clamped to min_period..max_period)
+//@param min_period Minimum allowed period
+//@param max_period Maximum allowed period
+//@returns EMA value with variable alpha = 2/(period+1), compensated warmup
+//@optimized Uses adaptive warmup compensator that tracks cumulative (1-alpha) product for O(1) per bar
+export mavp(series float source, series float period, simple int min_period, simple int max_period) =>
+    if min_period < 1
+        runtime.error("min_period must be >= 1")
+    if max_period < min_period
+        runtime.error("max_period must be >= min_period")
+    var float ema = 0.0
+    var float e = 1.0
+    var bool warmup = true
+    var float result = source
+    float p = math.max(min_period, math.min(max_period, nz(period, min_period)))
+    float a = 2.0 / (p + 1.0)
+    float beta = 1.0 - a
+    ema := a * (nz(source) - ema) + ema
+    if warmup
+        e *= beta
+        float c = 1.0 / (1.0 - e)
+        result := c * ema
+        warmup := e > 1e-10
+    else
+        result := ema
+    result
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1, tooltip="Base period for the variable-period EMA")
+i_min = input.int(2, "Min Period", minval=1, tooltip="Minimum allowed period")
+i_max = input.int(30, "Max Period", minval=2, tooltip="Maximum allowed period")
+i_source = input.source(close, "Source")
+
+// Per-bar period series: fixed here, replace with any series for adaptive behavior
+// In the C# implementation, this is an external per-bar series input
+float per_bar_period = float(i_period)
+
+// Calculation
+mavp_value = mavp(i_source, per_bar_period, i_min, i_max)
+
+// Plot
+// plot(mavp_value, "MAVP", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+// @function Calculates the Natural Moving Average (Jim Sloman, Ocean Theory pgs 63-70).
+//   Adaptive IIR filter where the smoothing ratio derives from volatility-weighted
+//   sqrt-kernel analysis of log-price movements over a lookback window.
+//   Step 1: ln = log(src) × 1000 (scaled natural log)
+//   Step 2: For i=0..period-1, accumulate:
+//     oi  = |ln[i] - ln[i+1]|           (bar-to-bar log-price volatility)
+//     num += oi × (√(i+1) - √i)         (sqrt-differenced weight emphasizes recent bars)
+//     denom += oi                        (total volatility normalization)
+//   Step 3: ratio = num / denom          (adaptive smoothing factor ∈ [0,1])
+//   Step 4: nma = nma[1] + ratio × (src - nma[1])  (IIR adaptive EMA step)
+//   When volatility concentrates in recent bars → ratio ≈ 1 → fast tracking.
+//   When volatility is spread uniformly → ratio ≈ 1/√period → heavy smoothing.
+// @param source Series to smooth
+// @param period Lookback window for volatility analysis (must be > 0)
+// @returns NMA value
+export nma(series float source, simple int period) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+
+
+    float src = nz(source)
+
+    // Step 1: scaled natural log of price
+    // Use circular buffer to store log-scaled values for lookback
+    var array<float> lnBuf = array.new_float(period + 1, 0.0)
+    var int head = 0
+
+    float lnVal = src > 0 ? math.log(src) * 1000.0 : 0.0
+    array.set(lnBuf, head, lnVal)
+
+    // Step 2: compute volatility-weighted sqrt ratio over lookback
+    float num = 0.0
+    float denom = 0.0
+    int bars = math.min(bar_index + 1, period)
+
+    for i = 0 to bars - 1
+        int idx0 = (head - i + period + 1) % (period + 1)
+        int idx1 = (head - i - 1 + period + 1) % (period + 1)
+        float oi = math.abs(array.get(lnBuf, idx0) - array.get(lnBuf, idx1))
+        num += oi * (math.sqrt(i + 1) - math.sqrt(i))
+        denom += oi
+
+    // Advance head for next bar
+    head := (head + 1) % (period + 1)
+
+    // Step 3: adaptive ratio
+    float ratio = denom != 0.0 ? num / denom : 0.0
+
+    // Step 4: IIR adaptive EMA step
+    var float result = 0.0
+    if bar_index == 0
+        result := src
+    else
+        result := result + ratio * (src - result)
+
+    result
+
+// ── Inputs ─────────────────────────────────────────────────────────────
+int i_period  = input.int(40, "Period", minval=1)
+float i_source = input.source(close, "Source")
+
+// ── Calculation ────────────────────────────────────────────────────────
+float value = nma(i_source, i_period)
+
+// ── Plot ───────────────────────────────────────────────────────────────
+// plot(value, "NMA", color.yellow, 2)  // Disabled in library
+
+
+
+//@function Calculates QEMA using quadruple exponential smoothing with compensator
+//@param source Series to calculate QEMA from
+//@param period Lookback period for QEMA calculation
+//@param alpha Optional smoothing factor (overrides period if provided)
+//@returns QEMA value from first bar with proper compensation
+//@optimized Uses exponential warmup compensator on all four EMA stages for O(1) complexity
+export qema(series float source, simple int period=0, simple float alpha=0.0) =>
+    if alpha <= 0 and period <= 0
+        runtime.error("Alpha or period must be provided")
+    float a1 = alpha > 0 ? alpha : (period > 0 ? 2.0 / (period + 1) : 0.1)
+    float r = math.pow(1.0 / a1, 1.0 / 3.0)
+    float a2 = a1 * r
+    float a3 = a2 * r
+    float a4 = a3 * r
+    float beta1 = 1.0 - a1
+    float beta2 = 1.0 - a2
+    float beta3 = 1.0 - a3
+    float beta4 = 1.0 - a4
+    var float e1 = 1.0
+    var float e2 = 1.0
+    var float e3 = 1.0
+    var float e4 = 1.0
+    var bool warmup = true
+    var float rema1 = 0.0
+    var float rema2 = 0.0
+    var float rema3 = 0.0
+    var float rema4 = 0.0
+    var float ema1 = source
+    var float ema2 = source
+    var float ema3 = source
+    var float ema4 = source
+    rema1 := a1 * (source - rema1) + rema1
+    if warmup
+        e1 *= beta1
+        e2 *= beta2
+        e3 *= beta3
+        e4 *= beta4
+        float c1 = 1.0 / (1.0 - e1)
+        float c2 = 1.0 / (1.0 - e2)
+        float c3 = 1.0 / (1.0 - e3)
+        float c4 = 1.0 / (1.0 - e4)
+        ema1 := rema1 * c1
+        rema2 := a2 * (ema1 - rema2) + rema2
+        ema2 := rema2 * c2
+        rema3 := a3 * (ema2 - rema3) + rema3
+        ema3 := rema3 * c3
+        rema4 := a4 * (ema3 - rema4) + rema4
+        ema4 := rema4 * c4
+        warmup := e1 > 1e-10
+    else
+        ema1 := rema1
+        rema2 := a2 * (ema1 - rema2) + rema2
+        ema2 := rema2
+        rema3 := a3 * (ema2 - rema3) + rema3
+        ema3 := rema3
+        rema4 := a4 * (ema3 - rema4) + rema4
+        ema4 := rema4
+    4 * ema1 - 6 * ema2 + 4 * ema3 - ema4
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(20, "Period", minval=1)
+i_source = input.source(close, "Source")
+
+// Calculation
+qema_value = qema(i_source, i_period)
+
+// Plot
+// plot(qema_value, "QEMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates RGMA using cascaded recursive filters to approximate Gaussian smoothing
+//@param source Series to calculate RGMA from
+//@param period Effective smoothing period
+//@param passes Number of recursive passes (higher = more Gaussian-like)
+//@returns RGMA value with gaussian-like smoothing properties using recursive calculation
+//@optimized Uses cascaded exponential filters for O(1) complexity per bar
+export rgma(series float source, simple int period, simple int passes=3) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+    if passes <= 0
+        runtime.error("Passes must be greater than 0")
+    simple float alpha = 2.0 / (period / math.sqrt(passes) + 1.0)
+    var array<float> filters = array.new_float(passes, na)
+    float result = na
+    if not na(source)
+        if na(array.get(filters, 0))
+            array.fill(filters, source)
+            result := source
+        else
+            array.set(filters, 0, alpha * (source - array.get(filters, 0)) + array.get(filters, 0))
+            if passes > 1
+                for i = 1 to passes - 1
+                    array.set(filters, i, alpha * (array.get(filters, i - 1) - array.get(filters, i)) + array.get(filters, i))
+            result := array.get(filters, passes - 1)
+    result
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_passes = input.int(3, "Passes", minval=1, maxval=10, tooltip="More passes create more Gaussian-like smoothing")
+i_source = input.source(close, "Source")
+
+// Calculation
+rgma_value = rgma(i_source, i_period, i_passes)
+
+// Plot
+// plot(rgma_value, "RGMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates REMA using exponential smoothing with regularization term
+//@param source Series to calculate REMA from
+//@param period Lookback period used to determine alpha value
+//@param lambda Regularization parameter (0-1) controlling smoothness
+//@returns REMA value, calculates from first bar using available data
+//@optimized Uses regularization term to reduce noise for O(1) complexity
+export rema(series float source, simple int period, simple float lambda=0.5) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+    if lambda < 0.0 or lambda > 1.0
+        runtime.error("Lambda must be between 0 and 1")
+    float alpha = 2.0 / (period + 1.0)
+    var float rema_val = na
+    var float prev_rema = na
+    float result = na
+    if not na(source)
+        if na(rema_val)
+            rema_val := source
+            prev_rema := source
+            result := rema_val
+        else
+            prev_rema := rema_val
+            float ema_component = alpha * (source - rema_val) + rema_val
+            float reg_component = rema_val + (rema_val - prev_rema)
+            rema_val := lambda * (ema_component - reg_component) + reg_component
+            result := rema_val
+    else
+        result := rema_val
+    result
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_lambda = input.float(0.5, "Lambda", minval=0.0, maxval=1.0, step=0.1, tooltip="Regularization parameter: 0 = maximum regularization, 1 = standard EMA")
+i_source = input.source(close, "Source")
+
+// Calculation
+rema_value = rema(i_source, i_period, i_lambda)
+
+// Plot
+// plot(rema_value, "REMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates Welles Wilder's Relative Moving Average (RMA/SMMA)
+//@param source Series to calculate RMA from
+//@param period Smoothing period
+//@returns RMA value from first bar with proper compensation for early values
+//@optimized Uses exponential warmup compensator with Wilder's alpha (1/period) for O(1) complexity
+export rma(series float source, simple int period) =>
+    if period <= 0
+        runtime.error("Period must be provided")
+    float a = 1.0 / float(period)
+    float beta = 1.0 - a
+    var bool warmup = true
+    var float e = 1.0
+    var float ema = 0.0
+    var float result = source
+    ema := a * (source - ema) + ema
+    if warmup
+        e *= beta
+        float c = 1.0 / (1.0 - e)
+        result := c * ema
+        warmup := e > 1e-10
+    else
+        result := ema
+    result
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_source = input.source(close, "Source")
+
+// Calculation
+rma_value = rma(i_source, i_period)
+
+// Plot
+// plot(rma_value, "RMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates MMA using combined simple and weighted moving average components
+//@param source Series to calculate MMA from
+//@param period Lookback period - must be at least 2
+//@returns MMA value, combines SMA with weighted component for balanced smoothing
+//@optimized Uses circular buffer for O(1) sum updates, O(n) for weighted component
+export mma(series float source, simple int period) =>
+    if period < 2
+        runtime.error("Period must be at least 2")
+    var array<float> buffer = array.new_float(math.min(math.max(2, period), 4000), na)
+    var int head = 0
+    var float sum = 0.0
+    var int valid_count = 0
+    float oldest = array.get(buffer, head)
+    sum := sum + (not na(source) ? source : 0) - (not na(oldest) ? oldest : 0)
+    valid_count := valid_count + (not na(source) ? 1 : 0) - (not na(oldest) ? 1 : 0)
+    array.set(buffer, head, source)
+    head := (head + 1) % array.size(buffer)
+    if valid_count <= 0
+        source
+    else
+        float sma = sum / valid_count
+        float weighted_sum = 0.0
+        int count = 0
+        for i = 0 to array.size(buffer) - 1
+            float val = array.get(buffer, (head - 1 - i + array.size(buffer)) % array.size(buffer))
+            if not na(val)
+                weighted_sum += ((valid_count - ((2 * count) + 1)) * 0.5) * val
+                count += 1
+        sma + (weighted_sum * 6.0) / ((valid_count + 1) * valid_count)
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=2)
+i_source = input.source(close, "Source")
+
+// Calculation
+mma_value = mma(i_source, i_period)
+
+// Plot
+// plot(mma_value, "MMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+// @function Calculates the Trend Regularity Adaptive Moving Average.
+//   An adaptive EMA where the smoothing factor is derived from
+//   the regularity of new highest-highs and lowest-lows over the lookback.
+//   More frequent HH/LL = trending = faster adaptation; fewer = ranging = slower.
+//   tc = sma(HH_or_LL_occurred ? 1 : 0, length)²
+//   TRAMA = TRAMA[1] + tc * (src - TRAMA[1])
+//   Squaring penalizes low trend regularity, making the MA nearly flat in ranges.
+//   Source: LuxAlgo (TradingView, December 2020).
+// @param src Series to smooth.
+// @param length Lookback period. Must be >= 1.
+// @returns The trend regularity adaptive moving average value.
+export trama(series float src, simple int length) =>
+    float ama = 0.0
+    // Detect new highest-high: sign of change in rolling highest
+
+    // Detect new highest-high: sign of change in rolling highest
+    float hh = math.max(math.sign(ta.change(ta.highest(length))), 0.0)
+    // Detect new lowest-low: sign of negative change in rolling lowest
+    float ll = math.max(math.sign(ta.change(ta.lowest(length)) * -1.0), 0.0)
+    // Trend coefficient: fraction of bars with HH or LL, squared
+    float tc = math.pow(ta.sma((hh != 0.0 or ll != 0.0) ? 1.0 : 0.0, length), 2)
+    ama := nz(ama[1]) + tc * (src - nz(ama[1]))
+    if na(ama[1])
+        ama := src
+    ama
+
+// ── Inputs ──────────────────────────────────────────────
+p = input.int(14, "Period", minval=1)
+
+// ── Calculation ─────────────────────────────────────────
+result = trama(close, p)
+
+// ── Plot ────────────────────────────────────────────────
+// plot(result, "TRAMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates TEMA using triple exponential smoothing with compensator
+//@param source Series to calculate TEMA from
+//@param period Lookback period for TEMA calculation
+//@param alpha Optional smoothing factor (overrides period if provided)
+//@param corrected Use diminishing alpha factors for each stage
+//@returns TEMA value from first bar with proper compensation
+//@optimized Uses exponential warmup compensator on all three EMA stages for O(1) complexity
+export tema(series float source, simple int period=0, simple float alpha=0.0, simple bool corrected=false) =>
+    if alpha <= 0 and period <= 0
+        runtime.error("Alpha or period must be provided")
+    float a1 = alpha > 0 ? alpha : (period > 0 ? 2.0 / (period + 1) : 0.1)
+    float r = math.pow(1.0 / a1, 1.0 / 3.0)
+    float a2 = corrected ? a1 * r : a1
+    float a3 = corrected ? a2 * r : a1
+    float beta1 = 1.0 - a1
+    float beta2 = 1.0 - a2
+    float beta3 = 1.0 - a3
+    var float e1 = 1.0
+    var float e2 = 1.0
+    var float e3 = 1.0
+    var bool warmup = true
+    var float rema1 = 0.0
+    var float rema2 = 0.0
+    var float rema3 = 0.0
+    var float ema1 = source
+    var float ema2 = source
+    var float ema3 = source
+    rema1 := a1 * (source - rema1) + rema1
+    if warmup
+        e1 *= beta1
+        e2 *= beta2
+        e3 *= beta3
+        float c1 = 1.0 / (1.0 - e1)
+        float c2 = 1.0 / (1.0 - e2)
+        float c3 = 1.0 / (1.0 - e3)
+        ema1 := rema1 * c1
+        rema2 := a2 * (ema1 - rema2) + rema2
+        ema2 := rema2 * c2
+        rema3 := a3 * (ema2 - rema3) + rema3
+        ema3 := rema3 * c3
+        warmup := e1 > 1e-10
+    else
+        ema1 := rema1
+        rema2 := a2 * (ema1 - rema2) + rema2
+        ema2 := rema2
+        rema3 := a3 * (ema2 - rema3) + rema3
+        ema3 := rema3
+    3 * ema1 - 3 * ema2 + ema3
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_source = input.source(close, "Source")
+
+// Calculation
+tema_value = tema(i_source, period=i_period)
+
+// Plot
+// plot(tema_value, "TEMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates T3 using six EMAs with volume factor optimization
+//@param source Series to calculate T3 from
+//@param period Smoothing period
+//@param v Volume factor controlling smoothing (default 0.7)
+//@returns T3 value with optimized coefficients
+//@optimized Uses six cascaded EMAs with precomputed coefficients for O(1) complexity
+export t3(series float src, simple int period, simple float v) =>
+    if period <= 0
+        runtime.error("T3 period must be > 0")
+    float a = 2.0 / (period + 1)
+    float v2 = v * v
+    float v3 = v2 * v
+    float c1 = -v3
+    float c2 = 3.0 * (v2 + v3)
+    float c3 = -3.0 * (2.0 * v2 + v + v3)
+    float c4 = 1.0 + 3.0 * v + 3.0 * v2 + v3
+    var float e1 = na
+    var float e2 = na
+    var float e3 = na
+    var float e4 = na
+    var float e5 = na
+    var float e6 = na
+    float res = na
+    if not na(src)
+        if na(e1)
+            e1 := src
+            e2 := src
+            e3 := src
+            e4 := src
+            e5 := src
+            e6 := src
+            res := src
+        else
+            e1 := e1 + a * (src - e1)
+            e2 := e2 + a * (e1 - e2)
+            e3 := e3 + a * (e2 - e3)
+            e4 := e4 + a * (e3 - e4)
+            e5 := e5 + a * (e4 - e5)
+            e6 := e6 + a * (e5 - e6)
+            res := c1 * e6 + c2 * e5 + c3 * e4 + c4 * e3
+    res
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_source = input.source(close, "Source")
+i_period = input.int(10, "Period", minval=1)
+i_vfactor = input.float(0.7, "Volume Factor", minval=0.0, maxval=1.0, step=0.1)
+
+// Calculation
+t3_value = t3(i_source, i_period, i_vfactor)
+
+// Plot
+// plot(t3_value, "T3", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates VAMA by adjusting MA length based on volatility ratio using ATR
+//@param source Series to calculate VAMA from
+//@param base_length Base lookback period for the moving average
+//@param short_atr_period Short-term ATR period for current volatility measurement
+//@param long_atr_period Long-term ATR period for reference volatility measurement
+//@param min_length Minimum allowed adjusted length
+//@param max_length Maximum allowed adjusted length
+//@returns VAMA value
+//@optimized Uses RMA compensator for ATR and circular buffer for O(1) sum updates
+export vama(series float source, simple int base_length, simple int short_atr_period=10, simple int long_atr_period=50, simple int min_length=5, simple int max_length=100) =>
+    if base_length <= 0
+        runtime.error("Base length must be greater than 0")
+    if short_atr_period <= 0 or long_atr_period <= 0
+        runtime.error("ATR periods must be greater than 0")
+    if min_length <= 0 or max_length <= 0
+        runtime.error("Min and max length must be greater than 0")
+    if min_length > max_length
+        runtime.error("Min length must be less than or equal to max length")
+    var float prevClose = close
+    float tr1 = high - low
+    float tr2 = math.abs(high - prevClose)
+    float tr3 = math.abs(low - prevClose)
+    float trueRange = math.max(tr1, tr2, tr3)
+    prevClose := close
+    float EPSILON = 1e-10
+    var float raw_rma_short = 0.0
+    var float e_short = 1.0
+    var float raw_rma_long = 0.0
+    var float e_long = 1.0
+    float short_atr = na
+    float long_atr = na
+    if not na(trueRange)
+        float alpha_short = 1.0 / float(short_atr_period)
+        float beta_short = 1.0 - alpha_short
+        raw_rma_short := (raw_rma_short * (short_atr_period - 1) + trueRange) / short_atr_period
+        e_short := beta_short * e_short
+        short_atr := e_short > EPSILON ? raw_rma_short / (1.0 - e_short) : raw_rma_short
+        float alpha_long = 1.0 / float(long_atr_period)
+        float beta_long = 1.0 - alpha_long
+        raw_rma_long := (raw_rma_long * (long_atr_period - 1) + trueRange) / long_atr_period
+        e_long := beta_long * e_long
+        long_atr := e_long > EPSILON ? raw_rma_long / (1.0 - e_long) : raw_rma_long
+    float volatility_ratio = not na(short_atr) and not na(long_atr) and short_atr != 0.0 ? long_atr / short_atr : 1.0
+    float calc_length = base_length * volatility_ratio
+    int adjusted_length = int(math.max(min_length, math.min(max_length, calc_length)))
+    var array<float> buffer = array.new_float(max_length, na)
+    var int head = 0
+    var float sum = 0.0
+    var int valid_count = 0
+    if array.size(buffer) != max_length
+        buffer := array.new_float(max_length, na)
+        head := 0
+        sum := 0.0
+        valid_count := 0
+    float oldest = array.get(buffer, head)
+    if not na(oldest)
+        sum -= oldest
+        valid_count -= 1
+    if not na(source)
+        sum += source
+        valid_count += 1
+    array.set(buffer, head, source)
+    head := (head + 1) % max_length
+    float avg = valid_count > 0 ? sum / valid_count : source
+    int actual_count = math.min(valid_count, adjusted_length)
+    float partial_sum = 0.0
+    int partial_count = 0
+    for i = 0 to actual_count - 1
+        int idx = (head - 1 - i + max_length) % max_length
+        float val = array.get(buffer, idx)
+        if not na(val)
+            partial_sum += val
+            partial_count += 1
+    partial_count > 0 ? partial_sum / partial_count : nz(avg, source)
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_base_length = input.int(20, "Base Length", minval=1)
+i_source = input.source(close, "Source")
+i_short_atr = input.int(10, "Short ATR Period", minval=1)
+i_long_atr = input.int(50, "Long ATR Period", minval=1)
+i_min_length = input.int(5, "Minimum Length", minval=1)
+i_max_length = input.int(100, "Maximum Length", minval=1)
+
+// Calculation
+vama_value = vama(i_source, i_base_length, i_short_atr, i_long_atr, i_min_length, i_max_length)
+
+// Plot
+// plot(vama_value, "VAMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates VIDYA using adaptive smoothing based on market volatility
+//@param source Series to calculate VIDYA from
+//@param period Length of the smoothing period
+//@param std_period Length of the standard deviation period, defaults to same as period
+//@returns VIDYA value that adapts to market volatility
+//@optimized Uses volatility index calculation with O(n) complexity per bar due to lookback loops
+export vidya(series float source, simple int period, simple int std_period=0) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+    float alpha = 2.0 / (period + 1.0)
+    var float vidya = na
+    if not na(source)
+        int p = std_period > 0 ? std_period : period
+        float sum_p = 0.0
+        float sumSq_p = 0.0
+        float count_p = 0.0
+        float sum_5 = 0.0
+        float sumSq_5 = 0.0
+        float count_5 = 0.0
+        for i = 0 to math.max(p, 5) - 1
+            if not na(source[i])
+                float val = source[i]
+                if i < p
+                    sum_p += val
+                    sumSq_p += val * val
+                    count_p += 1
+                if i < 5
+                    sum_5 += val
+                    sumSq_5 += val * val
+                    count_5 += 1
+        float std = count_p > 0 ? math.sqrt(math.max((sumSq_p / count_p) - (sum_p / count_p) * (sum_p / count_p), 0.0)) : 0.0
+        float std_5 = count_5 > 0 ? math.sqrt(math.max((sumSq_5 / count_5) - (sum_5 / count_5) * (sum_5 / count_5), 0.0)) : 0.0
+        float vol_idx = std > 0 ? std_5 / std : 1.0
+        vol_idx := math.min(math.max(vol_idx, 0.0), 1.0)
+        float sc = alpha * vol_idx
+        vidya := na(vidya) ? source : source * sc + vidya * (1.0 - sc)
+    vidya
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_std_period = input.int(0, "Std Dev Period (0=use Period)", minval=0)
+i_source = input.source(close, "Source")
+
+// Calculation
+vidya_value = vidya(i_source, i_period, i_std_period)
+
+// Plot
+// plot(vidya_value, "VIDYA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates ZLDEMA using zero-lag price and double exponential smoothing with compensator
+//@param source Series to calculate ZLDEMA from
+//@param period Smoothing period
+//@param alpha Optional smoothing factor (overrides period if provided)
+//@returns ZLDEMA value with zero-lag effect applied
+//@optimized Uses lag compensation buffer and exponential warmup compensator on both EMA stages for O(1) complexity
+export zldema(series float source, simple int period=0, simple float alpha=0) =>
+    if alpha <= 0 and period <= 0
+        runtime.error("Alpha or period must be provided")
+    float a = alpha > 0 ? alpha : 2.0 / (period + 1)
+    float beta = 1.0 - a
+    simple int lag = math.max(1, math.round((period - 1) / 2))
+    var bool warmup = true
+    var float e = 1.0
+    var float ema1_raw = 0.0
+    var float ema2_raw = 0.0
+    var float ema1 = source
+    var float ema2 = source
+    var priceBuffer = array.new<float>(lag + 1, na)
+    if not na(source)
+        array.shift(priceBuffer)
+        array.push(priceBuffer, source)
+        float laggedPrice = nz(array.get(priceBuffer, 0), source)
+        float signal = 2 * source - laggedPrice
+        ema1_raw := a * (signal - ema1_raw) + ema1_raw
+        if warmup
+            e *= beta
+            float c = 1.0 / (1.0 - e)
+            ema1 := c * ema1_raw
+            ema2_raw := a * (ema1 - ema2_raw) + ema2_raw
+            ema2 := c * ema2_raw
+            warmup := e > 1e-10
+        else
+            ema1 := ema1_raw
+            ema2_raw := a * (ema1 - ema2_raw) + ema2_raw
+            ema2 := ema2_raw
+        2 * ema1 - ema2
+    else
+        na
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_source = input.source(close, "Source")
+
+// Calculation
+zldema_value = zldema(i_source, i_period)
+
+// Plot
+// plot(zldema_value, "ZLDEMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates ZLEMA using zero-lag price and exponential smoothing with compensator
+//@param source Series to calculate ZLEMA from
+//@param period Smoothing period
+//@param alpha Optional smoothing factor (overrides period if provided)
+//@returns ZLEMA value with zero-lag effect applied
+//@optimized Uses lag compensation buffer and exponential warmup compensator for O(1) complexity
+export zlema(series float source, simple int period=0, simple float alpha=0) =>
+    if alpha <= 0 and period <= 0
+        runtime.error("Alpha or period must be provided")
+    float a = alpha > 0 ? alpha : 2.0 / (period + 1)
+    float beta = 1.0 - a
+    simple int lag = math.max(1, math.round((period - 1) / 2))
+    var bool warmup = true
+    var float e = 1.0
+    var float zlema = 0.0
+    var float result = source
+    var priceBuffer = array.new<float>(lag + 1, 0.0)
+    if not na(source)
+        array.shift(priceBuffer)
+        array.push(priceBuffer, source)
+        float laggedPrice = array.get(priceBuffer, 0)
+        float signal = 2 * source - laggedPrice
+        zlema := a * (signal - zlema) + zlema
+        if warmup
+            e *= beta
+            float c = 1.0 / (1.0 - e)
+            result := c * zlema
+            warmup := e > 1e-10
+        else
+            result := zlema
+    result
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_source = input.source(close, "Source")
+
+// Calculation
+zlema_value = zlema(i_source, i_period)
+
+// Plot
+// plot(zlema_value, "ZLEMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates ZLTEMA using zero-lag price and triple exponential smoothing with compensator
+//@param source Series to calculate ZLTEMA from
+//@param period Smoothing period
+//@param alpha Optional smoothing factor (overrides period if provided)
+//@returns ZLTEMA value with zero-lag effect applied
+//@optimized Uses lag compensation buffer and exponential warmup compensator on all three EMA stages for O(1) complexity
+export zltema(series float source, simple int period=0, simple float alpha=0) =>
+    if alpha <= 0 and period <= 0
+        runtime.error("Alpha or period must be provided")
+    float a1 = alpha > 0 ? alpha : 2.0 / (period + 1)
+    float beta1 = 1.0 - a1
+    float r = math.pow(1.0 / a1, 1.0 / 3.0)
+    float a2 = a1 * r
+    float a3 = a2 * r
+    simple int lag = math.max(1, math.round((period - 1) / 2))
+    var bool warmup = true
+    var float e = 1.0
+    var float ema1_raw = 0.0
+    var float ema2_raw = 0.0
+    var float ema3_raw = 0.0
+    var float ema1 = na
+    var float ema2 = na
+    var float ema3 = na
+    var priceBuffer = array.new<float>(lag + 1, na)
+    if not na(source)
+        if na(ema1)
+            ema1 := source
+            ema2 := source
+            ema3 := source
+            array.fill(priceBuffer, source)
+        array.shift(priceBuffer)
+        array.push(priceBuffer, source)
+        float laggedPrice = nz(array.get(priceBuffer, 0), source)
+        float signal = 2 * source - laggedPrice
+        ema1_raw := a1 * (signal - ema1_raw) + ema1_raw
+        if warmup
+            e *= beta1
+            float c = 1.0 / (1.0 - e)
+            ema1 := c * ema1_raw
+            ema2_raw := a2 * (ema1 - ema2_raw) + ema2_raw
+            ema2 := c * ema2_raw
+            ema3_raw := a3 * (ema2 - ema3_raw) + ema3_raw
+            ema3 := c * ema3_raw
+            warmup := e > 1e-10
+        else
+            ema1 := ema1_raw
+            ema2_raw := a2 * (ema1 - ema2_raw) + ema2_raw
+            ema2 := ema2_raw
+            ema3_raw := a3 * (ema2 - ema3_raw) + ema3_raw
+            ema3 := ema3_raw
+        3 * ema1 - 3 * ema2 + ema3
+    else
+        na
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_source = input.source(close, "Source")
+
+// Calculation
+zltema_value = zltema(i_source, i_period)
+
+// Plot
+// plot(zltema_value, "ZLTEMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates YZVAMA by adjusting MA length based on percentile rank of short-term YZV
+//@param source Series to calculate YZVAMA from
+//@param yzv_short_period Short-term YZV period for current volatility
+//@param yzv_long_period Long-term YZV period for baseline volatility
+//@param percentile_lookback Lookback for percentile calculation
+//@param min_length Minimum allowed adjusted length
+//@param max_length Maximum allowed adjusted length
+//@returns YZVAMA value
+//@optimized Uses RMA compensators for YZV and circular buffers for O(1) sum updates
+export yzvama(series float source, simple int yzv_short_period=3, simple int yzv_long_period=50, simple int percentile_lookback=100, simple int min_length=5, simple int max_length=100) =>
+    if yzv_short_period <= 0 or yzv_long_period <= 0
+        runtime.error("All periods must be greater than 0")
+    if min_length <= 0 or max_length <= 0
+        runtime.error("Min and max length must be greater than 0")
+    if min_length > max_length
+        runtime.error("Min length must be less than or equal to max length")
+    if percentile_lookback <= 0
+        runtime.error("Percentile lookback must be greater than 0")
+    var float prev_close = close
+    float o = open
+    float h = high
+    float l = low
+    float c = close
+    float pc = na(prev_close) ? open : prev_close
+    prev_close := c
+    float ro = math.log(o / pc)
+    float rc = math.log(c / o)
+    float rh = math.log(h / o)
+    float rl = math.log(l / o)
+    float s_o_sq = ro * ro
+    float s_c_sq = rc * rc
+    float s_rs_sq = rh * (rh - rc) + rl * (rl - rc)
+    float ratio_N_short = yzv_short_period <= 1 ? 1.0 : (float(yzv_short_period) + 1.0) / (float(yzv_short_period) - 1.0)
+    float k_yz_short = 0.34 / (1.34 + ratio_N_short)
+    float s_sq_daily_short = s_o_sq + k_yz_short * s_c_sq + (1.0 - k_yz_short) * s_rs_sq
+    float EPSILON = 1e-10
+    var float raw_rma_short = 0.0
+    var float e_comp_short = 1.0
+    float yzv_short = na
+    if not na(s_sq_daily_short)
+        float rma_alpha_short = 1.0 / float(yzv_short_period)
+        float rma_beta_short = 1.0 - rma_alpha_short
+        raw_rma_short := (raw_rma_short * (yzv_short_period - 1) + s_sq_daily_short) / yzv_short_period
+        e_comp_short := rma_beta_short * e_comp_short
+        float smoothed_s_sq_short = e_comp_short > EPSILON ? raw_rma_short / (1.0 - e_comp_short) : raw_rma_short
+        yzv_short := math.sqrt(smoothed_s_sq_short)
+    float ratio_N_long = yzv_long_period <= 1 ? 1.0 : (float(yzv_long_period) + 1.0) / (float(yzv_long_period) - 1.0)
+    float k_yz_long = 0.34 / (1.34 + ratio_N_long)
+    float s_sq_daily_long = s_o_sq + k_yz_long * s_c_sq + (1.0 - k_yz_long) * s_rs_sq
+    var float raw_rma_long = 0.0
+    var float e_comp_long = 1.0
+    float yzv_long = na
+    if not na(s_sq_daily_long)
+        float rma_alpha_long = 1.0 / float(yzv_long_period)
+        float rma_beta_long = 1.0 - rma_alpha_long
+        raw_rma_long := (raw_rma_long * (yzv_long_period - 1) + s_sq_daily_long) / yzv_long_period
+        e_comp_long := rma_beta_long * e_comp_long
+        float smoothed_s_sq_long = e_comp_long > EPSILON ? raw_rma_long / (1.0 - e_comp_long) : raw_rma_long
+        yzv_long := math.sqrt(smoothed_s_sq_long)
+    var array<float> yzv_buffer = array.new_float(percentile_lookback, na)
+    var int yzv_head = 0
+    if not na(yzv_short)
+        array.set(yzv_buffer, yzv_head, yzv_short)
+        yzv_head := (yzv_head + 1) % percentile_lookback
+    array<float> sorted_yzv = array.new_float()
+    for i = 0 to percentile_lookback - 1
+        float val = array.get(yzv_buffer, i)
+        if not na(val)
+            array.push(sorted_yzv, val)
+    int n_valid = array.size(sorted_yzv)
+    float percentile_value = 50.0
+    if n_valid > 1 and not na(yzv_short)
+        array.sort(sorted_yzv)
+        int rank_pos = 0
+        for i = 0 to n_valid - 1
+            if array.get(sorted_yzv, i) < yzv_short
+                rank_pos += 1
+        percentile_value := (float(rank_pos) / float(n_valid - 1)) * 100.0
+    float length_range = max_length - min_length
+    float adjusted_length_f = max_length - (percentile_value / 100.0) * length_range
+    int adjusted_length = int(math.max(min_length, math.min(max_length, adjusted_length_f)))
+    var array<float> buffer = array.new_float(max_length, na)
+    var int head = 0
+    var float sum = 0.0
+    var int valid_count = 0
+    if array.size(buffer) != max_length
+        buffer := array.new_float(max_length, na)
+        head := 0
+        sum := 0.0
+        valid_count := 0
+    float oldest = array.get(buffer, head)
+    if not na(oldest)
+        sum -= oldest
+        valid_count -= 1
+    if not na(source)
+        sum += source
+        valid_count += 1
+    array.set(buffer, head, source)
+    head := (head + 1) % max_length
+    float avg = valid_count > 0 ? sum / valid_count : source
+    int actual_count = math.min(valid_count, adjusted_length)
+    float partial_sum = 0.0
+    int partial_count = 0
+    for i = 0 to actual_count - 1
+        int idx = (head - 1 - i + max_length) % max_length
+        float val = array.get(buffer, idx)
+        if not na(val)
+            partial_sum += val
+            partial_count += 1
+    partial_count > 0 ? partial_sum / partial_count : nz(avg, source)
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_source = input.source(close, "Source")
+i_yzv_short = input.int(3, "Short YZV Period", minval=1)
+i_yzv_long = input.int(50, "Long YZV Period", minval=1)
+i_percentile_lookback = input.int(100, "Percentile Lookback", minval=1)
+i_min_length = input.int(5, "Minimum Length", minval=1)
+i_max_length = input.int(100, "Maximum Length", minval=1)
+
+// Calculation
+yzvama_value = yzvama(i_source, i_yzv_short, i_yzv_long, i_percentile_lookback, i_min_length, i_max_length)
+
+// Plot
+// plot(yzvama_value, "YZVAMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+
+
+// ============================================================
+// FIR MOVING AVERAGES
+// ============================================================
+
+//@function Calculates ALMA using Gaussian distribution weights
+//@param source Series to calculate ALMA from
+//@param period Lookback period - window size
+//@param offset Controls the Gaussian peak location (0 to 1)
+//@param sigma Controls the Gaussian distribution width/curve shape
+//@returns ALMA value, calculates from first bar using available data
+//@optimized Uses Gaussian weighting with O(n) complexity per bar due to lookback loop
+export alma(series float source, simple int period, simple float offset=0.85, simple float sigma=6.0) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+    if offset < 0.0 or offset > 1.0
+        runtime.error("Offset must be between 0 and 1")
+    if sigma <= 0.0
+        runtime.error("Sigma must be greater than 0")
+    int p = math.min(bar_index + 1, period)
+    if p <= 1
+        source
+    else
+        float m = (1.0 - offset) * (p - 1)
+        float s = p / sigma
+        float s2 = 2.0 * (s * s)
+        float sum = 0.0
+        float weight_sum = 0.0
+        for i = 0 to p - 1
+            float price = source[i]
+            if not na(price)
+                float diff = i - m
+                float weight = math.exp(-(diff * diff) / s2)
+                sum += price * weight
+                weight_sum += weight
+        nz(sum / weight_sum, source)
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(50, "Period", minval=1, tooltip="Number of bars used in the calculation")
+i_offset = input.float(0.85, "Offset", minval=0.0, maxval=1.0, step=0.01)
+i_sigma = input.float(6.0, "Sigma", minval=0.1, maxval=20.0, step=0.1)
+i_source = input.source(close, "Source")
+
+// Calculation
+alma_value = alma(i_source, i_period, i_offset, i_sigma)
+
+// Plot
+// plot(alma_value, "ALMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates BWMA using Bessel window weighting
+//@param source Series to calculate BWMA from
+//@param period Lookback period - FIR window size
+//@param order Bessel function order (default: 0)
+//@returns BWMA value, calculates from first bar using available data
+//@optimized Uses Bessel window coefficients with O(n) complexity per bar due to lookback loop
+export bwma(series float source, simple int period, simple int order=0) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+    if order < 0
+        runtime.error("Bessel order must be non-negative")
+    int p = math.min(bar_index + 1, period)
+    var array<float> weights = array.new_float(1, 1.0)
+    var int last_p = 1
+    var int last_order = order
+    if last_p != p or last_order != order
+        weights := array.new_float(p, 0.0)
+        float total_weight = 0.0
+        float scale = 2.0 / (p - 1)
+        float power = order / 2.0 + 0.5
+        for i = 0 to p - 1
+            float x = i * scale - 1.0
+            float arg = 1.0 - x * x
+            float w = 0.0
+            if arg > 0.0
+                if order == 0
+                    w := arg
+                else if order == 1
+                    w := arg * math.sqrt(arg)
+                else
+                    w := math.pow(arg, power)
+            array.set(weights, i, w)
+            total_weight += w
+        if total_weight > 0.0
+            float inv_total = 1.0 / total_weight
+            for i = 0 to p - 1
+                array.set(weights, i, array.get(weights, i) * inv_total)
+        last_p := p
+        last_order := order
+    float sum = 0.0
+    float weight_sum = 0.0
+    for i = 0 to p - 1
+        float price = source[i]
+        if not na(price)
+            float w = array.get(weights, i)
+            sum += price * w
+            weight_sum += w
+    nz(sum / weight_sum, source)
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_order = input.int(0, "Bessel Order", minval=0, maxval=3, tooltip="Order of the Bessel function (0-3)")
+i_source = input.source(close, "Source")
+
+// Calculation
+bwma_value = bwma(i_source, i_period, i_order)
+
+// Plot
+// plot(bwma_value, "BWMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates BLMA using Blackman window weighting
+//@param source Series to calculate BLMA from
+//@param period Lookback period - FIR window size
+//@returns BLMA value, calculates from first bar using available data
+//@optimized Uses Blackman window coefficients with O(n) complexity per bar due to lookback loop
+export blma(series float source, simple int period) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+    int p = math.min(bar_index + 1, period)
+    var array<float> weights = array.new_float(1, 1.0)
+    var int last_p = 1
+    if last_p != p
+        weights := array.new_float(p, 0.0)
+        float total_weight = 0.0
+        float a0 = 0. 42
+        float a1 = 0.5
+        float a2 = 0.08
+        float inv_p_minus_1 = 1.0 / (p - 1)
+        float pi2 = 2.0 * math.pi
+        float pi4 = 4.0 * math.pi
+        for i = 0 to p - 1
+            float ratio = i * inv_p_minus_1
+            float term1 = a1 * math.cos(pi2 * ratio)
+            float term2 = a2 * math.cos(pi4 * ratio)
+            float w = a0 - term1 + term2
+            array.set(weights, i, w)
+            total_weight += w
+        float inv_total = 1.0 / total_weight
+        for i = 0 to p - 1
+            array.set(weights, i, array.get(weights, i) * inv_total)
+        last_p := p
+    float sum = 0.0
+    float weight_sum = 0.0
+    for i = 0 to p - 1
+        float price = source[i]
+        if not na(price)
+            float w = array.get(weights, i)
+            sum += price * w
+            weight_sum += w
+    nz(sum / weight_sum, source)
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_source = input.source(close, "Source")
+
+// Calculation
+blma_value = blma(i_source, i_period)
+
+// Plot
+// plot(blma_value, "BLMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates a convolution MA using any custom kernel
+//@param source Series to calculate CONV from
+//@param kernel Array of weights to use as convolution kernel
+//@returns CONV value, calculates from first bar using available data
+//@optimized Uses custom kernel convolution with O(n) complexity per bar due to lookback loop
+export conv(series float source, simple array<float> kernel) =>
+    int kernel_size = array.size(kernel)
+    if kernel_size <= 0
+        runtime.error("Kernel must not be empty")
+    var array<float> norm_kernel = array.new_float(1, 1.0)
+    var int last_kernel_size = 1
+    if last_kernel_size != kernel_size
+        norm_kernel := array.copy(kernel)
+        float kernel_sum = 0.0
+        for i = 0 to kernel_size - 1
+            kernel_sum += array.get(kernel, i)
+        if kernel_sum != 0.0
+            float inv_sum = 1.0 / kernel_sum
+            for i = 0 to kernel_size - 1
+                array.set(norm_kernel, i, array.get(kernel, i) * inv_sum)
+        last_kernel_size := kernel_size
+    int p = math.min(bar_index + 1, kernel_size)
+    float sum = 0.0
+    float weight_sum = 0.0
+    for i = 0 to p - 1
+        float price = source[i]
+        if not na(price)
+            float w = array.get(norm_kernel, i)
+            sum += price * w
+            weight_sum += w
+    nz(sum / weight_sum, source)
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_source = input.source(close, "Source")
+i_kernel = array.from(1.0, 2.5, -3.14, 0.0, 1.0)
+
+// Calculation
+conv_value = conv(i_source, i_kernel)
+
+// Plot
+// plot(conv_value, "CONV", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Computes Cubic Regression Moving Average — fits a degree-3 polynomial
+//          y = a0 + a1*x + a2*x² + a3*x³ to the most recent `period` bars via
+//          normal equations solved by closed-form elimination, returns the fitted endpoint.
+//@param source Series to analyze
+//@param period Lookback window for the cubic regression
+//@returns Fitted value at the most recent bar (x = 0)
+//@reference Polynomial least-squares regression (degree 3), evaluated at endpoint
+//@optimized O(period) per bar for accumulating sums; O(1) for solve
+export crma(series float source, simple int period) =>
+    if period < 4
+        runtime.error("Period must be at least 4 for cubic regression")
+
+
+    float price = nz(source)
+
+    // --- Circular buffer for rolling window ---
+    var array<float> buffer = array.new_float(period, na)
+    var int head = 0
+
+    array.set(buffer, head, price)
+    head := (head + 1) % period
+
+    int p = math.min(bar_index + 1, period)
+    if p < 4
+        price
+    else
+        // --- Accumulate power sums and cross-products ---
+        float s0 = 0.0
+        float s1 = 0.0
+        float s2 = 0.0
+        float s3 = 0.0
+        float s4 = 0.0
+        float s5 = 0.0
+        float s6 = 0.0
+        float r0 = 0.0
+        float r1 = 0.0
+        float r2 = 0.0
+        float r3 = 0.0
+
+        int idx = (head - 1 + period) % period
+        for i = 0 to p - 1
+            float val = array.get(buffer, idx)
+            float v = na(val) ? price : val
+            float x  = float(i)
+            float x2 = x * x
+            float x3 = x2 * x
+
+            s0 += 1.0
+            s1 += x
+            s2 += x2
+            s3 += x3
+            s4 += x2 * x2
+            s5 += x2 * x3
+            s6 += x3 * x3
+
+            r0 += v
+            r1 += x * v
+            r2 += x2 * v
+            r3 += x3 * v
+
+            idx := (idx - 1 + period) % period
+
+        // --- Solve 4x4 via scalar Gaussian elimination with partial pivoting ---
+        // Row 0
+        float a00 = s0
+        float a01 = s1
+        float a02 = s2
+        float a03 = s3
+        float b0  = r0
+        // Row 1
+        float a10 = s1
+        float a11 = s2
+        float a12 = s3
+        float a13 = s4
+        float b1  = r1
+        // Row 2
+        float a20 = s2
+        float a21 = s3
+        float a22 = s4
+        float a23 = s5
+        float b2  = r2
+        // Row 3
+        float a30 = s3
+        float a31 = s4
+        float a32 = s5
+        float a33 = s6
+        float b3  = r3
+
+        // --- Column 0: partial pivoting among rows 0-3 ---
+        float best0 = math.abs(a00)
+        int piv0 = 0
+        if math.abs(a10) > best0
+            best0 := math.abs(a10)
+            piv0 := 1
+        if math.abs(a20) > best0
+            best0 := math.abs(a20)
+            piv0 := 2
+        if math.abs(a30) > best0
+            best0 := math.abs(a30)
+            piv0 := 3
+
+        // Swap pivot row with row 0
+        if piv0 == 1
+            float t0 = a00
+            float t1 = a01
+            float t2 = a02
+            float t3 = a03
+            float t4 = b0
+            a00 := a10
+            a01 := a11
+            a02 := a12
+            a03 := a13
+            b0 := b1
+            a10 := t0
+            a11 := t1
+            a12 := t2
+            a13 := t3
+            b1 := t4
+        else if piv0 == 2
+            float t0 = a00
+            float t1 = a01
+            float t2 = a02
+            float t3 = a03
+            float t4 = b0
+            a00 := a20
+            a01 := a21
+            a02 := a22
+            a03 := a23
+            b0 := b2
+            a20 := t0
+            a21 := t1
+            a22 := t2
+            a23 := t3
+            b2 := t4
+        else if piv0 == 3
+            float t0 = a00
+            float t1 = a01
+            float t2 = a02
+            float t3 = a03
+            float t4 = b0
+            a00 := a30
+            a01 := a31
+            a02 := a32
+            a03 := a33
+            b0 := b3
+            a30 := t0
+            a31 := t1
+            a32 := t2
+            a33 := t3
+            b3 := t4
+
+        bool singular = best0 < 1e-12
+        if not singular
+            // Eliminate column 0 from rows 1,2,3
+            float f1 = a10 / a00
+            a11 -= f1 * a01
+            a12 -= f1 * a02
+            a13 -= f1 * a03
+            b1  -= f1 * b0
+            a10 := 0.0
+
+            float f2 = a20 / a00
+            a21 -= f2 * a01
+            a22 -= f2 * a02
+            a23 -= f2 * a03
+            b2  -= f2 * b0
+            a20 := 0.0
+
+            float f3 = a30 / a00
+            a31 -= f3 * a01
+            a32 -= f3 * a02
+            a33 -= f3 * a03
+            b3  -= f3 * b0
+            a30 := 0.0
+
+            // --- Column 1: partial pivoting among rows 1-3 ---
+            float best1 = math.abs(a11)
+            int piv1 = 1
+            if math.abs(a21) > best1
+                best1 := math.abs(a21)
+                piv1 := 2
+            if math.abs(a31) > best1
+                best1 := math.abs(a31)
+                piv1 := 3
+
+            if piv1 == 2
+                float t1 = a11
+                float t2 = a12
+                float t3 = a13
+                float t4 = b1
+                a11 := a21
+                a12 := a22
+                a13 := a23
+                b1 := b2
+                a21 := t1
+                a22 := t2
+                a23 := t3
+                b2 := t4
+            else if piv1 == 3
+                float t1 = a11
+                float t2 = a12
+                float t3 = a13
+                float t4 = b1
+                a11 := a31
+                a12 := a32
+                a13 := a33
+                b1 := b3
+                a31 := t1
+                a32 := t2
+                a33 := t3
+                b3 := t4
+
+            singular := best1 < 1e-12
+
+        if not singular
+            // Eliminate column 1 from rows 2,3
+            float g2 = a21 / a11
+            a22 -= g2 * a12
+            a23 -= g2 * a13
+            b2  -= g2 * b1
+            a21 := 0.0
+
+            float g3 = a31 / a11
+            a32 -= g3 * a12
+            a33 -= g3 * a13
+            b3  -= g3 * b1
+            a31 := 0.0
+
+            // --- Column 2: partial pivoting among rows 2-3 ---
+            if math.abs(a32) > math.abs(a22)
+                float t2 = a22
+                float t3 = a23
+                float t4 = b2
+                a22 := a32
+                a23 := a33
+                b2 := b3
+                a32 := t2
+                a33 := t3
+                b3 := t4
+
+            singular := math.abs(a22) < 1e-12
+
+        if not singular
+            // Eliminate column 2 from row 3
+            float h3 = a32 / a22
+            a33 -= h3 * a23
+            b3  -= h3 * b2
+            a32 := 0.0
+
+            singular := math.abs(a33) < 1e-12
+
+        float result = price
+        if not singular
+            // Back-substitution
+            float c3 = b3 / a33
+            float c2 = (b2 - a23 * c3) / a22
+            float c1 = (b1 - a12 * c2 - a13 * c3) / a11
+            float c0 = (b0 - a01 * c1 - a02 * c2 - a03 * c3) / a00
+            result := c0
+
+        result
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(14, "Period", minval=4)
+i_source = input.source(close, "Source")
+
+// Calculation
+crma_value = crma(i_source, i_period)
+
+// Plot
+// plot(crma_value, "CRMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates DWMA using double weighted smoothing with inline O(1) WMA
+//@param source Series to calculate DWMA from
+//@param period Lookback period for both smoothing passes
+//@returns DWMA value, calculates from first bar using available data
+//@optimized Uses two inline O(1) WMA calculations for combined O(1) complexity per bar
+export dwma(series float source, simple int period) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+    
+
+    var array<float> buffer1 = array.new_float(period, na)
+    var int head1 = 0
+    var float sum1 = 0.0
+    var float weighted_sum1 = 0.0
+    var int count1 = 0
+    var float norm1 = 0.0
+    
+    var array<float> buffer2 = array.new_float(period, na)
+    var int head2 = 0
+    var float sum2 = 0.0
+    var float weighted_sum2 = 0.0
+    var int count2 = 0
+    var float norm2 = 0.0
+    
+    float oldest1 = array.get(buffer1, head1)
+    float current1 = nz(source)
+    
+    if not na(oldest1)
+        float old_sum1 = sum1
+        sum1 -= oldest1
+        sum1 += current1
+        weighted_sum1 := weighted_sum1 - old_sum1 + (period * current1)
+    else
+        count1 += 1
+        sum1 += current1
+        weighted_sum1 := weighted_sum1 + (count1 * current1)
+        norm1 := count1 * (count1 + 1) * 0.5
+    
+    array.set(buffer1, head1, current1)
+    head1 := (head1 + 1) % period
+    
+    float wma1 = weighted_sum1 / norm1
+    
+    float oldest2 = array.get(buffer2, head2)
+    float current2 = nz(wma1)
+    
+    if not na(oldest2)
+        float old_sum2 = sum2
+        sum2 -= oldest2
+        sum2 += current2
+        weighted_sum2 := weighted_sum2 - old_sum2 + (period * current2)
+    else
+        count2 += 1
+        sum2 += current2
+        weighted_sum2 := weighted_sum2 + (count2 * current2)
+        norm2 := count2 * (count2 + 1) * 0.5
+    
+    array.set(buffer2, head2, current2)
+    head2 := (head2 + 1) % period
+    
+    weighted_sum2 / norm2
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_source = input.source(close, "Source")
+
+// Calculation
+dwma_value = dwma(i_source, i_period)
+
+// Plot
+// plot(dwma_value, "DWMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates EPMA using linear weighting with endpoint emphasis
+//@param source Series to calculate EPMA from
+//@param period Lookback period
+//@returns EPMA value with proper weight distribution
+//@optimized Uses linear weighting with O(n) complexity per bar due to lookback loop
+export epma(series float source, simple int period) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+    int p = math.max(1, math.min(bar_index + 1, period))
+    if p <= 1
+        source
+    else
+        float weightedSum = 0.0
+        float totalWeight = 0.0
+        for i = 0 to p - 1
+            float price = source[i]
+            if not na(price)
+                int weight = p - i
+                weightedSum += price * weight
+                totalWeight += weight
+        nz(weightedSum / totalWeight, na)
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_source = input.source(close, "Source")
+
+// Calculation
+epma_value = epma(i_source, i_period)
+
+// Plot
+// plot(epma_value, "EPMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates FWMA using Fibonacci sequence as weights with adaptive warmup
+//@param source Series to calculate FWMA from
+//@param period Lookback period - FIR window size (number of Fibonacci weights)
+//@returns FWMA value, calculates from first bar using available data
+//@optimized Precomputes Fibonacci weights when period changes; O(period) per bar
+export fwma(series float source, simple int period) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+    int p = math.min(bar_index + 1, period)
+    var array<float> weights = array.new_float(1, 1.0)
+    var int last_p = 1
+    if last_p != p
+        weights := array.new_float(p, 0.0)
+        // Generate Fibonacci sequence: F(1)=1, F(2)=1, F(3)=2, ...
+
+        // Generate Fibonacci sequence: F(1)=1, F(2)=1, F(3)=2, ...
+        float prev2 = 0.0
+        float prev1 = 1.0
+        for i = 0 to p - 1
+            float fib = (i == 0) ? 1.0 : (i == 1) ? 1.0 : prev1 + prev2
+            // Reverse: index 0 = most recent bar gets F(p), last index gets F(1)
+            array.set(weights, p - 1 - i, fib)
+            prev2 := prev1
+            prev1 := fib
+        last_p := p
+    float sum = 0.0
+    float weight_sum = 0.0
+    for i = 0 to p - 1
+        float price = source[i]
+        if not na(price)
+            float w = array.get(weights, i)
+            sum += price * w
+            weight_sum += w
+    nz(sum / weight_sum, source)
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_source = input.source(close, "Source")
+
+// Calculation
+fwma_value = fwma(i_source, i_period)
+
+// Plot
+// plot(fwma_value, "FWMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates GWMA using Gaussian window weighting
+//@param source Series to calculate GWMA from
+//@param period Lookback period - FIR window size
+//@param sigma Controls the width of the Gaussian bell curve (default: 0.4)
+//@returns GWMA value, calculates from first bar using available data
+//@optimized Uses Gaussian window coefficients with O(n) complexity per bar due to lookback loop
+export gwma(series float source, simple int period, simple float sigma=0.4) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+    int p = math.min(bar_index + 1, period)
+    var array<float> weights = array.new_float(1, 1.0)
+    var int last_p = 1
+    var float last_sigma = sigma
+    if last_p != p or last_sigma != sigma
+        weights := array.new_float(p, 0.0)
+        float center = (p - 1) / 2.0
+        float inv_sigmap = 1.0 / (sigma * p)
+        float total = 0.0
+        for i = 0 to p - 1
+            float x = (i - center) * inv_sigmap
+            float w = math.exp(-0.5 * x * x)
+            array.set(weights, i, w)
+            total += w
+        float inv_total = 1.0 / total
+        for i = 0 to p - 1
+            array.set(weights, i, array.get(weights, i) * inv_total)
+        last_p := p
+        last_sigma := sigma
+    float sum = 0.0
+    float weight_sum = 0.0
+    for i = 0 to p - 1
+        float price = source[i]
+        if not na(price)
+            float w = array.get(weights, i)
+            sum += price * w
+            weight_sum += w
+    nz(sum / weight_sum, source)
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_sigma = input.float(0.4, "Sigma", minval=0.1, maxval=1.0, step=0.1, tooltip="Controls the width of the Gaussian bell curve. Lower values make the curve narrower.")
+i_source = input.source(close, "Source")
+
+// Calculation
+gwma_value = gwma(i_source, i_period, i_sigma)
+
+// Plot
+// plot(gwma_value, "GWMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates HANMA using Hanning window weighting
+//@param source Series to calculate HANMA from
+//@param period Lookback period - FIR window size
+//@returns HANMA value, calculates from first bar using available data
+//@optimized Uses Hanning window coefficients with O(n) complexity per bar due to lookback loop
+export hanma(series float source, simple int period) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+    int p = math.min(bar_index + 1, period)
+    var array<float> weights = array.new_float(1, 1.0)
+    var int last_p = 1
+    if last_p != p
+        weights := array.new_float(p, 0.0)
+        for i = 0 to p - 1
+            float w = 0.5 * (1.0 - math.cos(2.0 * math.pi * i / (p - 1)))
+            array.set(weights, i, w)
+        last_p := p
+    float sum = 0.0
+    float weight_sum = 0.0
+    for i = 0 to p - 1
+        float price = source[i]
+        if not na(price)
+            float w = array.get(weights, i)
+            sum += price * w
+            weight_sum += w
+    nz(sum / weight_sum, source)
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_source = input.source(close, "Source")
+
+// Calculation
+hanma_value = hanma(i_source, i_period)
+
+// Plot
+// plot(hanma_value, "HANMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Computes Henderson Moving Average — a symmetric FIR filter that preserves
+//          cubic polynomial trends without distortion, from the X-11 seasonal adjustment
+//          framework. Weights are derived from the closed-form Henderson formula and
+//          can be negative at the edges (bandpass-like property).
+//@param source Series to smooth
+//@param period Lookback window (must be odd >= 5)
+//@returns Henderson-weighted moving average
+//@reference Henderson, R. (1916). "Note on Graduation by Adjusted Average."
+//           Transactions of the Actuarial Society of America, 17, 43-48.
+//@reference Hyndman, R.J. (2011). "Moving Averages" (International Encyclopedia of
+//           Statistical Science). Springer.
+//@optimized O(period) per bar for convolution; weights precomputed once
+export hend(series float source, simple int period) =>
+    if period < 5
+        runtime.error("Period must be at least 5 for Henderson filter")
+    if period % 2 == 0
+        runtime.error("Period must be odd for Henderson filter")
+
+
+    float price = nz(source)
+
+    // --- Circular buffer for rolling window ---
+    var array<float> buffer = array.new_float(period, na)
+    var int head = 0
+    array.set(buffer, head, price)
+    head := (head + 1) % period
+
+    // --- Precompute Henderson weights once ---
+    // Formula: w(k) = 315 * [(n-1)^2 - k^2] * [n^2 - k^2] * [(n+1)^2 - k^2]
+    //                * [3*n^2 - 16 - 11*k^2]
+    //          / {8 * n * (n^2-1) * (4*n^2 - 1) * (4*n^2 - 9) * (4*n^2 - 25)}
+    // where n = (period + 3) / 2, k ranges from -(period-1)/2 to (period-1)/2
+    var array<float> weights = array.new_float(0)
+    if barstate.isfirst
+        int half = (period - 1) / 2
+        float n = (period + 3) / 2.0
+        float n2 = n * n
+        float nm1_2 = (n - 1) * (n - 1)
+        float np1_2 = (n + 1) * (n + 1)
+        float denom = 8.0 * n * (n2 - 1) * (4 * n2 - 1) * (4 * n2 - 9) * (4 * n2 - 25)
+
+        float wsum = 0.0
+        for k = -half to half
+            float k2 = float(k * k)
+            float w = 315.0 * (nm1_2 - k2) * (n2 - k2) * (np1_2 - k2) * (3 * n2 - 16 - 11 * k2) / denom
+            array.push(weights, w)
+            wsum += w
+
+        // Normalize weights to sum exactly 1.0 (handles floating-point drift)
+        if wsum != 0
+            for j = 0 to period - 1
+                array.set(weights, j, array.get(weights, j) / wsum)
+
+    int count = math.min(bar_index + 1, period)
+    if count < period
+        price
+    else
+        // --- Apply Henderson convolution via circular buffer ---
+        // Buffer position: head points to next-write = oldest entry
+        // Weight[0] corresponds to oldest bar, Weight[period-1] to newest
+        float result = 0.0
+        for j = 0 to period - 1
+            int idx = (head + j) % period
+            float val = nz(array.get(buffer, idx))
+            result += val * array.get(weights, j)
+        result
+
+// ── Inputs ──────────────────────────────────────────────────────────────
+src  = input.source(close, "Source")
+per  = input.int(7, "Period", minval=5, step=2, tooltip="Must be odd, >= 5")
+
+// Enforce odd period at input level
+period_adj = per % 2 == 0 ? per + 1 : per
+
+// ── Plot ────────────────────────────────────────────────────────────────
+// plot(hend(src, period_adj), "HEND", color.new(color.yellow, 0), 2)  // Disabled in library
+
+
+
+//@function Calculates HAMMA using Hamming window weighting
+//@param source Series to calculate HAMMA from
+//@param period Lookback period - FIR window size
+//@returns HAMMA value, calculates from first bar using available data
+//@optimized Uses Hamming window coefficients with O(n) complexity per bar due to lookback loop
+export hamma(series float source, simple int period) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+    int p = math.min(bar_index + 1, period)
+    var array<float> weights = array.new_float(1, 1.0)
+    var int last_p = 1
+    if last_p != p
+        weights := array.new_float(p, 0.0)
+        for i = 0 to p - 1
+            float w = 0.54 - 0.46 * math.cos(2.0 * math.pi * i / (p - 1))
+            array.set(weights, i, w)
+        last_p := p
+    float sum = 0.0
+    float weight_sum = 0.0
+    for i = 0 to p - 1
+        float price = source[i]
+        if not na(price)
+            float w = array.get(weights, i)
+            sum += price * w
+            weight_sum += w
+    nz(sum / weight_sum, source)
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_source = input.source(close, "Source")
+
+// Calculation
+hamma_value = hamma(i_source, i_period)
+
+// Plot
+// plot(hamma_value, "HAMMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates WMA using circular buffer with O(1) complexity
+//@param source Series to calculate WMA from
+//@param period Lookback period
+//@returns WMA value
+export wma_helper(series float source, simple int period) =>
+    var array<float> buffer = array.new_float(period, na)
+    var int head = 0
+    var float sum = 0.0
+    var float weighted_sum = 0.0
+    var int count = 0
+    var float norm = 0.0
+    
+
+    float oldest = array.get(buffer, head)
+    float current = nz(source)
+    
+    if not na(oldest)
+        float old_sum = sum
+        sum -= oldest
+        sum += current
+        weighted_sum := weighted_sum - old_sum + (period * current)
+    else
+        count += 1
+        sum += current
+        weighted_sum := weighted_sum + (count * current)
+        norm := count * (count + 1) * 0.5
+    
+    array.set(buffer, head, current)
+    head := (head + 1) % period
+    
+    weighted_sum / norm
+
+//@function Calculates HMA using optimized WMA helper function
+//@param source Series to calculate HMA from
+//@param period Lookback period - FIR window size
+//@returns HMA value, calculates from first bar using available data
+//@optimized Uses three O(1) WMA calculations for combined O(1) complexity per bar
+export hma(series float source, simple int period) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+    
+
+    int half_period = math.max(1, math.round(period / 2.0))
+    int sqrt_period = math.max(1, math.round(math.sqrt(period)))
+    
+    float wma_half = wma_helper(source, half_period)
+    float wma_full = wma_helper(source, period)
+    float diff = 2.0 * wma_half - wma_full
+    float hma_value = wma_helper(diff, sqrt_period)
+    
+    hma_value
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_source = input.source(close, "Source")
+
+// Calculation
+hma_value = hma(i_source, i_period)
+
+// Plot
+// plot(hma_value, "HMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Computes the Integral of Linear Regression Slope — cumulative sum of the
+//          least-squares slope computed over a rolling window. Tracks accumulated
+//          trend direction as a price-overlay smoothing filter.
+//@param source Series to analyze
+//@param period Lookback window for slope calculation (>= 2)
+//@returns Cumulative integral of the rolling linear regression slope
+//@reference John Ehlers, "Rocket Science for Traders" (Wiley, 2001).
+//@reference Concept: ILRS is the discrete integral (running sum) of the LinReg slope,
+//           producing a smoother trend follower than LSMA. Equivalent to filtering
+//           the first derivative and reconstructing via integration.
+//@optimized O(period) per bar for slope via circular buffer accumulation
+export ilrs(series float source, simple int period) =>
+    if period < 2
+        runtime.error("Period must be at least 2")
+
+
+    float price = nz(source)
+
+    // --- Circular buffer for rolling window ---
+    var array<float> buffer = array.new_float(period, na)
+    var int head = 0
+    array.set(buffer, head, price)
+    head := (head + 1) % period
+
+    // --- Running integral state ---
+    var float integral = na
+
+    int count = math.min(bar_index + 1, period)
+    if count < 2
+        integral := price
+        integral
+    else
+        // --- Compute linear regression slope over the buffer ---
+        // x-indices: 0, 1, ..., n-1 (oldest to newest)
+        // Analytical x-sums: ΣX = n(n-1)/2, ΣX² = n(n-1)(2n-1)/6
+        float n = count
+        float sumX  = 0.5 * (n - 1) * n
+        float sumX2 = (n - 1) * n * (2 * n - 1) / 6.0
+
+        // Accumulate y-sums from circular buffer
+        int start = count < period ? 0 : head
+        float sumY  = 0.0
+        float sumXY = 0.0
+        for i = 0 to int(n) - 1
+            int idx = (start + i) % period
+            float val = nz(array.get(buffer, idx))
+            sumY  += val
+            sumXY += i * val
+
+        float denomX = n * sumX2 - sumX * sumX
+        float slope = denomX != 0 ? (n * sumXY - sumX * sumY) / denomX : 0.0
+
+        // --- Integrate: ILRS = ILRS[1] + slope ---
+        if na(integral)
+            integral := price
+        integral := integral + slope
+        integral
+
+// ── Inputs ──────────────────────────────────────────────────────────────
+src = input.source(close, "Source")
+per = input.int(14, "Period", minval=2)
+
+// ── Plot ────────────────────────────────────────────────────────────────
+// plot(ilrs(src, per), "ILRS", color.new(color.yellow, 0), 2)  // Disabled in library
+
+
+
+//@function I0 approximation (modified Bessel, first kind, order 0) via 25-term power series.
+export bessel_i0(float x) =>
+    float sum = 1.0
+    float term = 1.0
+    float half_x = x / 2.0
+    for m = 1 to 25
+        term *= (half_x / m)
+        sum += term * term
+    sum
+
+
+//@function Computes Kaiser Window Moving Average — a symmetric FIR filter using the
+//          Kaiser-Bessel window function for optimal sidelobe attenuation. The beta
+//          parameter controls the trade-off between main lobe width and sidelobe level.
+//@param source Series to smooth
+//@param period Lookback window (>= 2)
+//@param beta Kaiser shape parameter controlling sidelobe attenuation (default 3.0).
+//            Higher beta = smoother (more attenuation) but wider transition band.
+//            beta=0 reduces to rectangular (SMA), beta~5.65 approximates Blackman.
+//@returns Kaiser-weighted moving average
+//@reference Kaiser, J.F. & Schafer, R.W. (1980). "On the Use of the I0-Sinh Window
+//           for Spectrum Analysis." IEEE Trans. Acoust., Speech, Signal Process.
+//@optimized O(period) per bar for convolution; weights precomputed once via I0 series
+export kaiser(series float source, simple int period, simple float beta = 3.0) =>
+    if period < 2
+        runtime.error("Period must be at least 2")
+
+
+    float price = nz(source)
+
+    // --- Circular buffer for rolling window ---
+    var array<float> buffer = array.new_float(period, na)
+    var int head = 0
+    array.set(buffer, head, price)
+    head := (head + 1) % period
+
+    // --- Precompute Kaiser window weights once ---
+    // Kaiser window: w(k) = I0(beta * sqrt(1 - ((2k/(N-1)) - 1)^2)) / I0(beta)
+    var array<float> weights = array.new_float(0)
+    if barstate.isfirst
+        float i0_beta = bessel_i0(beta)
+        float N = period - 1
+
+        float wsum = 0.0
+        for k = 0 to period - 1
+            float t = N > 0 ? (2.0 * k / N) - 1.0 : 0.0
+            float arg_sq = 1.0 - t * t
+            // Clamp to avoid sqrt of negative due to floating-point
+            float arg = arg_sq > 0 ? math.sqrt(arg_sq) : 0.0
+            float w = i0_beta > 0 ? bessel_i0(beta * arg) / i0_beta : 1.0
+            array.push(weights, w)
+            wsum += w
+
+        // Normalize weights to sum exactly 1.0
+        if wsum > 0
+            for j = 0 to period - 1
+                array.set(weights, j, array.get(weights, j) / wsum)
+
+    int count = math.min(bar_index + 1, period)
+    if count < period
+        price
+    else
+        // --- Apply Kaiser window convolution via circular buffer ---
+        // Buffer: head points to next-write = oldest entry
+        // Weight[0] = oldest bar, Weight[period-1] = newest
+        float result = 0.0
+        for j = 0 to period - 1
+            int idx = (head + j) % period
+            float val = nz(array.get(buffer, idx))
+            result += val * array.get(weights, j)
+        result
+
+// ── Inputs ──────────────────────────────────────────────────────────────
+src  = input.source(close, "Source")
+per  = input.int(14, "Period", minval=2)
+bet  = input.float(3.0, "Beta (shape)", minval=0, maxval=20, step=0.1,
+           tooltip="0=rectangular(SMA), 3=good general, 5.65≈Blackman, 8.6=Hamming-like")
+
+// ── Plot ────────────────────────────────────────────────────────────────
+// plot(kaiser(src, per, bet), "KAISER", color.new(color.yellow, 0), 2)  // Disabled in library
+
+
+
+//@function Calculates LANCZOS using sinc window weighting
+//@param source Series to calculate LANCZOS from
+//@param period Lookback period - FIR window size
+//@returns LANCZOS value, calculates from first bar using available data
+//@reference Lanczos, C. (1956). "Applied Analysis." Prentice-Hall.
+export lanczos(series float source, simple int period) =>
+    if period < 2
+        runtime.error("Period must be at least 2")
+
+
+    float price = nz(source)
+
+    // --- Circular buffer for rolling window ---
+    var array<float> buffer = array.new_float(period, na)
+    var int head = 0
+    array.set(buffer, head, price)
+    head := (head + 1) % period
+
+    // --- Precompute Lanczos (sinc) window weights once ---
+    // w(k) = sinc(2k/(N-1) - 1), sinc(x) = sin(pi*x)/(pi*x), sinc(0) = 1
+    var array<float> weights = array.new_float(0)
+    if barstate.isfirst
+        float nm1 = (period - 1) * 1.0
+        float wsum = 0.0
+        for k = 0 to period - 1
+            float x = nm1 > 0 ? (2.0 * k / nm1) - 1.0 : 0.0
+            float pix = math.pi * x
+            // Ternary guarantees lazy evaluation — avoids 0/0 when pix≈0
+            float w = math.abs(pix) < 1e-8 ? 1.0 : math.sin(pix) / pix
+            array.push(weights, w)
+            wsum += w
+        // Normalize weights to sum = 1
+        if wsum > 1e-15
+            for j = 0 to period - 1
+                array.set(weights, j, array.get(weights, j) / wsum)
+
+    int count = math.min(bar_index + 1, period)
+    if count < period
+        price
+    else
+        // --- Apply Lanczos window convolution via circular buffer ---
+        // Buffer: head points to next-write = oldest entry
+        // Weight[0] = oldest bar, Weight[period-1] = newest
+        float result = 0.0
+        for j = 0 to period - 1
+            int idx = (head + j) % period
+            float val = nz(array.get(buffer, idx))
+            result += val * array.get(weights, j)
+        result
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(14, "Period", minval=2)
+i_source = input.source(close, "Source")
+
+// Calculation
+lanczos_value = lanczos(i_source, i_period)
+
+// Plot
+// plot(lanczos_value, "LANCZOS", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates LSMA by fitting a linear regression line to price data
+//@param source Series to calculate LSMA from
+//@param period Lookback period for the linear regression
+//@returns LSMA value, calculates from first bar using available data
+//@optimized Uses circular buffer with linear regression for O(n) complexity per bar
+export lsma(series float source, simple int period) =>
+    if period <= 1
+        runtime.error("Period must be greater than 1")
+        source
+    else
+        int p = math.min(bar_index + 1, period)
+        if p <= 1
+            source
+        else
+            var array<float> buffer = array.new_float(period, na)
+            var int head = 0
+            array.set(buffer, head, source)
+            head := (head + 1) % period
+            float sum_y = 0.0
+            float sum_xy = 0.0
+            float sum_x = 0.0
+            float sum_x2 = 0.0
+            float count = 0.0
+            int idx = (head - 1 + period) % period
+            for i = 0 to p - 1
+                float val = array.get(buffer, idx)
+                if not na(val)
+                    sum_x += i
+                    sum_y += val
+                    sum_xy += i * val
+                    sum_x2 += i * i
+                    count += 1.0
+                idx := (idx - 1 + period) % period
+            if count <= 1.0
+                source
+            else
+                float denom = count * sum_x2 - sum_x * sum_x
+                if denom == 0.0
+                    source
+                else
+                    float slope = (count * sum_xy - sum_x * sum_y) / denom
+                    float intercept = (sum_y - slope * sum_x) / count
+                    intercept
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_source = input.source(close, "Source")
+
+// Calculation
+lsma_value = lsma(i_source, i_period)
+
+// Plot
+// plot(lsma_value, "LSMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates NLMA using the original Igorad (TrendLaboratory) kernel
+//@param source Series to calculate NLMA from
+//@param period Length parameter (conceptual averaging period)
+//@returns NLMA value, returns price during warmup
+//@description NonLagMA by Igorad (TrendLaboratory). Original two-phase kernel:
+//  Phase 1 (focus zone, i=0..Length-2): t = i/(Length-2), beta=cos(pi*t), g=1 for t<=0.5 else 1/(Coeff*t+1)
+//  Phase 2 (cycle zone, i=Length-1..Len-2): oscillating cosine with 1/(Coeff*t+1) decay
+//  Coeff = 3*pi. Kernel length Len = 4*Length + (Length-1) = 5*Length-1.
+//  alfa[i] = g * beta. Normalized by signed sum preserves DC gain = 1.
+export nlma(series float source, simple int period) =>
+    if period < 2
+        runtime.error("Period must be at least 2")
+
+
+    float price = nz(source)
+
+    // Original Igorad parameters
+    int phase = period - 1           // Phase zone length
+    int cycle = 4                     // Default cycle parameter
+    int flen = period * 4 + phase     // Full kernel length = 5*period - 1
+
+    // --- Circular buffer for rolling window ---
+    var array<float> buffer = array.new_float(flen, na)
+    var int head = 0
+    array.set(buffer, head, price)
+    head := (head + 1) % flen
+
+    // --- Precompute Igorad kernel weights once ---
+    var array<float> weights = array.new_float(0)
+    var float weightSum = 0.0
+    if barstate.isfirst
+        float coeff = 3.0 * math.pi
+        float wsum = 0.0
+
+        for i = 0 to flen - 2
+            float t = 0.0
+            if i <= phase - 1
+                // Phase zone: t ramps from 0 to 1
+                t := phase > 1 ? float(i) / float(phase - 1) : 0.0
+            else
+                // Cycle zone: t continues from 1 upward
+                float numer = float(i - phase + 1) * float(2 * cycle - 1)
+                float denom = float(cycle * period - 1)
+                t := 1.0 + (denom > 0 ? numer / denom : 0.0)
+
+            float beta = math.cos(math.pi * t)
+            float g = t <= 0.5 ? 1.0 : 1.0 / (coeff * t + 1.0)
+            float w = g * beta
+            array.push(weights, w)
+            wsum += w
+
+        // Last tap (i = flen-1) has weight 0 (original loop goes to Len-2)
+        array.push(weights, 0.0)
+        weightSum := wsum
+
+    int count = math.min(bar_index + 1, flen)
+    if count < flen
+        price
+    else
+        // --- Convolution via circular buffer ---
+        // head = next write = oldest | weights[0] maps to oldest bar
+        // Original MQL4: alfa[0] = newest price, alfa[Len-1] = oldest
+        // Our buffer: (head+0) = oldest, (head+flen-1) = newest
+        // So we need to reverse: oldest bar × weights[flen-1], newest bar × weights[0]
+        float nlma_sum = 0.0
+        for j = 0 to flen - 1
+            int idx = (head + j) % flen
+            float val = nz(array.get(buffer, idx))
+            nlma_sum += val * array.get(weights, flen - 1 - j)
+        math.abs(weightSum) > 1e-15 ? nlma_sum / weightSum : price
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(14, "Period", minval=2)
+i_source = input.source(close, "Source")
+
+// Calculation
+nlma_value = nlma(i_source, i_period)
+
+// Plot
+// plot(nlma_value, "NLMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Nyquist Moving Average per Dr. Manfred G. Dürschner ("Gleitende Durchschnitte 3.0").
+//          Applies the Nyquist-Shannon sampling theorem to cascaded LWMAs: a single-smoothed
+//          LWMA and a double-smoothed LWMA are combined via lag-compensating extrapolation.
+//          Formula: NYQMA = (1 + α) · MA1 − α · MA2, where α = N2 / (N1 − N2).
+//          The second LWMA period (N2) must satisfy N2 ≤ floor(N1/2) per Nyquist criterion
+//          to prevent aliasing artifacts ("ghost signals") in the smoothed output.
+//@param source Series to smooth
+//@param period Primary LWMA period (N1), must be ≥ 3
+//@param nyquist_period Secondary LWMA period (N2), clamped to ≤ floor(N1/2)
+//@returns Nyquist-compliant lag-compensated moving average
+export nyqma(series float source, simple int period, simple int nyquist_period) =>
+    if period < 3
+        runtime.error("Period must be at least 3")
+
+
+    float price = nz(source)
+    int n2 = math.min(math.max(nyquist_period, 1), period / 2)
+
+    // ── MA1: LWMA(source, period) with O(1) circular buffer ──
+    var array<float> buf1 = array.new_float(period, na)
+    var int head1 = 0
+    var float sum1 = 0.0
+    var float wsum1 = 0.0
+    var int cnt1 = 0
+
+    float oldest1 = array.get(buf1, head1)
+    if not na(oldest1)
+        float old_sum1 = sum1
+        sum1 -= oldest1
+        sum1 += price
+        wsum1 := wsum1 - old_sum1 + period * price
+    else
+        cnt1 += 1
+        sum1 += price
+        wsum1 := wsum1 + cnt1 * price
+
+    array.set(buf1, head1, price)
+    head1 := (head1 + 1) % period
+
+    int p1 = math.min(cnt1, period)
+    float norm1 = p1 * (p1 + 1) * 0.5
+    float ma1 = wsum1 / norm1
+
+    // ── MA2: LWMA(MA1, n2) with O(1) circular buffer ──
+    var array<float> buf2 = array.new_float(n2, na)
+    var int head2 = 0
+    var float sum2 = 0.0
+    var float wsum2 = 0.0
+    var int cnt2 = 0
+
+    float oldest2 = array.get(buf2, head2)
+    if not na(oldest2)
+        float old_sum2 = sum2
+        sum2 -= oldest2
+        sum2 += ma1
+        wsum2 := wsum2 - old_sum2 + n2 * ma1
+    else
+        cnt2 += 1
+        sum2 += ma1
+        wsum2 := wsum2 + cnt2 * ma1
+
+    array.set(buf2, head2, ma1)
+    head2 := (head2 + 1) % n2
+
+    int p2 = math.min(cnt2, n2)
+    float norm2 = p2 * (p2 + 1) * 0.5
+    float ma2 = wsum2 / norm2
+
+    // ── Lag-compensating extrapolation ──
+    float alpha = float(n2) / float(period - n2)
+    float result = (1.0 + alpha) * ma1 - alpha * ma2
+    result
+
+// ── Inputs ──
+int   p_period  = input.int(89, "Period (N1)", minval=3)
+int   p_nyquist = input.int(21, "Nyquist Period (N2)", minval=1)
+float p_src     = input.source(close, "Source")
+
+// ── Calculation ──
+float out = nyqma(p_src, p_period, p_nyquist)
+
+// ── Plot ──
+// plot(out, "NYQMA", color.yellow, 2)  // Disabled in library
+
+
+
+//@function Calculates PWMA using Pascal's triangle coefficients as weights with compensator
+//@param source Series to calculate PWMA from
+//@param period Lookback period - FIR window size
+//@returns PWMA value, calculates from first bar using available data
+//@optimized Uses Pascal's triangle weighting with O(n) complexity per bar due to lookback loop
+export pwma(series float source, simple int period) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+    int p = math.min(bar_index + 1, period)
+    var array<float> weights = array.new_float(1, 1.0)
+    var int last_p = 1
+    if last_p != p
+        weights := array.new_float(p, 0.0)
+        array.set(weights, 0, 1.0)
+        if p > 1
+            float prev_weight = 1.0
+            for i = 1 to p - 1
+                float curr_weight = prev_weight * (p - i) / i
+                array.set(weights, i, curr_weight)
+                prev_weight := curr_weight
+        last_p := p
+    float sum = 0.0
+    float weight_sum = 0.0
+    for i = 0 to p - 1
+        float price = source[i]
+        if not na(price)
+            float w = array.get(weights, i)
+            sum += price * w
+            weight_sum += w
+    nz(sum / weight_sum, source)
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_source = input.source(close, "Source")
+
+// Calculation
+pwma_value = pwma(i_source, i_period)
+
+// Plot
+// plot(pwma_value, "PWMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Computes Parzen (de la Vallée-Poussin) Window Moving Average — a symmetric
+//          FIR filter using the Parzen window function. The Parzen window is a piecewise
+//          cubic polynomial with zero sidelobe discontinuity, giving excellent sidelobe
+//          suppression (-24 dB/octave rolloff). It is the convolution of two triangular
+//          (Bartlett) windows at half-length, producing a smooth bell-shaped kernel.
+//          w(k) = 1 - 6u² + 6|u|³        for |u| ≤ 0.5
+//          w(k) = 2(1 - |u|)³             for 0.5 < |u| ≤ 1.0
+//          where u = 2k/(N-1) normalized to [-1,1] center-symmetric.
+//@param source Series to smooth
+//@param period Lookback window (>= 2)
+//@returns Parzen-weighted moving average
+//@reference Parzen, E. (1961). "Mathematical Considerations in the Estimation of Spectra."
+//           Technometrics, 3(2), 167–190.
+//@optimized O(period) per bar for convolution; weights precomputed once
+export parzen(series float source, simple int period) =>
+    if period < 2
+        runtime.error("Period must be at least 2")
+
+
+    float price = nz(source)
+
+    // --- Circular buffer for rolling window ---
+    var array<float> buffer = array.new_float(period, na)
+    var int head = 0
+    array.set(buffer, head, price)
+    head := (head + 1) % period
+
+    // --- Precompute Parzen window weights once ---
+    var array<float> weights = array.new_float(0)
+    if barstate.isfirst
+        float half_N = (period - 1) / 2.0
+        float wsum = 0.0
+        for k = 0 to period - 1
+            // u normalized to [-1, 1] centered on the middle of the window
+            float u = half_N > 0 ? (k - half_N) / half_N : 0.0
+            float abs_u = math.abs(u)
+            float w = 0.0
+            if abs_u <= 0.5
+                // Inner region: cubic spline
+                w := 1.0 - 6.0 * abs_u * abs_u + 6.0 * abs_u * abs_u * abs_u
+            else if abs_u <= 1.0
+                // Outer region: cubic taper to zero
+                float t = 1.0 - abs_u
+                w := 2.0 * t * t * t
+            array.push(weights, w)
+            wsum += w
+
+        // Normalize weights to sum exactly 1.0
+        if wsum > 0
+            for j = 0 to period - 1
+                array.set(weights, j, array.get(weights, j) / wsum)
+
+    int count = math.min(bar_index + 1, period)
+    if count < period
+        price
+    else
+        // --- Apply Parzen window convolution via circular buffer ---
+        // Buffer: head points to next-write = oldest entry
+        // Weight[0] = oldest bar, Weight[period-1] = newest
+        float result = 0.0
+        for j = 0 to period - 1
+            int idx = (head + j) % period
+            float val = nz(array.get(buffer, idx))
+            result += val * array.get(weights, j)
+        result
+
+// ── Inputs ──
+src = input.source(close, "Source")
+per = input.int(14, "Period", minval = 2)
+
+// ── Plot ──
+// plot(parzen(src, per), "PARZEN", color.yellow, 2)  // Disabled in library
+
+
+
+//@function Calculates Ehlers Predictive Moving Average using WMA-based linear extrapolation
+//@param source Series to calculate PMA from
+//@param period Lookback period for WMA smoothing (>= 1, default 7 per Ehlers)
+//@returns [pma, trigger] where PMA = 2×WMA − WMA(WMA) and Trigger = (4×WMA − WMA(WMA)) / 3
+//@optimized Uses dual running sums with cached denominator for O(1) WMA complexity per bar
+export pma(series float source, simple int period) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+
+
+    // --- First WMA: WMA(source, period) --- matches canonical wma.pine pattern
+    var array<float> buffer1 = array.new_float(period, na)
+    var int head1 = 0
+    var float sum1 = 0.0
+    var float weighted_sum1 = 0.0
+    var int count1 = 0
+    var float norm1 = 0.0
+
+    float oldest1 = array.get(buffer1, head1)
+    float current1 = nz(source)
+
+    if not na(oldest1)
+        float old_sum1 = sum1
+        sum1 -= oldest1
+        sum1 += current1
+        weighted_sum1 := weighted_sum1 - old_sum1 + (period * current1)
+    else
+        count1 += 1
+        sum1 += current1
+        weighted_sum1 := weighted_sum1 + (count1 * current1)
+        norm1 := count1 * (count1 + 1) * 0.5
+
+    array.set(buffer1, head1, current1)
+    head1 := (head1 + 1) % period
+
+    float wma1 = weighted_sum1 / norm1
+
+    // --- Second WMA: WMA(WMA1, period) --- same O(1) circular buffer on first WMA output
+    var array<float> buffer2 = array.new_float(period, na)
+    var int head2 = 0
+    var float sum2 = 0.0
+    var float weighted_sum2 = 0.0
+    var int count2 = 0
+    var float norm2 = 0.0
+
+    float oldest2 = array.get(buffer2, head2)
+    float current2 = nz(wma1)
+
+    if not na(oldest2)
+        float old_sum2 = sum2
+        sum2 -= oldest2
+        sum2 += current2
+        weighted_sum2 := weighted_sum2 - old_sum2 + (period * current2)
+    else
+        count2 += 1
+        sum2 += current2
+        weighted_sum2 := weighted_sum2 + (count2 * current2)
+        norm2 := count2 * (count2 + 1) * 0.5
+
+    array.set(buffer2, head2, current2)
+    head2 := (head2 + 1) % period
+
+    float wma2 = weighted_sum2 / norm2
+
+    // Predictive line: cancels one WMA lag via linear extrapolation
+    // PMA = 2 × WMA(src) − WMA(WMA(src))
+    float pma_val = 2.0 * wma1 - wma2
+
+    // Trigger/signal line: weighted blend for crossover signals
+    // Trigger = (4 × WMA(src) − WMA(WMA(src))) / 3
+    float trigger_val = (4.0 * wma1 - wma2) / 3.0
+
+    [na(source) ? na : pma_val, na(source) ? na : trigger_val]
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(7, "Period", minval=1, tooltip="Lookback period for WMA smoothing (Ehlers default: 7)")
+i_source = input.source(close, "Source")
+
+// Calculation
+[pma_value, trigger_value] = pma(i_source, i_period)
+
+// Plot
+// plot(pma_value, "PMA", color=color.yellow, linewidth=2)  // Disabled in library
+// plot(trigger_value, "Trigger", color=color.orange, linewidth=1)  // Disabled in library
+
+
+
+//@function Quadratic Regression Moving Average — fits a second-degree polynomial
+//          y = a + b·x + c·x² to the lookback window via ordinary least squares and
+//          returns the fitted value at the most recent bar (the endpoint). Captures
+//          both linear trends and curvature, providing better tracking of parabolic
+//          price movements than linear regression (LSMA). Uses x = 0..N-1 convention
+//          where x=0 is the oldest bar and the endpoint is evaluated at x=N-1.
+//@param source Series to smooth
+//@param period Lookback window (>= 3, need at least 3 points for quadratic fit)
+//@returns Quadratic regression endpoint value
+//@reference Savitzky, A. & Golay, M.J.E. (1964). Analytical Chemistry, 36(8), 1627–1639.
+//           (Quadratic regression is a special case of Savitzky-Golay degree=2 smoothing.)
+//@optimized O(period) per bar via circular buffer; sums precomputed for normal equations
+export qrma(series float source, simple int period) =>
+    if period < 3
+        runtime.error("Period must be at least 3")
+
+
+    float price = nz(source)
+
+    // --- Circular buffer ---
+    var array<float> buffer = array.new_float(period, 0.0)
+    var int head = 0
+    array.set(buffer, head, price)
+    head := (head + 1) % period
+
+    int count = math.min(bar_index + 1, period)
+    if count < period
+        price
+    else
+        // --- Precompute constant sums for x = 0, 1, ..., N-1 ---
+        // These only depend on period (N) and could be precomputed once,
+        // but Pine Script handles them efficiently inline.
+        float n = period
+
+        // Σx = N(N-1)/2
+        float sx = n * (n - 1.0) / 2.0
+        // Σx² = N(N-1)(2N-1)/6
+        float sx2 = n * (n - 1.0) * (2.0 * n - 1.0) / 6.0
+        // Σx³ = [N(N-1)/2]²
+        float sx3 = sx * sx
+        // Σx⁴ = N(N-1)(2N-1)(3N²-3N-1)/30
+        float sx4 = n * (n - 1.0) * (2.0 * n - 1.0) * (3.0 * n * n - 3.0 * n - 1.0) / 30.0
+
+        // --- Compute data-dependent sums ---
+        // Buffer: head points to next-write = oldest entry
+        float sy = 0.0
+        float sxy = 0.0
+        float sx2y = 0.0
+        for j = 0 to period - 1
+            int idx = (head + j) % period
+            float val = array.get(buffer, idx)
+            float x = j  // x=0 is oldest, x=N-1 is newest
+            sy += val
+            sxy += x * val
+            sx2y += x * x * val
+
+        // --- Solve 3x3 normal equations via Cramer's rule ---
+        // [n    Σx   Σx²] [a]   [Σy  ]
+        // [Σx   Σx²  Σx³] [b] = [Σxy ]
+        // [Σx²  Σx³  Σx⁴] [c]   [Σx²y]
+
+        float d00 = n
+        float d01 = sx
+        float d02 = sx2
+        float d10 = sx
+        float d11 = sx2
+        float d12 = sx3
+        float d20 = sx2
+        float d21 = sx3
+        float d22 = sx4
+
+        // Determinant of coefficient matrix
+        float det = d00 * (d11 * d22 - d12 * d21) -
+                     d01 * (d10 * d22 - d12 * d20) +
+                     d02 * (d10 * d21 - d11 * d20)
+
+        if math.abs(det) < 1e-20
+            price
+        else
+            // Solve for a, b, c using Cramer's rule
+            float det_a = sy  * (d11 * d22 - d12 * d21) -
+                          d01 * (sxy * d22 - sx2y * d21) +
+                          d02 * (sxy * d21 - sx2y * d11)
+            float det_b = d00 * (sxy * d22 - sx2y * d21) -
+                          sy  * (d10 * d22 - d12 * d20) +
+                          d02 * (d10 * sx2y - sxy * d20)
+            float det_c = d00 * (d11 * sx2y - sxy * d21) -
+                          d01 * (d10 * sx2y - sxy * d20) +
+                          sy  * (d10 * d21 - d11 * d20)
+
+            float a = det_a / det
+            float b = det_b / det
+            float c = det_c / det
+
+            // Evaluate at x = N-1 (newest bar = endpoint)
+            float x_end = n - 1.0
+            a + b * x_end + c * x_end * x_end
+
+// ── Inputs ──
+int   p_period = input.int(14, "Period", minval = 3)
+float p_src    = input.source(close, "Source")
+
+// ── Calculation ──
+float out = qrma(p_src, p_period)
+
+// ── Plot ──
+// plot(out, "QRMA", color.yellow, 2)  // Disabled in library
+
+
+
+//@function Rainbow Moving Average — recursively applies SMA 10 times, then computes
+//          a weighted average of all 10 layers. Layers 1–4 receive weights 5,4,3,2
+//          and layers 5–10 each receive weight 1, for a total divisor of 20.
+//          The recursive SMA application creates progressively smoother versions
+//          of price, and the weighting scheme emphasizes the less-smoothed (more
+//          responsive) layers. Developed by Mel Widner, published in Technical
+//          Analysis of Stocks & Commodities (TASC), 1998.
+//@param source Series to smooth
+//@param period Lookback window for each SMA layer (>= 1)
+//@returns Weighted average of 10 recursive SMA layers
+//@reference Widner, M. (1998). "Rainbow Charts." Technical Analysis of Stocks & Commodities.
+//@reference thinkorswim RainbowAverage study documentation.
+//@optimized O(10 × period) per bar; each SMA uses circular buffer with O(1) running sum
+export rain(series float source, simple int period) =>
+    if period < 1
+        runtime.error("Period must be at least 1")
+
+
+    float price = nz(source)
+
+    // --- 10 circular buffers for 10 SMA layers ---
+    var array<float> buf1  = array.new_float(period, 0.0)
+    var array<float> buf2  = array.new_float(period, 0.0)
+    var array<float> buf3  = array.new_float(period, 0.0)
+    var array<float> buf4  = array.new_float(period, 0.0)
+    var array<float> buf5  = array.new_float(period, 0.0)
+    var array<float> buf6  = array.new_float(period, 0.0)
+    var array<float> buf7  = array.new_float(period, 0.0)
+    var array<float> buf8  = array.new_float(period, 0.0)
+    var array<float> buf9  = array.new_float(period, 0.0)
+    var array<float> buf10 = array.new_float(period, 0.0)
+
+    // --- Running sums for O(1) SMA ---
+    var float sum1  = 0.0
+    var float sum2  = 0.0
+    var float sum3  = 0.0
+    var float sum4  = 0.0
+    var float sum5  = 0.0
+    var float sum6  = 0.0
+    var float sum7  = 0.0
+    var float sum8  = 0.0
+    var float sum9  = 0.0
+    var float sum10 = 0.0
+
+    // --- Shared head pointer (all buffers same size, same cadence) ---
+    var int head = 0
+    int count = math.min(bar_index + 1, period)
+    float n = count
+
+    // --- Layer 1: SMA(price, period) ---
+    sum1 -= array.get(buf1, head)
+    sum1 += price
+    array.set(buf1, head, price)
+    float ma1 = sum1 / n
+
+    // --- Layer 2: SMA(ma1, period) ---
+    sum2 -= array.get(buf2, head)
+    sum2 += ma1
+    array.set(buf2, head, ma1)
+    float ma2 = sum2 / n
+
+    // --- Layer 3: SMA(ma2, period) ---
+    sum3 -= array.get(buf3, head)
+    sum3 += ma2
+    array.set(buf3, head, ma2)
+    float ma3 = sum3 / n
+
+    // --- Layer 4: SMA(ma3, period) ---
+    sum4 -= array.get(buf4, head)
+    sum4 += ma3
+    array.set(buf4, head, ma3)
+    float ma4 = sum4 / n
+
+    // --- Layer 5: SMA(ma4, period) ---
+    sum5 -= array.get(buf5, head)
+    sum5 += ma4
+    array.set(buf5, head, ma4)
+    float ma5 = sum5 / n
+
+    // --- Layer 6: SMA(ma5, period) ---
+    sum6 -= array.get(buf6, head)
+    sum6 += ma5
+    array.set(buf6, head, ma5)
+    float ma6 = sum6 / n
+
+    // --- Layer 7: SMA(ma6, period) ---
+    sum7 -= array.get(buf7, head)
+    sum7 += ma6
+    array.set(buf7, head, ma6)
+    float ma7 = sum7 / n
+
+    // --- Layer 8: SMA(ma7, period) ---
+    sum8 -= array.get(buf8, head)
+    sum8 += ma7
+    array.set(buf8, head, ma7)
+    float ma8 = sum8 / n
+
+    // --- Layer 9: SMA(ma8, period) ---
+    sum9 -= array.get(buf9, head)
+    sum9 += ma8
+    array.set(buf9, head, ma8)
+    float ma9 = sum9 / n
+
+    // --- Layer 10: SMA(ma9, period) ---
+    sum10 -= array.get(buf10, head)
+    sum10 += ma9
+    array.set(buf10, head, ma9)
+    float ma10 = sum10 / n
+
+    // --- Advance shared head ---
+    head := (head + 1) % period
+
+    // --- Weighted average (Widner/thinkorswim weights) ---
+    // Layers 1-4: weights 5,4,3,2; Layers 5-10: weight 1 each
+    // Total weight = 5 + 4 + 3 + 2 + 1 + 1 + 1 + 1 + 1 + 1 = 20
+    (5.0 * ma1 + 4.0 * ma2 + 3.0 * ma3 + 2.0 * ma4 + ma5 + ma6 + ma7 + ma8 + ma9 + ma10) / 20.0
+
+// ── Inputs ──
+int   p_period = input.int(2, "Period", minval = 1)
+float p_src    = input.source(close, "Source")
+
+// ── Calculation ──
+float out = rain(p_src, p_period)
+
+// ── Plot ──
+// plot(out, "RAIN", color.yellow, 2)  // Disabled in library
+
+
+
+// @function Calculates the Range Weighted Moving Average.
+//   Each bar's contribution is weighted by its range (high - low),
+//   giving more influence to volatile bars and less to narrow-range bars.
+//   RWMA = Σ(close[i] × range[i]) / Σ(range[i]) over the lookback period.
+// @param src Series to smooth (typically close).
+// @param high_src High price series.
+// @param low_src Low price series.
+// @param period Lookback window length. Must be > 0.
+// @returns The range-weighted moving average value.
+export rwma(series float src, series float high_src, series float low_src, simple int period) =>
+    float sumWV = 0.0
+    float sumW  = 0.0
+    for i = 0 to period - 1
+        float rng = high_src[i] - low_src[i]
+        float w   = math.max(rng, 0.0)
+        sumWV += src[i] * w
+        sumW  += w
+    sumW > 0.0 ? sumWV / sumW : src
+
+
+// ── Inputs ──────────────────────────────────────────────
+p = input.int(14, "Period", minval=1)
+
+// ── Calculation ─────────────────────────────────────────
+result = rwma(close, high, low, p)
+
+// ── Plot ────────────────────────────────────────────────
+// plot(result, "RWMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates SGMA using Savitzky-Golay filter with polynomial fitting
+//@param source Series to calculate SGMA from
+//@param period Lookback period - FIR window size (must be odd)
+//@param deg Polynomial degree (default: 2)
+//@returns SGMA value, calculates from first bar using available data
+//@optimized Uses Savitzky-Golay coefficients with O(n) complexity per bar due to lookback loop
+export sgma(series float source, simple int period, simple int deg=2) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+    int use_period = period % 2 == 0 ? period + 1 : period
+    int use_deg = deg < 0 or deg >= use_period ? 2 : math.min(deg, 4)
+    int p = math.min(bar_index + 1, use_period)
+    var array<float> weights = array.new_float(1, 1.0)
+    var int last_p = 1
+    var int last_deg = use_deg
+    if last_p != p or last_deg != use_deg
+        weights := array.new_float(p, 0.0)
+        if use_deg == 2
+            if p == 5
+                array.set(weights, 0, -0.0857)
+                array.set(weights, 1, 0.3429)
+                array.set(weights, 2, 0.4857)
+                array.set(weights, 3, 0.3429)
+                array.set(weights, 4, -0.0857)
+            else if p == 7
+                array.set(weights, 0, -0.0476)
+                array.set(weights, 1, 0.0952)
+                array.set(weights, 2, 0.2857)
+                array.set(weights, 3, 0.3333)
+                array.set(weights, 4, 0.2857)
+                array.set(weights, 5, 0.0952)
+                array.set(weights, 6, -0.0476)
+            else if p == 9
+                array.set(weights, 0, -0.0281)
+                array.set(weights, 1, 0.0337)
+                array.set(weights, 2, 0.1236)
+                array.set(weights, 3, 0.2247)
+                array.set(weights, 4, 0.2921)
+                array.set(weights, 5, 0.2247)
+                array.set(weights, 6, 0.1236)
+                array.set(weights, 7, 0.0337)
+                array.set(weights, 8, -0.0281)
+            else
+                float half_window = (p - 1) / 2.0
+                float total_weight = 0.0
+                for i = 0 to p - 1
+                    float x = i - half_window
+                    float norm_x = x / half_window
+                    float w = 1.0 - norm_x * norm_x
+                    array.set(weights, i, w)
+                    total_weight += w
+                float inv_total = 1.0 / total_weight
+                for i = 0 to p - 1
+                    array.set(weights, i, array.get(weights, i) * inv_total)
+        else
+            float half_window = (p - 1) / 2.0
+            float total_weight = 0.0
+            for i = 0 to p - 1
+                float x = i - half_window
+                float norm_x = x / half_window
+                float w = 0.0
+                if use_deg == 0
+                    w := 1.0
+                else if use_deg == 1
+                    w := 1.0 - math.abs(norm_x)
+                else if use_deg == 3
+                    w := 1.0 - math.abs(math.pow(norm_x, 3.0))
+                else if use_deg == 4
+                    w := 1.0 - math.pow(norm_x, 4.0)
+                else
+                    w := 1.0 - norm_x * norm_x
+                array.set(weights, i, w)
+                total_weight += w
+            if total_weight > 0.0
+                float inv_total = 1.0 / total_weight
+                for i = 0 to p - 1
+                    array.set(weights, i, array.get(weights, i) * inv_total)
+        last_p := p
+        last_deg := use_deg
+    float sum = 0.0
+    float weight_sum = 0.0
+    for i = 0 to p - 1
+        float price = source[i]
+        if not na(price)
+            float w = array.get(weights, i)
+            sum += price * w
+            weight_sum += w
+    nz(sum / weight_sum, source)
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(9, "Period", minval=3, step=2, tooltip="Must be odd number (will be adjusted if even)")
+i_degree = input.int(2, "Polynomial Degree", minval=0, maxval=4, tooltip="Higher degrees fit more complex shapes but risk overfitting")
+i_source = input.source(close, "Source")
+
+// Calculation
+sgma_value = sgma(i_source, i_period, i_degree)
+
+// Plot
+// plot(sgma_value, "SGMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates SMA using simple smoothing with compensator
+//@param source Series to calculate SMA from
+//@param period Lookback period - FIR window size
+//@returns SMA value, calculates from first bar using available data
+//@optimized Uses circular buffer and running sum for O(1) complexity
+export sma(series float source, simple int period) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+    int p = period
+    var array<float> buffer = array.new_float(p, na)
+    var int head = 0
+    var float sum = 0.0
+    var int count = 0
+    float oldest = array.get(buffer, head)
+    if not na(oldest)
+        sum -= oldest
+    else
+        count += 1
+    float current = nz(source)
+    sum += current
+    array.set(buffer, head, current)
+    head := (head + 1) % p
+    sum / math.max(1, count)
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_source = input.source(close, "Source")
+
+// Calculation
+sma_value = sma(i_source, i_period)
+
+// Plot
+// plot(sma_value, "SMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates SINEMA using sine-wave weighted smoothing with compensator
+//@param source Series to calculate SINEMA from
+//@param period Lookback period - FIR window size
+//@returns SINEMA value, calculates from first bar using available data
+//@optimized Uses sine wave weighting with O(n) complexity per bar due to lookback loop
+export sinema(series float source, simple int period) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+    int p = math.min(bar_index + 1, period)
+    var int prev_p = 0
+    var array<float> sine_weights = array.new_float(period, 0.0)
+    if p != prev_p
+        sine_weights := array.new_float(p, 0.0)
+        for j = 0 to p - 1
+            array.set(sine_weights, j, math.sin(math.pi * (j + 1) / p))
+        prev_p := p
+    float sum = 0.0
+    float weight = 0.0
+    for i = 0 to p - 1
+        float price = source[i]
+        if not na(price)
+            float w = array.get(sine_weights, i)
+            sum += price * w
+            weight += w
+    nz(sum / weight, source)
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_source = input.source(close, "Source")
+
+// Calculation
+sinema_value = sinema(i_source, i_period)
+
+// Plot
+// plot(sinema_value, "SINEMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+// @function Calculates the Spencer 15-Point Moving Average.
+//   A symmetric FIR filter with fixed coefficients designed by John Spencer
+//   for seasonal adjustment of economic time series. The 15 weights are:
+//   [-3, -6, -5, 3, 21, 46, 67, 74, 67, 46, 21, 3, -5, -6, -3] / 320.
+//   The filter has zero response at frequencies 2π/4 and 2π/5 (periods 4 and 5),
+//   making it effective at removing quarterly and quintile seasonal components.
+//   Centered at lag 7 bars.
+// @param src Series to smooth.
+// @returns The Spencer 15-point weighted average.
+export sp15(series float src) =>
+    // Spencer 15-point weights (symmetric, sum = 320)
+
+    // Spencer 15-point weights (symmetric, sum = 320)
+    float w0  = -3.0
+    float w1  = -6.0
+    float w2  = -5.0
+    float w3  =  3.0
+    float w4  = 21.0
+    float w5  = 46.0
+    float w6  = 67.0
+    float w7  = 74.0
+    // Symmetric: w8=w6, w9=w5, ..., w14=w0
+    float total = w0 * (src[0] + src[14]) + w1 * (src[1] + src[13]) + w2 * (src[2] + src[12]) + w3 * (src[3] + src[11]) + w4 * (src[4] + src[10]) + w5 * (src[5] + src[9]) + w6 * (src[6] + src[8]) + w7 * src[7]
+    total / 320.0
+
+// ── Calculation ─────────────────────────────────────────
+result = sp15(close)
+
+// ── Plot ────────────────────────────────────────────────
+// plot(result, "SP15", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+// @function Calculates the Symmetric Weighted Moving Average.
+//   Uses triangular/symmetric weights that peak at the center of the window.
+//   For period N, weight at position i (0-based from newest) is:
+//     w(i) = (N/2 + 1) - |i - N/2|  (triangular shape)
+//   This is equivalent to convolving two rectangular windows (SMA of SMA)
+//   and produces a smooth, low-lag FIR filter with zero phase distortion
+//   at the center of the window.
+//   For period=4 (Pine's built-in ta.swma): weights are [1, 2, 2, 1] / 6.
+// @param src Series to smooth.
+// @param period Window length. Must be >= 2.
+// @returns The symmetric weighted moving average value.
+export swma(series float src, simple int period) =>
+    float sumWV = 0.0
+    float sumW  = 0.0
+    float half  = (period - 1) / 2.0
+    for i = 0 to period - 1
+        float w = half + 1.0 - math.abs(i - half)
+        sumWV += src[i] * w
+        sumW  += w
+    sumWV / sumW
+
+
+// ── Inputs ──────────────────────────────────────────────
+p = input.int(4, "Period", minval=2)
+
+// ── Calculation ─────────────────────────────────────────
+result = swma(close, p)
+
+// ── Plot ────────────────────────────────────────────────
+// plot(result, "SWMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Time Series Forecast - linear regression extrapolated N periods forward
+//@param source Price data to analyze
+//@param period Number of bars for linear regression calculation
+//@param forecast Number of periods to forecast ahead (default 1)
+//@returns Forecasted value N periods ahead
+//@optimized O(1) complexity using incremental sumXY maintenance
+export tsf(series float source, simple int period, simple int forecast = 1) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+    if period > 5000
+        runtime.error("Period exceeds maximum of 5000")
+    if forecast <= 0
+        runtime.error("Forecast must be greater than 0")
+    
+
+    var int count = 0
+    var int head = 0
+    var float sumY = 0.0
+    var float sumXY = 0.0
+    var array<float> buffer = array.new_float(period, na)
+    
+    if na(source)
+        na
+    else
+        float oldest = array.get(buffer, head)
+        if not na(oldest)
+            sumY -= oldest
+            sumXY -= sumY
+            sumXY += (period - 1) * source
+        else
+            sumXY += count * source
+            count += 1
+        
+        sumY += source
+        array.set(buffer, head, source)
+        head := (head + 1) % period
+        
+        if count < period
+            na
+        else
+            float sumX = period * (period - 1) / 2
+            float sumX2 = period * (period - 1) * (2 * period - 1) / 6
+            float denomX = period * sumX2 - sumX * sumX
+            
+            float slope = (period * sumXY - sumX * sumY) / denomX
+            float intercept = (sumY - slope * sumX) / period
+            float result = intercept + slope * (period - 1 + forecast - 1)
+            
+            result
+
+// ---------- Main loop ----------
+
+i_period = input.int(14, "Period", minval=1, maxval=5000)
+i_forecast = input.int(1, "Forecast Periods", minval=1, maxval=100)
+i_source = input.source(close, "Source")
+
+result = tsf(i_source, i_period, i_forecast)
+
+// plot(result, "TSF", color=color.yellow, linewidth=2)  // Disabled in library
+// plot(i_source, "Source", color=color.gray, linewidth=1)  // Disabled in library
+
+
+
+//@function Calculates TRIMA using triangular weighted smoothing with compensator
+//@param source Series to calculate TRIMA from
+//@param period Lookback period - FIR window size
+//@returns TRIMA value, calculates from first bar using available data
+//@optimized Uses triangular weighting with O(n) complexity per bar due to lookback loop
+export trima(series float source, simple int period) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+    int p = math.min(bar_index + 1, period)
+    var array<float> weights = array.new_float(1, 1.0)
+    var int last_p = 1
+    if last_p != p
+        weights := array.new_float(p, 0.0)
+        int mid = math.floor(p / 2)
+        for i = 0 to p - 1
+            array.set(weights, i, math.min(i, p - 1 - i) + 1)
+        last_p := p
+    float sum = 0.0
+    float weight_sum = 0.0
+    for i = 0 to p - 1
+        float price = source[i]
+        if not na(price)
+            float w = array.get(weights, i)
+            sum += price * w
+            weight_sum += w
+    nz(sum / weight_sum, source)
+
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_source = input.source(close, "Source")
+
+// Calculation
+trima_value = trima(i_source, i_period)
+
+// Plot
+// plot(trima_value, "TRIMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+// @function Calculates the Tukey (Tapered Cosine) Window Moving Average.
+//   The Tukey window has cosine-tapered edges and a flat-top center.
+//   Parameter alpha controls the taper fraction:
+//     alpha=0 → rectangular window (SMA)
+//     alpha=1 → Hann window (full cosine taper)
+//     alpha=0.5 → half tapered, half flat (typical default)
+//   For sample n in [0, N-1]:
+//     if n < alpha*(N-1)/2: w(n) = 0.5*(1 - cos(2π*n / (alpha*(N-1))))
+//     if n > (N-1)*(1 - alpha/2): w(n) = 0.5*(1 - cos(2π*(N-1-n) / (alpha*(N-1))))
+//     else: w(n) = 1.0  (flat-top center)
+// @param src Series to smooth.
+// @param period Window length. Must be >= 2.
+// @param alpha Taper fraction (0 = rectangular, 1 = Hann). Default 0.5.
+// @returns The Tukey window weighted average.
+export tukey_w(series float src, simple int period, simple float alpha) =>
+    float sumWV = 0.0
+    float sumW  = 0.0
+    int N = period - 1
+    float aN = alpha * N
+    for i = 0 to N
+        float w = 1.0
+        if aN > 0.0
+            if i < aN / 2.0
+                w := 0.5 * (1.0 - math.cos(2.0 * math.pi * i / aN))
+            else if i > N - aN / 2.0
+                w := 0.5 * (1.0 - math.cos(2.0 * math.pi * (N - i) / aN))
+        sumWV += src[i] * w
+        sumW  += w
+    sumWV / sumW
+
+
+// ── Inputs ──────────────────────────────────────────────
+p = input.int(20, "Period", minval=2)
+a = input.float(0.5, "Alpha (taper fraction)", minval=0.0, maxval=1.0, step=0.05, tooltip="0=SMA, 1=Hann, 0.5=half taper")
+
+// ── Calculation ─────────────────────────────────────────
+result = tukey_w(close, p, a)
+
+// ── Plot ────────────────────────────────────────────────
+// plot(result, "TUKEY_W", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+
+//@function Calculates WMA using circular buffer with O(1) complexity
+//@param source Series to calculate WMA from
+//@param period Lookback period - FIR window size
+//@returns WMA value, calculates from first bar using available data
+//@optimized Uses dual running sums with cached denominator for O(1) complexity per bar
+export wma(series float source, simple int period) =>
+    if period <= 0
+        runtime.error("Period must be greater than 0")
+    
+
+    var array<float> buffer = array.new_float(period, na)
+    var int head = 0
+    var float sum = 0.0
+    var float weighted_sum = 0.0
+    var int count = 0
+    var float norm = 0.0
+    
+    float oldest = array.get(buffer, head)
+    float current = nz(source)
+    
+    if not na(oldest)
+        float old_sum = sum
+        sum -= oldest
+        sum += current
+        weighted_sum := weighted_sum - old_sum + (period * current)
+    else
+        count += 1
+        sum += current
+        weighted_sum := weighted_sum + (count * current)
+        norm := count * (count + 1) * 0.5
+    
+    array.set(buffer, head, current)
+    head := (head + 1) % period
+    
+    weighted_sum / norm
+
+// ---------- Main loop ----------
+
+// Inputs
+i_period = input.int(10, "Period", minval=1)
+i_source = input.source(close, "Source")
+
+// Calculation
+wma_value = wma(i_source, i_period)
+
+// Plot
+// plot(wma_value, "WMA", color=color.yellow, linewidth=2)  // Disabled in library
+
+
+

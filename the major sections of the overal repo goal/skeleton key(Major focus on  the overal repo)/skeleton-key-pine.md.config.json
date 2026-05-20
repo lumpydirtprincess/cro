@@ -1,0 +1,70 @@
+{
+  "1": {
+    "config": {
+      "executionHistory": [
+        {
+          "id": "1767073188720-857d11fnu",
+          "cellIndex": 1,
+          "languageId": "pine",
+          "code": "trendUp = ema1 > ema2\nmomentumOK = rsi > 50\ntrigger = ta.crossover(fast, slow)\nlongEntry = trendUp and momentumOK and trigger",
+          "output": "12/30/2025, 5:39:48 AM\n",
+          "status": "failure",
+          "timestamp": "2025-12-30T05:39:48.720Z",
+          "errorMessage": "something went wrong - please try your request again",
+          "duration": 21
+        }
+      ]
+    }
+  },
+  "3": {
+    "config": {
+      "executionHistory": [
+        {
+          "id": "1767073188756-hfq4cc0g5",
+          "cellIndex": 3,
+          "languageId": "pine",
+          "code": "breakout = close > ta.highest(high, 20)[1]\ntrendFilter = close > ema200\nlongEntry = breakout and trendFilter",
+          "output": "12/30/2025, 5:39:48 AM\n",
+          "status": "failure",
+          "timestamp": "2025-12-30T05:39:48.756Z",
+          "errorMessage": "something went wrong - please try your request again",
+          "duration": 5
+        }
+      ]
+    }
+  },
+  "5": {
+    "config": {
+      "executionHistory": [
+        {
+          "id": "1767073188761-zmhwt8zj4",
+          "cellIndex": 5,
+          "languageId": "pine",
+          "code": "upperBand = ta.sma(close, 20) + 2 * ta.stdev(close, 20)\nlowerBand = ta.sma(close, 20) - 2 * ta.stdev(close, 20)\nshortEntry = close > upperBand\nlongEntry = close < lowerBand",
+          "output": "12/30/2025, 5:39:48 AM\n",
+          "status": "failure",
+          "timestamp": "2025-12-30T05:39:48.761Z",
+          "errorMessage": "something went wrong - please try your request again",
+          "duration": 4
+        }
+      ]
+    }
+  },
+  "7": {
+    "config": {
+      "executionHistory": [
+        {
+          "id": "1767073188767-rks589e4s",
+          "cellIndex": 7,
+          "languageId": "pine",
+          "code": "priceLowerLow = low < ta.lowest(low, 10)[1]\nrsiHigherLow = rsi > ta.valuewhen(priceLowerLow[1], rsi, 1)\nbullishDivergence = priceLowerLow and rsiHigherLow",
+          "output": "12/30/2025, 5:39:48 AM\n",
+          "status": "failure",
+          "timestamp": "2025-12-30T05:39:48.767Z",
+          "errorMessage": "something went wrong - please try your request again",
+          "duration": 5
+        }
+      ]
+    }
+  }
+}

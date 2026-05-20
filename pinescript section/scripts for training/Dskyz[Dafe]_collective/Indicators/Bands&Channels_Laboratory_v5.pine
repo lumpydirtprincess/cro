@@ -1,0 +1,2008 @@
+//@version=5
+indicator("Bands and Channels Laboratory [DAFE]", shorttitle="🎯B&C", overlay=true, max_bars_back=5000, max_lines_count=500, max_labels_count=500, max_boxes_count=500)
+
+//                              DAFE Trading Systems - Dskyz
+//                         "The Ultimate Volatility & Envelope Engine"
+//                    40+ Band Types × 6 Visualization Modes × MTF Horizon
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// ℹ️ TOOLTIPS
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+var string TT_BAND = "🎯 BAND TYPE\n\nSelect from 14 band calculation methods:\n• Classic: Bollinger, Keltner, Donchian\n• Statistical: Parkinson, Yang-Zhang\n• DAFE Proprietary: Quantum, Neural, Gravity"
+var string TT_BASIS = "📊 BASIS ALGORITHM\n\n22 center line calculations from SMA to advanced adaptive methods like KAMA, VIDYA, and DAFE proprietary engines."
+var string TT_DEV = "📈 DEVIATION METHOD\n\n16 volatility calculation methods determining band width, from standard deviation to entropy-based measures."
+var string TT_VIZ = "🎨 VISUALIZATION ENGINE\n\n6 stunning visual modes:\n• Quantum Field: Particle probability clouds\n• Plasma Flow: Energy streams\n• Neural Network: Connected nodes\n• Gravity Wells: Gravitational visualization\n• Holographic: Multi-layer prism\n• Nebula Pulse: Breathing glow effects"
+var string TT_MTF = "🌐 MTF HORIZON\n\nProjects band metrics from multiple timeframes into floating display boxes, showing squeeze states, bandwidth, and trends across time horizons."
+var string TT_ZONES = "📍 SMART KILL ZONES\n\nIdentifies high-probability reversal zones where price interacted strongly with bands. Shows historical touch strength and projected levels."
+var string TT_PATTERN = "🔬 PATTERN ENGINE\n\nDetects band patterns:\n• Squeeze Types (Coiling, Compression, Exhaustion)\n• Walking Bands (Strong Trends)\n• Band Divergences\n• Expansion Breakouts"
+var string TT_OPT = "🧪 OPTIMIZER ENGINE\n\nBacktests your band strategy with configurable TP/SL. Shows win rate, profit factor, expectancy, and robustness score."
+// ═══════════════════════════════════════════════════════════════════════════════
+// 📁 INPUT GROUPS
+// ═══════════════════════════════════════════════════════════════════════════════
+string G_BAND     = "═══════════ 🎯 BAND TYPE ═══════════"
+string G_BASIS    = "═══════════ 📊 BASIS (CENTER) ═══════════"
+string G_DEV      = "═══════════ 📈 DEVIATION (WIDTH) ═══════════"
+var G_VIZ = "════════════ 🌌 VISUALIZATION ENGINE ═════════════"
+string G_SIGNALS  = "═══════════ ⚡ SIGNAL ENGINE ═══════════"
+string G_ZONES    = "═══════════ 📍 SMART KILL ZONES ═══════════"
+string G_PATTERN  = "═══════════ 🔬 PATTERN DETECTION ═══════════"
+string G_MTF      = "═══════════ 🌐 MTF HORIZON ═══════════"
+string G_H1       = "═══════════ 🌐 Horizon 1 ═══════════"
+string G_H2       = "═══════════ 🌐 Horizon 2 ═══════════"
+string G_H3       = "═══════════ 🌐 Horizon 3 ═══════════"
+string G_OPT      = "═══════════ 🧪 OPTIMIZER ENGINE ═══════════"
+string G_DASH     = "═══════════ 📋 DASHBOARD ═══════════"
+var G_VISUAL = "════════════ 🎨 VISUALS ═════════════"
+string G_THEME    = "═══════════ 🎨 COLOR THEME ═══════════"
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🎯 INPUTS
+// ═══════════════════════════════════════════════════════════════════════════════
+i_band_type = input.string("Bollinger Bands", "★ Band Type ★", 
+     options=["Bollinger Bands", "Keltner Channel", "Donchian Channel", "Starc Bands", 
+              "Envelope (Percentage)", "Price Channel", "ATR Bands", "Standard Error Bands",
+              "Acceleration Bands", "Chandelier Bands", "DAFE Flux Bands", "DAFE Quantum Bands",
+              "DAFE Gravity Bands", "DAFE Neural Bands"], 
+     group=G_BAND, tooltip=TT_BAND)
+i_length = input.int(20, "Length", minval=2, maxval=500, group=G_BAND)
+i_mult = input.float(2.0, "Multiplier", minval=0.1, maxval=10, step=0.1, group=G_BAND)
+i_src = input.source(close, "Source", group=G_BAND)
+i_basis_type = input.string("SMA", "Basis Algorithm",
+     options=["SMA", "EMA", "WMA", "VWMA", "Hull MA", "KAMA", "VIDYA", "FRAMA",
+              "McGinley Dynamic", "T3 Tillson", "DEMA", "TEMA", "ZLEMA", "ALMA",
+              "SuperSmoother", "Butterworth", "Gaussian", "Laguerre", "Kalman Filter",
+              "DAFE Flux", "DAFE Tensor", "DAFE Phase-Zero"], 
+     group=G_BASIS, tooltip=TT_BASIS)
+i_alma_offset = input.float(0.85, "ALMA Offset", minval=0, maxval=1, step=0.05, group=G_BASIS)
+i_alma_sigma = input.float(6, "ALMA Sigma", minval=1, maxval=20, step=0.5, group=G_BASIS)
+i_laguerre_gamma = input.float(0.5, "Laguerre Gamma", minval=0.1, maxval=0.9, step=0.05, group=G_BASIS)
+i_dev_type = input.string("Standard Deviation", "Deviation Method",
+     options=["Standard Deviation", "Mean Absolute Deviation", "True Range (ATR)",
+              "Interquartile Range", "Sortino (Downside)", "Standard Error",
+              "Parkinson Volatility", "Garman-Klass", "Yang-Zhang", "Chaikin Volatility",
+              "Historical Volatility", "Ulcer Index", "DAFE Entropy", "DAFE Elastic",
+              "DAFE Dark Matter", "DAFE Heisenberg"], 
+     group=G_DEV, tooltip=TT_DEV)
+i_viz_mode = input.string("Quantum Field", "★ Visualization Mode ★",
+     options=[
+         "Standard (Classic)",
+         "Quantum Field",
+         "Neural Network",
+         "Plasma Storm",
+         "Depth Perception",
+         "Spectral Analysis",
+         "Probability Cone",
+         "Heat Map",
+         "Nebula Envelope",
+         "Crystalline Matrix",
+         "Temporal Flux"
+     ], group=G_VIZ, tooltip="Choose your reality-bending visualization")
+i_viz_intensity = input.float(1.0, "Visual Intensity", minval=0.3, maxval=3.0, step=0.1, group=G_VIZ)
+i_viz_particles = input.bool(true, "✨ Particle Effects", group=G_VIZ)
+i_viz_glow = input.bool(true, "💫 Glow & Aura", group=G_VIZ)
+i_viz_animation = input.int(5, "Animation Speed", minval=1, maxval=10, group=G_VIZ)
+i_viz_layers = input.int(3, "Effect Layers", minval=1, maxval=5, group=G_VIZ)
+i_signal_mode = input.string("Smart Composite", "★ Signal Mode ★",
+     options=["Band Touch", "Band Cross", "Squeeze Breakout", "Mean Reversion",
+              "Trend Following", "Bandwidth Expansion", "Smart Composite", "Pattern Based"],
+     group=G_SIGNALS)
+i_show_signals = input.bool(true, "Show Signals", group=G_SIGNALS)
+i_signal_size = input.string("Small", "Signal Size", options=["Tiny", "Small", "Normal"], group=G_SIGNALS)
+i_squeeze_len = input.int(100, "Squeeze Lookback", minval=20, maxval=500, group=G_SIGNALS)
+i_squeeze_threshold = input.float(20, "Squeeze Percentile", minval=1, maxval=50, group=G_SIGNALS)
+i_enable_filters = input.bool(true, "🔬 Enable Signal Filters", group=G_SIGNALS)
+i_filter_volume = input.bool(true, "Volume Filter", group=G_SIGNALS, inline="vol")
+i_vol_mult = input.float(1.2, "×", minval=1, maxval=5, step=0.1, group=G_SIGNALS, inline="vol")
+i_filter_trend = input.bool(true, "ADX Filter", group=G_SIGNALS, inline="adx")
+i_adx_thresh = input.int(20, ">", minval=10, maxval=50, group=G_SIGNALS, inline="adx")
+i_filter_time = input.int(3, "Min Bars Between", minval=0, maxval=50, group=G_SIGNALS)
+i_enable_zones = input.bool(true, "★ Enable Kill Zones ★", group=G_ZONES, tooltip=TT_ZONES)
+i_zone_lookback = input.int(100, "Zone Lookback", minval=20, maxval=500, group=G_ZONES)
+i_max_zones = input.int(5, "Max Zones Per Side", minval=1, maxval=10, group=G_ZONES)
+i_zone_strength = input.int(60, "Min Strength %", minval=30, maxval=95, group=G_ZONES)
+i_zone_size = input.float(0.5, "Zone Height (ATR)", minval=0.1, maxval=2.0, step=0.1, group=G_ZONES)
+i_zone_transparency = input.int(80, "Zone Transparency", minval=50, maxval=95, group=G_ZONES)
+i_show_zone_labels = input.bool(true, "Show Zone Labels", group=G_ZONES)
+i_enable_patterns = input.bool(true, "★ Enable Pattern Detection ★", group=G_PATTERN, tooltip=TT_PATTERN)
+i_pattern_sensitivity = input.float(1.5, "Pattern Sensitivity", minval=0.5, maxval=3.0, step=0.1, group=G_PATTERN)
+i_show_squeeze_type = input.bool(true, "Show Squeeze Classification", group=G_PATTERN)
+i_show_walking = input.bool(true, "Detect Walking Bands", group=G_PATTERN)
+i_show_divergence = input.bool(true, "Detect Band Divergence", group=G_PATTERN)
+i_enable_mtf = input.bool(true, "★ Enable MTF Horizon ★", group=G_MTF, tooltip=TT_MTF)
+i_mtf_offset = input.int(80, "Future Offset (bars)", minval=10, maxval=150, group=G_MTF)
+i_mtf_box_width = input.int(65, "Box Width", minval=20, maxval=100, group=G_MTF)
+i_mtf_box_spacing = input.int(6, "Box Spacing", minval=2, maxval=20, group=G_MTF)
+i_mtf_height = input.int(30, "Box Height %", minval=5, maxval=35, group=G_MTF)
+i_mtf_location = input.string("Bottom", "Vertical Position", options=["Bottom", "Top"], group=G_MTF)
+i_mtf_style = input.string("Flowing Wave", "Display Style", 
+     options=["Flowing Wave", "Gradient Bars", "Neon Pulse", "Crystal Shards"], group=G_MTF)
+i_mtf_glow = input.bool(true, "Glow Effect", group=G_MTF)
+i_mtf_show_labels = input.bool(true, "Show Labels", group=G_MTF)
+i_mtf_show_values = input.bool(true, "Show Values", group=G_MTF)
+i_mtf_depth = input.int(50, "History Depth", minval=10, maxval=80, group=G_MTF)
+i_h1_show = input.bool(true, "Enable Horizon 1", group=G_H1)
+i_h1_tf = input.timeframe("60", "Timeframe", group=G_H1)
+i_h1_metric = input.string("Bandwidth %", "Metric", 
+     options=["Bandwidth %", "%B Position", "Squeeze State", "Band Slope", "Volatility Regime"], group=G_H1)
+i_h1_color = input.color(#00FFAA, "Color", group=G_H1)
+i_h2_show = input.bool(true, "Enable Horizon 2", group=G_H2)
+i_h2_tf = input.timeframe("5", "Timeframe", group=G_H2)
+i_h2_metric = input.string("%B Position", "Metric",
+     options=["Bandwidth %", "%B Position", "Squeeze State", "Band Slope", "Volatility Regime"], group=G_H2)
+i_h2_color = input.color(#FF00FF, "Color", group=G_H2)
+i_h3_show = input.bool(true, "Enable Horizon 3", group=G_H3)
+i_h3_tf = input.timeframe("5", "Timeframe", group=G_H3)
+i_h3_metric = input.string("Squeeze State", "Metric",
+     options=["Bandwidth %", "%B Position", "Squeeze State", "Band Slope", "Volatility Regime"], group=G_H3)
+i_h3_color = input.color(#FFD700, "Color", group=G_H3)
+i_opt_enable = input.bool(false, "★ Enable Optimizer ★", group=G_OPT, tooltip=TT_OPT)
+i_opt_capital = input.float(10000, "Starting Capital", minval=100, group=G_OPT)
+i_opt_position = input.float(10, "Position Size %", minval=1, maxval=100, group=G_OPT)
+i_opt_tp = input.float(2.0, "Take Profit (×ATR)", minval=0.5, maxval=10, step=0.1, group=G_OPT)
+i_opt_sl = input.float(1.5, "Stop Loss (×ATR)", minval=0.5, maxval=10, step=0.1, group=G_OPT)
+i_opt_commission = input.float(0.04, "Commission %", minval=0, maxval=1, step=0.01, group=G_OPT)
+i_opt_signal_type = input.string("Smart Composite", "Signal Type",
+     options=["Smart Composite", "All Signals", "Strong Only", "Pattern Based"], group=G_OPT)
+i_basis_show = input.bool(true, "Show Basis Line", group=G_VISUAL, inline="basis")
+i_basis_color = input.color(#FFFFFF, "", group=G_VISUAL, inline="basis")
+i_basis_width = input.int(2, "Width", minval=1, maxval=5, group=G_VISUAL, inline="basis")
+i_upper_color = input.color(#2962FF, "Upper Band", group=G_VISUAL, inline="upper")
+i_lower_color = input.color(#2962FF, "Lower Band", group=G_VISUAL, inline="lower")
+i_band_width = input.int(1, "Band Width", minval=1, maxval=5, group=G_VISUAL)
+i_show_fill = input.bool(true, "Show Fill", group=G_VISUAL, inline="fill")
+i_fill_bull = input.color(color.new(#26A69A, 85), "Bull", group=G_VISUAL, inline="fill")
+i_fill_bear = input.color(color.new(#EF5350, 85), "Bear", group=G_VISUAL, inline="fill")
+i_adaptive_color = input.bool(true, "🎨 Adaptive Colors", group=G_VISUAL,
+     tooltip="Colors change based on bandwidth and position")
+i_glow_effect = input.bool(true, "✨ Glow Effect", group=G_VISUAL)
+i_show_mid_bands = input.bool(false, "Show ±1σ Bands", group=G_VISUAL)
+i_dash_show = input.bool(true, "★ Show Dashboard ★", group=G_DASH)
+i_dash_size = input.string("Full Dashboard", "Size", 
+     options=["Full Dashboard", "Compact", "Mini"], group=G_DASH)
+i_dash_position = input.string("Top Right", "Position",
+     options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=G_DASH)
+i_dash_text_size = input.string("Normal", "Text Size",
+     options=["Tiny", "Small", "Normal", "Large"], group=G_DASH)
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🎨 COLOR THEME
+// ═══════════════════════════════════════════════════════════════════════════════
+i_theme = input.string("Neon Tokyo", "★ Color Theme ★",
+     options=["Neon Tokyo", "Ocean Depths", "Forest Canopy", "Arctic Aurora", 
+              "Sunset Blaze", "Classic Terminal", "Quantum Dark"],
+     group=G_THEME)
+bullColor = switch i_theme
+    "Neon Tokyo" => #00FFAA
+    "Ocean Depths" => #00CED1
+    "Forest Canopy" => #32CD32
+    "Arctic Aurora" => #00FF7F
+    "Sunset Blaze" => #FFD700
+    "Classic Terminal" => #00FF00
+    "Quantum Dark" => #00FF88
+    => #00FFAA
+bearColor = switch i_theme
+    "Neon Tokyo" => #FF0055
+    "Ocean Depths" => #FF6B6B
+    "Forest Canopy" => #CD5C5C
+    "Arctic Aurora" => #FF4500
+    "Sunset Blaze" => #FF4136
+    "Classic Terminal" => #FF0000
+    "Quantum Dark" => #FF0066
+    => #FF0055
+neutralColor = switch i_theme
+    "Neon Tokyo" => #8899AA
+    "Ocean Depths" => #708090
+    "Forest Canopy" => #8B8B7A
+    "Arctic Aurora" => #B0C4DE
+    "Sunset Blaze" => #AAAAAA
+    "Classic Terminal" => #888888
+    "Quantum Dark" => #8899AA
+    => #8899AA
+accentColor1 = switch i_theme
+    "Neon Tokyo" => #00DDFF
+    "Ocean Depths" => #40E0D0
+    "Forest Canopy" => #98FB98
+    "Arctic Aurora" => #7FFFD4
+    "Sunset Blaze" => #FFA07A
+    "Classic Terminal" => #00FFFF
+    "Quantum Dark" => #00CCFF
+    => #00DDFF
+accentColor2 = switch i_theme
+    "Neon Tokyo" => #FF00FF
+    "Ocean Depths" => #9370DB
+    "Forest Canopy" => #DEB887
+    "Arctic Aurora" => #9932CC
+    "Sunset Blaze" => #FF6347
+    "Classic Terminal" => #FFFF00
+    "Quantum Dark" => #AA00FF
+    => #FF00FF
+accentColor3 = switch i_theme
+    "Neon Tokyo" => #FFFF00
+    "Ocean Depths" => #FF8C00
+    "Forest Canopy" => #FFD700
+    "Arctic Aurora" => #00BFFF
+    "Sunset Blaze" => #FFD700
+    "Classic Terminal" => #FF00FF
+    "Quantum Dark" => #FFCC00
+    => #FFFF00
+squeezeColor = switch i_theme
+    "Neon Tokyo" => #FF8800
+    "Ocean Depths" => #FFA500
+    "Forest Canopy" => #DAA520
+    "Arctic Aurora" => #FFD700
+    "Sunset Blaze" => #FF6600
+    "Classic Terminal" => #FFFF00
+    "Quantum Dark" => #FF8800
+    => #FF8800
+bgColor = switch i_theme
+    "Neon Tokyo" => #0A0A14
+    "Ocean Depths" => #0C1929
+    "Forest Canopy" => #1A1F16
+    "Arctic Aurora" => #0D1B2A
+    "Sunset Blaze" => #1A1209
+    "Classic Terminal" => #000000
+    "Quantum Dark" => #0A0A14
+    => #0A0A14
+frameColor = switch i_theme
+    "Neon Tokyo" => #00DDFF
+    "Ocean Depths" => #1E90FF
+    "Forest Canopy" => #6B8E23
+    "Arctic Aurora" => #7B68EE
+    "Sunset Blaze" => #FF8C00
+    "Classic Terminal" => #333333
+    "Quantum Dark" => #00CCFF
+    => #00DDFF
+// ═══════════════════════════════════════════════════════════════════════════════
+// 📚 TYPE DEFINITIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+type TradeStats
+    int trades = 0
+    int wins = 0
+    int losses = 0
+    float total_pnl = 0.0
+    float win_pnl = 0.0
+    float loss_pnl = 0.0
+    float max_dd = 0.0
+    float peak_equity = 0.0
+    float current_equity = 0.0
+    bool in_trade = false
+    int direction = 0
+    float entry_price = 0.0
+    int entry_bar = 0
+type BandZone
+    float level = 0.0
+    float strength = 0.0
+    int bar_idx = 0
+    bool is_upper = true
+    int touches = 0
+    float delta = 0.0
+chart_high = ta.highest(high, 200)
+chart_low = ta.lowest(low, 200)
+chart_range = chart_high - chart_low
+// ═══════════════════════════════════════════════════════════════════════════════
+// 📐 CORE ARRAYS & VARIABLES
+// ═══════════════════════════════════════════════════════════════════════════════
+var array<float> upper_zones = array.new<float>()
+var array<float> upper_strengths = array.new<float>()
+var array<int> upper_bars = array.new<int>()
+var array<int> upper_touches = array.new<int>()
+var array<float> lower_zones = array.new<float>()
+var array<float> lower_strengths = array.new<float>()
+var array<int> lower_bars = array.new<int>()
+var array<int> lower_touches = array.new<int>()
+var array<box> zone_boxes = array.new<box>()
+var array<label> zone_labels = array.new<label>()
+var array<line> viz_lines = array.new<line>()
+var array<label> viz_labels = array.new<label>()
+var array<box> viz_boxes = array.new<box>()
+var array<float> h1_history = array.new<float>(100, 0.0)
+var array<float> h2_history = array.new<float>(100, 0.0)
+var array<float> h3_history = array.new<float>(100, 0.0)
+var array<float> bandwidth_history = array.new<float>()
+var array<float> pctb_history = array.new<float>()
+f_cleanupLines(arr, max) =>
+    while array.size(arr) > max
+        line.delete(array.shift(arr))
+f_cleanupLabels(arr, max) =>
+    while array.size(arr) > max
+        label.delete(array.shift(arr))
+f_cleanupBoxes(arr, max) =>
+    while array.size(arr) > max
+        box.delete(array.shift(arr))
+// ═══════════════════════════════════════════════════════════════════════════════
+// 📊 BASIS CALCULATION FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+f_sma(src, len) => ta.sma(src, len)
+f_ema(src, len) => ta.ema(src, len)
+f_wma(src, len) => ta.wma(src, len)
+f_vwma(src, len) => ta.vwma(src, len)
+f_hull(src, len) =>
+    half_len = math.max(1, int(len / 2))
+    sqrt_len = math.max(1, int(math.sqrt(len)))
+    ta.wma(2 * ta.wma(src, half_len) - ta.wma(src, len), sqrt_len)
+f_kama(src, len) =>
+    change_val = math.abs(src - src[len])
+    volatility = math.sum(math.abs(src - src[1]), len)
+    er = volatility != 0 ? change_val / volatility : 0
+    sc = math.pow(er * (2.0/3 - 2.0/31) + 2.0/31, 2)
+    var float kama = na
+    kama := na(kama) ? src : kama + sc * (src - kama)
+f_vidya(src, len) =>
+    cmo = ta.cmo(src, len)
+    alpha = 2.0 / (len + 1)
+    abs_cmo = math.abs(cmo) / 100
+    var float vidya = na
+    vidya := na(vidya) ? src : alpha * abs_cmo * src + (1 - alpha * abs_cmo) * nz(vidya[1])
+f_frama(src, len) =>
+    half_len = math.max(1, int(len / 2))
+    n3 = (ta.highest(high, len) - ta.lowest(low, len)) / len
+    n1 = (ta.highest(high, half_len) - ta.lowest(low, half_len)) / half_len
+    n2 = (ta.highest(high[half_len], half_len) - ta.lowest(low[half_len], half_len)) / half_len
+    dimen = n3 > 0 and n1 + n2 > 0 ? (math.log(n1 + n2) - math.log(n3)) / math.log(2) : 1.5
+    alpha = math.max(0.01, math.min(1, math.exp(-4.6 * (dimen - 1))))
+    var float frama = na
+    frama := na(frama) ? src : alpha * src + (1 - alpha) * nz(frama[1])
+f_mcginley(src, len) =>
+    var float md = na
+    md := na(md) ? src : md + (src - md) / (len * math.pow(src / md, 4))
+f_t3(src, len) =>
+    vf = 0.7
+    e1 = ta.ema(src, len)
+    e2 = ta.ema(e1, len)
+    e3 = ta.ema(e2, len)
+    e4 = ta.ema(e3, len)
+    e5 = ta.ema(e4, len)
+    e6 = ta.ema(e5, len)
+    c1 = -vf * vf * vf
+    c2 = 3 * vf * vf + 3 * vf * vf * vf
+    c3 = -6 * vf * vf - 3 * vf - 3 * vf * vf * vf
+    c4 = 1 + 3 * vf + vf * vf * vf + 3 * vf * vf
+    c1 * e6 + c2 * e5 + c3 * e4 + c4 * e3
+f_dema(src, len) =>
+    e1 = ta.ema(src, len)
+    2 * e1 - ta.ema(e1, len)
+f_tema(src, len) =>
+    e1 = ta.ema(src, len)
+    e2 = ta.ema(e1, len)
+    3 * e1 - 3 * e2 + ta.ema(e2, len)
+f_zlema(src, len) =>
+    lag = int((len - 1) / 2)
+    ta.ema(src + (src - nz(src[lag])), len)
+f_supersmoother(src, len) =>
+    a1 = math.exp(-math.sqrt(2) * math.pi / len)
+    b1 = 2 * a1 * math.cos(math.sqrt(2) * math.pi / len)
+    c1 = 1 - b1 + a1 * a1
+    var float ss = na
+    ss := na(ss[2]) ? src : c1 * (src + nz(src[1])) / 2 + b1 * nz(ss[1]) - a1 * a1 * nz(ss[2])
+f_butterworth(src, len) =>
+    a = math.exp(-math.sqrt(2) * math.pi / len)
+    b = 2 * a * math.cos(math.sqrt(2) * math.pi / len)
+    c1 = (1 - b + a * a) / 4
+    var float bw = na
+    bw := na(bw[2]) ? src : c1 * (src + 2 * nz(src[1]) + nz(src[2])) + b * nz(bw[1]) - a * a * nz(bw[2])
+f_gaussian(src, len) =>
+    beta = 2.415 * (1 - math.cos(2 * math.pi / len)) / (1 + math.cos(2 * math.pi / len))
+    alpha = -beta + math.sqrt(beta * beta + 2 * beta)
+    var float g = na
+    g := na(g) ? src : alpha * src + (1 - alpha) * nz(g[1])
+f_laguerre(src, gamma) =>
+    var float L0 = na, var float L1 = na, var float L2 = na, var float L3 = na
+    L0 := (1 - gamma) * src + gamma * nz(L0[1])
+    L1 := -gamma * L0 + nz(L0[1]) + gamma * nz(L1[1])
+    L2 := -gamma * L1 + nz(L1[1]) + gamma * nz(L2[1])
+    L3 := -gamma * L2 + nz(L2[1]) + gamma * nz(L3[1])
+    (L0 + 2 * L1 + 2 * L2 + L3) / 6
+f_kalman(src, gain) =>
+    var float k_est = na
+    var float k_err = 1.0
+    if na(k_est)
+        k_est := src
+    k_err := k_err + 0.001
+    k_gain = k_err / (k_err + 0.01 * gain)
+    k_est := k_est + k_gain * (src - k_est)
+    k_err := (1 - k_gain) * k_err
+    k_est
+f_dafe_flux(src, len) =>
+    atr = ta.atr(len)
+    atr_avg = ta.sma(atr, len)
+    ratio = atr_avg > 0 ? atr / atr_avg : 1.0
+    alpha = math.min(0.5, math.max(0.01, 2.0 / (len + 1) * ratio))
+    var float flux = na
+    flux := na(flux) ? src : alpha * src + (1 - alpha) * nz(flux[1])
+f_dafe_tensor(src, len) =>
+    tensor_src = (open + 2 * high + 2 * low + 3 * close) / 8
+    f_hull(tensor_src, len)
+f_dafe_phase_zero(src, len) =>
+    ema1 = ta.ema(src, len)
+    ema2 = ta.ema(ema1, len)
+    ema1 + (ema1 - ema2)
+calc_basis(src, len, basis_type) =>
+    switch basis_type
+        "SMA" => f_sma(src, len)
+        "EMA" => f_ema(src, len)
+        "WMA" => f_wma(src, len)
+        "VWMA" => f_vwma(src, len)
+        "Hull MA" => f_hull(src, len)
+        "KAMA" => f_kama(src, len)
+        "VIDYA" => f_vidya(src, len)
+        "FRAMA" => f_frama(src, len)
+        "McGinley Dynamic" => f_mcginley(src, len)
+        "T3 Tillson" => f_t3(src, len)
+        "DEMA" => f_dema(src, len)
+        "TEMA" => f_tema(src, len)
+        "ZLEMA" => f_zlema(src, len)
+        "ALMA" => ta.alma(src, len, i_alma_offset, i_alma_sigma)
+        "SuperSmoother" => f_supersmoother(src, len)
+        "Butterworth" => f_butterworth(src, len)
+        "Gaussian" => f_gaussian(src, len)
+        "Laguerre" => f_laguerre(src, i_laguerre_gamma)
+        "Kalman Filter" => f_kalman(src, 1.0)
+        "DAFE Flux" => f_dafe_flux(src, len)
+        "DAFE Tensor" => f_dafe_tensor(src, len)
+        "DAFE Phase-Zero" => f_dafe_phase_zero(src, len)
+        => f_sma(src, len)
+// ═══════════════════════════════════════════════════════════════════════════════
+// 📈 DEVIATION CALCULATION FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+_precalc_stdev = ta.stdev(i_src, i_length)
+_precalc_atr = ta.atr(i_length)
+f_stdev(src, len) => ta.stdev(src, len)
+f_mad(src, basis, len) => ta.sma(math.abs(src - basis), len)
+f_atr(len) => ta.atr(len)
+f_iqr(src, len) =>
+    q75 = ta.percentile_linear_interpolation(src, len, 75)
+    q25 = ta.percentile_linear_interpolation(src, len, 25)
+    (q75 - q25) / 1.35
+f_sortino(src, basis, len) =>
+    downside = math.min(0, src - basis)
+    math.sqrt(ta.sma(math.pow(downside, 2), len))
+f_stderr(src, len) => ta.stdev(src, len) / math.sqrt(len)
+f_parkinson(len) =>
+    sum_val = 0.0
+    for i = 0 to len - 1
+        hl_ratio = nz(high[i]) / math.max(nz(low[i]), 0.0001)
+        sum_val += math.pow(math.log(hl_ratio), 2)
+    math.sqrt(sum_val / (4 * len * math.log(2))) * close
+f_garman_klass(len) =>
+    sum_val = 0.0
+    for i = 0 to len - 1
+        hl = math.log(nz(high[i]) / math.max(nz(low[i]), 0.0001))
+        co = math.log(nz(close[i]) / math.max(nz(open[i]), 0.0001))
+        sum_val += 0.5 * math.pow(hl, 2) - (2 * math.log(2) - 1) * math.pow(co, 2)
+    math.sqrt(sum_val / len) * close
+f_yang_zhang(len) =>
+    overnight = 0.0
+    oc = 0.0
+    rs = 0.0
+    for i = 0 to len - 1
+        overnight += math.pow(math.log(nz(open[i]) / math.max(nz(close[i+1]), 0.0001)), 2)
+        oc += math.pow(math.log(nz(close[i]) / math.max(nz(open[i]), 0.0001)), 2)
+        h = nz(high[i])
+        l = nz(low[i])
+        o = math.max(nz(open[i]), 0.0001)
+        c = math.max(nz(close[i]), 0.0001)
+        rs += math.log(h/c) * math.log(h/o) + math.log(l/c) * math.log(l/o)
+    overnight := overnight / len
+    oc := oc / len
+    rs := rs / len
+    k = 0.34 / (1.34 + (len + 1) / (len - 1))
+    math.sqrt(overnight + k * oc + (1 - k) * rs) * close
+f_chaikin(len) =>
+    hl_ema = ta.ema(high - low, len)
+    hl_ema_prev = ta.ema(high - low, len * 2)
+    stdev_val = ta.stdev(close, len)
+    hl_ema_prev > 0 ? (hl_ema - hl_ema_prev) / hl_ema_prev * stdev_val + stdev_val : stdev_val
+f_historical_vol(src, len) =>
+    log_ret = math.log(src / nz(src[1], src))
+    ta.stdev(log_ret, len) * src
+f_ulcer(src, len) =>
+    highest_close = ta.highest(src, len)
+    sum_sq = 0.0
+    for i = 0 to len - 1
+        pct_dd = (nz(src[i]) - highest_close) / highest_close * 100
+        sum_sq += math.pow(pct_dd, 2)
+    math.sqrt(sum_sq / len) / 100 * src
+f_dafe_entropy(src, len) =>
+    sum_changes = 0.0
+    for i = 1 to len
+        sum_changes += math.abs(src[i] - src[i-1])
+    entropy = sum_changes / len
+    avg_entropy = ta.sma(entropy, len)
+    stdev_val = ta.stdev(src, len)
+    ratio = avg_entropy > 0 ? entropy / avg_entropy : 1.0
+    stdev_val * ratio
+f_dafe_elastic(src, basis, len) =>
+    raw_dev = ta.stdev(src, len)
+    dist = math.abs(src - basis)
+    stretch_factor = dist / (raw_dev + 0.0001)
+    raw_dev * (1.0 / (1.0 + stretch_factor * 0.1))
+f_dafe_dark_matter(src, len) =>
+    hurst = ta.atr(len) / (ta.highest(high, len) - ta.lowest(low, len) + 0.0001)
+    ta.stdev(src, len) * (1 + (1 - hurst))
+f_dafe_heisenberg(src, len) =>
+    log_ret = math.log(src / nz(src[1], src))
+    ta.stdev(log_ret, len) * src * 2.5
+calc_deviation(src, basis, len, dev_type) =>
+    switch dev_type
+        "Standard Deviation" => f_stdev(src, len)
+        "Mean Absolute Deviation" => f_mad(src, basis, len)
+        "True Range (ATR)" => f_atr(len)
+        "Interquartile Range" => f_iqr(src, len)
+        "Sortino (Downside)" => f_sortino(src, basis, len)
+        "Standard Error" => f_stderr(src, len)
+        "Parkinson Volatility" => f_parkinson(len)
+        "Garman-Klass" => f_garman_klass(len)
+        "Yang-Zhang" => f_yang_zhang(len)
+        "Chaikin Volatility" => f_chaikin(len)
+        "Historical Volatility" => f_historical_vol(src, len)
+        "Ulcer Index" => f_ulcer(src, len)
+        "DAFE Entropy" => f_dafe_entropy(src, len)
+        "DAFE Elastic" => f_dafe_elastic(src, basis, len)
+        "DAFE Dark Matter" => f_dafe_dark_matter(src, len)
+        "DAFE Heisenberg" => f_dafe_heisenberg(src, len)
+        => f_stdev(src, len)
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🎯 BAND CALCULATIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+float basis = na
+if i_band_type == "Donchian Channel"
+    basis := (ta.highest(high, i_length) + ta.lowest(low, i_length)) / 2
+else
+    basis := calc_basis(i_src, i_length, i_basis_type)
+float base_dev = calc_deviation(i_src, basis, i_length, i_dev_type)
+float dev = na
+float band_modifier = 1.0
+if i_band_type == "Donchian Channel"
+    dev := (ta.highest(high, i_length) - ta.lowest(low, i_length)) / 2
+else if i_band_type == "Keltner Channel" or i_band_type == "Starc Bands"
+    float atr_dev = ta.atr(i_length)
+    dev := atr_dev * 0.7 + base_dev * 0.3
+else if i_band_type == "ATR Bands"
+    float atr_val = ta.atr(i_length)
+    float dev_ratio = base_dev / nz(ta.stdev(i_src, i_length), base_dev)
+    dev := atr_val * math.max(0.5, math.min(2.0, dev_ratio)) 
+else if i_band_type == "Envelope (Percentage)"
+    dev := basis * (i_mult / 100)
+else if i_band_type == "Acceleration Bands"
+    float hl_range = ta.sma(high - low, i_length)
+    dev := (hl_range + base_dev) / 2   
+else if i_band_type == "Chandelier Bands"
+    float atr_val = ta.atr(i_length)
+    dev := (atr_val + base_dev) / 2  
+else if i_band_type == "DAFE Flux Bands"
+    float atr_now = ta.atr(i_length)
+    float atr_avg = ta.sma(atr_now, i_length)
+    float flux_ratio = atr_avg > 0 ? atr_now / atr_avg : 1.0
+    dev := base_dev * flux_ratio    
+else if i_band_type == "DAFE Quantum Bands"
+    float step_size = ta.atr(i_length) * 0.5
+    var float quantum_dev = na
+    quantum_dev := na(quantum_dev) ? base_dev : 
+                   math.abs(base_dev - quantum_dev) > step_size ? base_dev : quantum_dev
+    dev := quantum_dev
+else if i_band_type == "DAFE Gravity Bands"
+    float sum_weighted_dev = 0.0
+    float sum_vol = 0.0
+    for i = 0 to i_length - 1
+        float local_dev = math.abs(i_src[i] - basis)
+        float vol_weight = nz(volume[i], 1.0)
+        sum_weighted_dev += local_dev * vol_weight
+        sum_vol += vol_weight
+    float gravity_raw = sum_vol > 0 ? sum_weighted_dev / sum_vol : base_dev
+    dev := (gravity_raw + base_dev) / 2  
+else if i_band_type == "DAFE Neural Bands"
+    float prediction_error = math.abs(i_src - basis)
+    float avg_error = ta.ema(prediction_error, i_length)
+    var float neural_adjustment = 1.0
+    float learning_rate = 0.1
+    neural_adjustment := neural_adjustment + learning_rate * (avg_error / nz(base_dev, avg_error) - neural_adjustment)
+    dev := base_dev * math.max(0.5, math.min(2.0, neural_adjustment * 2))   
+else if i_band_type == "Standard Error Bands"
+    dev := base_dev / math.sqrt(i_length) 
+else
+    dev := base_dev
+float upper_raw = na
+float lower_raw = na
+if i_band_type == "Donchian Channel"
+    upper_raw := ta.highest(high, i_length)
+    lower_raw := ta.lowest(low, i_length)
+else if i_band_type == "Envelope (Percentage)"
+    upper_raw := basis + dev
+    lower_raw := basis - dev
+else if i_band_type == "Chandelier Bands"
+    upper_raw := ta.highest(high, i_length) - dev * i_mult
+    lower_raw := ta.lowest(low, i_length) + dev * i_mult
+else
+    upper_raw := basis + dev * i_mult
+    lower_raw := basis - dev * i_mult
+float upper = upper_raw
+float lower = lower_raw
+float upper_mid = basis + dev * i_mult * 0.5
+float lower_mid = basis - dev * i_mult * 0.5
+// ═══════════════════════════════════════════════════════════════════════════════
+// 📊 BAND METRICS
+// ═══════════════════════════════════════════════════════════════════════════════
+bandwidth = upper - lower
+bandwidth_pct = basis > 0 ? bandwidth / basis * 100 : 0
+pct_b = (upper - lower) != 0 ? (i_src - lower) / (upper - lower) : 0.5
+if barstate.isconfirmed
+    array.unshift(bandwidth_history, bandwidth_pct)
+    if array.size(bandwidth_history) > 200
+        array.pop(bandwidth_history)
+    array.unshift(pctb_history, pct_b)
+    if array.size(pctb_history) > 200
+        array.pop(pctb_history)
+bandwidth_percentile = ta.percentrank(bandwidth, i_squeeze_len)
+is_squeeze = bandwidth_percentile <= i_squeeze_threshold
+is_expansion = bandwidth_percentile >= (100 - i_squeeze_threshold)
+band_slope = upper - upper[1]
+basis_slope = basis - basis[1]
+lower_slope = lower - lower[1]
+band_elasticity = nz(dev / nz(dev[5], dev)) - 1
+vol_regime = bandwidth_pct > ta.sma(bandwidth_pct, 50) * 1.5 ? "HIGH" : 
+             bandwidth_pct < ta.sma(bandwidth_pct, 50) * 0.5 ? "LOW" : "NORMAL"
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🔬 PATTERN DETECTION 
+// ═══════════════════════════════════════════════════════════════════════════════
+float sens = i_pattern_sensitivity
+squeeze_duration = ta.barssince(not is_squeeze[1] and is_squeeze)
+squeeze_type = is_squeeze ? 
+     squeeze_duration > int(20 / sens) ? "COILING" :   
+     squeeze_duration > int(10 / sens) ? "COMPRESSION" :
+     "BUILDING" : "NONE"
+int walk_bars = int(3 / sens) 
+walking_upper = true
+walking_lower = true
+for i = 0 to math.max(0, walk_bars - 1)
+    if close[i] <= upper_mid[i]
+        walking_upper := false
+    if close[i] >= lower_mid[i]
+        walking_lower := false
+is_walking = (i_show_walking and (walking_upper or walking_lower))
+price_trend = ta.ema(close, 10) - ta.ema(close, 20)
+band_trend = ta.ema(bandwidth, 10) - ta.ema(bandwidth, 20)
+float div_threshold = 0.3 / sens  // sens affects how extreme position needs to be
+bullish_band_div = i_show_divergence and price_trend < 0 and band_trend < 0 and pct_b < div_threshold
+bearish_band_div = i_show_divergence and price_trend > 0 and band_trend < 0 and pct_b > (1 - div_threshold)
+expansion_breakout_bull = is_squeeze[1] and not is_squeeze and close > basis and basis_slope > 0
+expansion_breakout_bear = is_squeeze[1] and not is_squeeze and close < basis and basis_slope < 0
+float pattern_strength = 0.0
+string current_pattern = "NEUTRAL"
+if i_enable_patterns
+    if is_squeeze and i_show_squeeze_type
+        current_pattern := "SQUEEZE: " + squeeze_type
+        pattern_strength := math.min(squeeze_duration / (30 / sens), 1.0)
+    else if expansion_breakout_bull
+        current_pattern := "🚀 EXPANSION ↑"
+        pattern_strength := 0.9 * sens
+    else if expansion_breakout_bear
+        current_pattern := "🚀 EXPANSION ↓"
+        pattern_strength := 0.9 * sens
+    else if walking_upper and i_show_walking
+        current_pattern := "📈 WALKING UPPER"
+        pattern_strength := 0.7 * sens
+    else if walking_lower and i_show_walking
+        current_pattern := "📉 WALKING LOWER"
+        pattern_strength := 0.7 * sens
+    else if bullish_band_div and i_show_divergence
+        current_pattern := "🔄 BULL DIVERGENCE"
+        pattern_strength := 0.6 * sens
+    else if bearish_band_div and i_show_divergence
+        current_pattern := "🔄 BEAR DIVERGENCE"
+        pattern_strength := 0.6 * sens
+else
+    current_pattern := "DISABLED"
+    pattern_strength := 0.0
+// ═══════════════════════════════════════════════════════════════════════════════
+// ⚡ SIGNAL ENGINE
+// ═══════════════════════════════════════════════════════════════════════════════
+vol_avg = ta.sma(volume, 20)
+vol_ratio = vol_avg > 0 ? volume / vol_avg : 1.0
+[diplus, diminus, adx] = ta.dmi(14, 14)
+rsi = ta.rsi(close, 14)
+var int bars_since_signal = 999
+vol_filter_pass = not i_filter_volume or volume >= vol_avg * i_vol_mult
+adx_filter_pass = not i_filter_trend or adx >= i_adx_thresh
+time_filter_pass = bars_since_signal >= i_filter_time
+bool filter_pass = not i_enable_filters or (vol_filter_pass and adx_filter_pass and time_filter_pass)
+bool buy_signal = false
+bool sell_signal = false
+float signal_strength = 0.0
+if i_signal_mode == "Band Touch"
+    buy_signal := low <= lower and close > lower
+    sell_signal := high >= upper and close < upper
+    signal_strength := math.abs(pct_b - 0.5) * 2
+else if i_signal_mode == "Band Cross"
+    buy_signal := ta.crossover(close, lower)
+    sell_signal := ta.crossunder(close, upper)
+    signal_strength := 0.7
+else if i_signal_mode == "Squeeze Breakout"
+    buy_signal := expansion_breakout_bull
+    sell_signal := expansion_breakout_bear
+    signal_strength := pattern_strength
+else if i_signal_mode == "Mean Reversion"
+    buy_signal := close < lower and rsi < 30
+    sell_signal := close > upper and rsi > 70
+    signal_strength := pct_b < 0 ? math.abs(pct_b) : pct_b > 1 ? pct_b - 1 : 0
+else if i_signal_mode == "Trend Following"
+    buy_signal := close > upper and basis_slope > 0 and adx > 25
+    sell_signal := close < lower and basis_slope < 0 and adx > 25
+    signal_strength := adx / 50
+else if i_signal_mode == "Bandwidth Expansion"
+    expanding = bandwidth > bandwidth[1] * 1.1
+    buy_signal := expanding and close > basis and pct_b > 0.8
+    sell_signal := expanding and close < basis and pct_b < 0.2
+    signal_strength := bandwidth_pct / 10
+else if i_signal_mode == "Smart Composite"
+    float buy_score = 0.0
+    float sell_score = 0.0
+    if pct_b < 0.2
+        buy_score += 2
+    if pct_b > 0.8
+        sell_score += 2
+    if expansion_breakout_bull
+        buy_score += 3
+    if expansion_breakout_bear
+        sell_score += 3
+    if bullish_band_div
+        buy_score += 2
+    if bearish_band_div
+        sell_score += 2
+    if walking_upper
+        buy_score += 1
+    if walking_lower
+        sell_score += 1
+    if vol_ratio > 1.5
+        buy_score += 1
+        sell_score += 1
+    buy_signal := buy_score >= 4
+    sell_signal := sell_score >= 4
+    signal_strength := math.max(buy_score, sell_score) / 8
+else if i_signal_mode == "Pattern Based"
+    buy_signal := expansion_breakout_bull or (bullish_band_div and pct_b < 0.3)
+    sell_signal := expansion_breakout_bear or (bearish_band_div and pct_b > 0.7)
+    signal_strength := pattern_strength
+buy_signal := buy_signal and filter_pass
+sell_signal := sell_signal and filter_pass
+if buy_signal or sell_signal
+    bars_since_signal := 0
+else
+    bars_since_signal += 1
+bool strong_buy = buy_signal and signal_strength >= 0.7
+bool strong_sell = sell_signal and signal_strength >= 0.7
+// ═══════════════════════════════════════════════════════════════════════════════
+// ALERT CONDITION VARIABLES
+// ═══════════════════════════════════════════════════════════════════════════════
+band_touch_lower = low <= lower and close > lower
+band_touch_upper = high >= upper and close < upper
+price_making_lower_low = low < ta.lowest(low, 14)[1]
+price_making_higher_high = high > ta.highest(high, 14)[1]
+bandwidth_expanding = bandwidth > bandwidth[1] * 1.05
+bandwidth_contracting = bandwidth < bandwidth[1] * 0.95
+bullish_divergence = price_making_lower_low and bandwidth_expanding and pct_b < 0.2
+bearish_divergence = price_making_higher_high and bandwidth_contracting and pct_b > 0.8
+mean_reversion_buy = pct_b < 0 and basis_slope > 0 and close < lower
+mean_reversion_sell = pct_b > 1 and basis_slope < 0 and close > upper
+trend_breakout_bull = ta.crossover(close, upper) and bandwidth_expanding and basis_slope > 0
+trend_breakout_bear = ta.crossunder(close, lower) and bandwidth_expanding and basis_slope < 0
+// ═══════════════════════════════════════════════════════════════════════════════
+// 📍 SMART KILL ZONES
+// ═══════════════════════════════════════════════════════════════════════════════
+atr14 = ta.atr(14)
+significant_upper_touch = high >= upper * 0.998 and close < upper and volume > vol_avg * 1.2
+significant_lower_touch = low <= lower * 1.002 and close > lower and volume > vol_avg * 1.2
+f_zoneNear(arr, level, dist) =>
+    result = false
+    if array.size(arr) > 0
+        for i = 0 to array.size(arr) - 1
+            if math.abs(array.get(arr, i) - level) < dist
+                result := true
+                break
+    result
+if i_enable_zones and significant_upper_touch
+    zone_level = high
+    if not f_zoneNear(upper_zones, zone_level, atr14 * 1.5)
+        if array.size(upper_zones) >= i_max_zones
+            array.shift(upper_zones)
+            array.shift(upper_strengths)
+            array.shift(upper_bars)
+            array.shift(upper_touches)
+        array.push(upper_zones, zone_level)
+        array.push(upper_strengths, math.min(vol_ratio * 30 + 40, 100.0))
+        array.push(upper_bars, bar_index)
+        array.push(upper_touches, 1)
+if i_enable_zones and significant_lower_touch
+    zone_level = low
+    if not f_zoneNear(lower_zones, zone_level, atr14 * 1.5)
+        if array.size(lower_zones) >= i_max_zones
+            array.shift(lower_zones)
+            array.shift(lower_strengths)
+            array.shift(lower_bars)
+            array.shift(lower_touches)
+        array.push(lower_zones, zone_level)
+        array.push(lower_strengths, math.min(vol_ratio * 30 + 40, 100.0))
+        array.push(lower_bars, bar_index)
+        array.push(lower_touches, 1)
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🧪 OPTIMIZER ENGINE
+// ═══════════════════════════════════════════════════════════════════════════════
+var TradeStats stats = TradeStats.new()
+stats.current_equity := i_opt_capital
+bool opt_buy = switch i_opt_signal_type
+    "Smart Composite" => buy_signal
+    "All Signals" => buy_signal
+    "Strong Only" => strong_buy
+    "Pattern Based" => expansion_breakout_bull or bullish_band_div
+    => buy_signal
+bool opt_sell = switch i_opt_signal_type
+    "Smart Composite" => sell_signal
+    "All Signals" => sell_signal
+    "Strong Only" => strong_sell
+    "Pattern Based" => expansion_breakout_bear or bearish_band_div
+    => sell_signal
+if i_opt_enable
+    if stats.in_trade
+        sl_price = stats.direction == 1 ? stats.entry_price - atr14 * i_opt_sl : stats.entry_price + atr14 * i_opt_sl
+        tp_price = stats.direction == 1 ? stats.entry_price + atr14 * i_opt_tp : stats.entry_price - atr14 * i_opt_tp
+        hit_sl = stats.direction == 1 ? low <= sl_price : high >= sl_price
+        hit_tp = stats.direction == 1 ? high >= tp_price : low <= tp_price
+        exit_opposite = stats.direction == 1 ? opt_sell : opt_buy
+        if hit_sl or hit_tp or exit_opposite
+            exit_price = hit_tp ? tp_price : hit_sl ? sl_price : close
+            pnl_pct = stats.direction == 1 ? 
+                 (exit_price - stats.entry_price) / stats.entry_price : 
+                 (stats.entry_price - exit_price) / stats.entry_price
+            position_value = stats.current_equity * (i_opt_position / 100)
+            gross_pnl = position_value * pnl_pct
+            comm = position_value * (i_opt_commission / 100) * 2
+            net_pnl = gross_pnl - comm
+            stats.total_pnl += net_pnl
+            stats.current_equity += net_pnl
+            stats.trades += 1
+            if net_pnl > 0
+                stats.wins += 1
+                stats.win_pnl += net_pnl
+            else
+                stats.losses += 1
+                stats.loss_pnl += math.abs(net_pnl)
+            stats.peak_equity := math.max(stats.peak_equity, stats.current_equity)
+            dd = stats.peak_equity > 0 ? (stats.peak_equity - stats.current_equity) / stats.peak_equity * 100 : 0
+            stats.max_dd := math.max(stats.max_dd, dd)
+            stats.in_trade := false
+    if not stats.in_trade
+        if opt_buy
+            stats.in_trade := true
+            stats.direction := 1
+            stats.entry_price := close
+            stats.entry_bar := bar_index
+        else if opt_sell
+            stats.in_trade := true
+            stats.direction := -1
+            stats.entry_price := close
+            stats.entry_bar := bar_index
+// ═══════════════════════════════════════════════════════════════════════════════
+// 📊 OPTIMIZER STATS
+// ═══════════════════════════════════════════════════════════════════════════════
+float win_rate = stats.trades > 0 ? (stats.wins / stats.trades) * 100 : 0.0
+float profit_factor = stats.loss_pnl > 0 ? stats.win_pnl / stats.loss_pnl : stats.win_pnl > 0 ? 99.9 : 0.0
+float expectancy = stats.trades > 0 ? (stats.win_pnl - stats.loss_pnl) / stats.trades : 0.0
+int robustness_score = 0
+robustness_score += win_rate >= 55 ? 25 : win_rate >= 50 ? 15 : win_rate >= 45 ? 5 : 0
+robustness_score += expectancy > 50 ? 25 : expectancy > 10 ? 15 : expectancy > 0 ? 5 : 0
+robustness_score += stats.trades >= 30 ? 25 : stats.trades >= 20 ? 15 : stats.trades >= 10 ? 5 : 0
+robustness_score += profit_factor >= 1.5 ? 25 : profit_factor >= 1.2 ? 15 : profit_factor >= 1.0 ? 5 : 0
+string robustness_text = robustness_score >= 80 ? "ROBUST" : robustness_score >= 60 ? "STABLE" : robustness_score >= 40 ? "FRAGILE" : "OVERFIT"
+color robustness_color = robustness_score >= 80 ? bullColor : robustness_score >= 60 ? accentColor1 : robustness_score >= 40 ? accentColor3 : bearColor
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🌐 MTF HORIZON DATA
+// ═══════════════════════════════════════════════════════════════════════════════
+current_bandwidth_pct = bandwidth_pct
+current_pct_b = pct_b
+current_squeeze = is_squeeze ? 1.0 : is_expansion ? -1.0 : 0.0
+current_band_slope = band_slope / atr14 * 100
+current_vol_regime = vol_regime == "HIGH" ? 1.0 : vol_regime == "LOW" ? -1.0 : 0.0
+[h1_bw, h1_pctb, h1_squeeze, h1_slope, h1_vol] = request.security(syminfo.tickerid, i_h1_tf,
+     [current_bandwidth_pct, current_pct_b, current_squeeze, current_band_slope, current_vol_regime], lookahead=barmerge.lookahead_off)
+[h2_bw, h2_pctb, h2_squeeze, h2_slope, h2_vol] = request.security(syminfo.tickerid, i_h2_tf,
+     [current_bandwidth_pct, current_pct_b, current_squeeze, current_band_slope, current_vol_regime], lookahead=barmerge.lookahead_off)
+[h3_bw, h3_pctb, h3_squeeze, h3_slope, h3_vol] = request.security(syminfo.tickerid, i_h3_tf,
+     [current_bandwidth_pct, current_pct_b, current_squeeze, current_band_slope, current_vol_regime], lookahead=barmerge.lookahead_off)
+f_getMetric(metric, bw, pctb, squeeze, slope, vol) =>
+    switch metric
+        "Bandwidth %" => bw
+        "%B Position" => pctb * 100
+        "Squeeze State" => squeeze * 100
+        "Band Slope" => slope
+        "Volatility Regime" => vol * 100
+        => bw
+h1_metric = f_getMetric(i_h1_metric, nz(h1_bw), nz(h1_pctb), nz(h1_squeeze), nz(h1_slope), nz(h1_vol))
+h2_metric = f_getMetric(i_h2_metric, nz(h2_bw), nz(h2_pctb), nz(h2_squeeze), nz(h2_slope), nz(h2_vol))
+h3_metric = f_getMetric(i_h3_metric, nz(h3_bw), nz(h3_pctb), nz(h3_squeeze), nz(h3_slope), nz(h3_vol))
+if barstate.isconfirmed or barstate.islast
+    array.unshift(h1_history, h1_metric)
+    if array.size(h1_history) > i_mtf_depth
+        array.pop(h1_history)
+    array.unshift(h2_history, h2_metric)
+    if array.size(h2_history) > i_mtf_depth
+        array.pop(h2_history)
+    array.unshift(h3_history, h3_metric)
+    if array.size(h3_history) > i_mtf_depth
+        array.pop(h3_history)
+f_formatTF(tf) =>
+    seconds = timeframe.in_seconds(tf)
+    minutes = seconds / 60
+    hours = minutes / 60
+    days = hours / 24
+    hours >= 24 ? str.tostring(days) + "D" : hours >= 1 ? str.tostring(hours) + "H" : str.tostring(minutes) + "m"
+f_metricShort(metric) =>
+    switch metric
+        "Bandwidth %" => "BW%"
+        "%B Position" => "%B"
+        "Squeeze State" => "SQZ"
+        "Band Slope" => "SLOPE"
+        "Volatility Regime" => "VOL"
+        => "MTF"
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🧮 VISUALIZATION CALCULATIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+float anim_phase = (bar_index % (50 / i_viz_animation)) / (50.0 / i_viz_animation)
+float pulse = math.sin(anim_phase * 2 * math.pi)
+float breathe = 0.5 + 0.5 * pulse
+float band_range = upper - lower
+float band_mid = (upper + lower) / 2
+float price_deviation = close - band_mid
+float normalized_position = band_range > 0 ? price_deviation / (band_range / 2) : 0  // -1 to +1
+float vol_intensity = bandwidth_pct / 10  // Normalized volatility
+float squeeze_intensity = is_squeeze ? 1.0 : is_expansion ? 0.3 : 0.5
+float delta_energy = math.abs(pct_b - 0.5) * 2  // 0 at center, 1 at extremes
+float momentum_energy = math.abs(basis_slope) / ta.atr(14)
+float total_energy = (delta_energy + momentum_energy + vol_intensity) / 3 * i_viz_intensity
+f_intensity_transparency(int base_trans) =>
+    float normalized = (i_viz_intensity - 0.3) / 2.7
+    float fade_amount = (1.0 - normalized) * (95 - base_trans)
+    int adjusted = int(base_trans + fade_amount)
+    math.max(0, math.min(95, adjusted))
+var array<line> quantum_field_lines = array.new<line>()
+var array<label> quantum_particles = array.new<label>()
+if i_viz_mode == "Quantum Field" and barstate.islast
+    for l in quantum_field_lines
+        line.delete(l)
+    array.clear(quantum_field_lines)
+    for lbl in quantum_particles
+        label.delete(lbl)
+    array.clear(quantum_particles)
+    int field_bars = 50
+    int field_levels = i_viz_layers * 2
+    for i = 0 to field_levels
+        float level_pct = i / field_levels
+        float field_level = lower + (band_range * level_pct)
+        float wave_offset = math.sin((bar_index + i * 10) * 0.1 * i_viz_animation) * band_range * 0.05 * total_energy
+        float distorted_level = field_level + wave_offset
+        int base_trans = int(60 - total_energy * 30)
+        int line_trans = f_intensity_transparency(base_trans)
+        color field_color = color.from_gradient(level_pct, 0, 1, 
+             color.new(#00FFFF, line_trans), 
+             color.new(#FF00FF, line_trans))
+        field_line = line.new(
+             bar_index - field_bars, distorted_level,
+             bar_index, distorted_level,
+             color=field_color,
+             width=1,
+             style=line.style_dotted,
+             force_overlay=true)
+        array.push(quantum_field_lines, field_line)
+    if i_viz_particles
+        int particle_count = int(total_energy * 10) + 5
+        for i = 0 to math.min(particle_count, 25)
+            int particle_bar = bar_index - int(math.random(0, field_bars))
+            float particle_level = lower + math.random() * band_range
+            int symbol_idx = int(math.random(0, 4.99))
+            string particle_symbol = switch symbol_idx
+                0 => "⚛"
+                1 => "✦"
+                2 => "◆"
+                3 => "●"
+                4 => "◉"
+                => "●"
+            int particle_trans = f_intensity_transparency(int(math.random(20, 50)))
+            particle_lbl = label.new(particle_bar, particle_level, particle_symbol, style=label.style_none, textcolor=color.new(accentColor3, particle_trans), size=size.small, force_overlay=true)
+            array.push(quantum_particles, particle_lbl)
+var array<line> neural_connections = array.new<line>()
+var array<label> neural_nodes = array.new<label>()
+if i_viz_mode == "Neural Network" and barstate.islast
+    for l in neural_connections
+        line.delete(l)
+    array.clear(neural_connections)
+    for lbl in neural_nodes
+        label.delete(lbl)
+    array.clear(neural_nodes)
+    var array<float> node_levels = array.new<float>()
+    array.clear(node_levels)
+    array.push(node_levels, upper)
+    array.push(node_levels, band_mid)
+    array.push(node_levels, lower)
+    for i = 1 to i_viz_layers
+        float level = lower + (band_range * i / (i_viz_layers + 1))
+        array.push(node_levels, level)
+    int time_points = 4
+    for t = 0 to time_points
+        int node_bar = bar_index - t * 10
+        for i = 0 to array.size(node_levels) - 1
+            float level = array.get(node_levels, i)
+            float proximity = math.abs(close - level) / band_range
+            bool is_active = proximity < 0.2
+            string node_symbol = is_active ? "◉" : "○"
+            int node_trans = is_active ? f_intensity_transparency(0) : f_intensity_transparency(50)
+            color node_color = is_active ? 
+                 color.new(#00FF00, node_trans) : 
+                 color.new(#888888, node_trans)
+            node_lbl = label.new(
+                 node_bar, level,
+                 node_symbol,
+                 style=label.style_none,
+                 textcolor=node_color,
+                 size=is_active ? size.normal : size.small,
+                 force_overlay=true)
+            array.push(neural_nodes, node_lbl)
+            if t < time_points and i < array.size(node_levels) - 1
+                float next_level = array.get(node_levels, i + 1)
+                int conn_trans = is_active ? f_intensity_transparency(40) : f_intensity_transparency(75)
+                connection = line.new(
+                     node_bar, level,
+                     node_bar - 10, next_level,
+                     color=color.new(#00FFFF, conn_trans),
+                     width=is_active ? 2 : 1,
+                     force_overlay=true)
+                array.push(neural_connections, connection)
+var array<box> plasma_chambers = array.new<box>()
+var array<line> plasma_arcs = array.new<line>()
+if i_viz_mode == "Plasma Storm" and barstate.islast
+    for b in plasma_chambers
+        box.delete(b)
+    array.clear(plasma_chambers)
+    for l in plasma_arcs
+        line.delete(l)
+    array.clear(plasma_arcs)
+    int plasma_bars = 30
+    for layer = 1 to i_viz_layers
+        float multiplier = layer * (i_mult / i_viz_layers)
+        float upper_band = basis + dev * multiplier
+        float lower_band = basis - dev * multiplier
+        float layer_intensity = (i_viz_layers - layer + 1) / i_viz_layers
+        int base_trans = int(80 - layer_intensity * 25 * total_energy)
+        int plasma_trans = f_intensity_transparency(base_trans)
+        color plasma_color = is_squeeze ?
+             color.from_gradient(breathe, 0, 1,
+                 color.new(#FF00FF, plasma_trans),
+                 color.new(#9400D3, plasma_trans)) :
+             color.from_gradient(pct_b, 0, 1,
+                 color.new(#8B00FF, plasma_trans),
+                 color.new(#FF1493, plasma_trans))
+        int border_trans = f_intensity_transparency(50)
+        upper_box = box.new(
+             bar_index - plasma_bars, upper_band + (band_range * 0.02),
+             bar_index, upper_band - (band_range * 0.02),
+             bgcolor=plasma_color,
+             border_color=color.new(#FFFFFF, border_trans),
+             border_width=1,
+             force_overlay=true)
+        array.push(plasma_chambers, upper_box)
+        lower_box = box.new(
+             bar_index - plasma_bars, lower_band + (band_range * 0.02),
+             bar_index, lower_band - (band_range * 0.02),
+             bgcolor=plasma_color,
+             border_color=color.new(#FFFFFF, border_trans),
+             border_width=1,
+             force_overlay=true)
+        array.push(plasma_chambers, lower_box)
+    if i_viz_particles and (is_expansion or total_energy > 0.7)
+        int arc_count = int(total_energy * i_viz_layers * 2) + 3
+        for i = 0 to arc_count
+            int arc_x = bar_index - int(math.random(0, plasma_bars))
+            bool upper_arc = math.random() > 0.5
+            float arc_start = upper_arc ? upper : lower
+            float arc_end = basis + (math.random(-1, 1) * band_range * 0.3)
+            int arc_trans = f_intensity_transparency(int(math.random(15, 50)))
+            color arc_color = color.new(#FFFF00, arc_trans)
+            arc_line = line.new(
+                 arc_x, arc_start,
+                 arc_x + int(math.random(-2, 2)), arc_end,
+                 color=arc_color,
+                 width=int(math.random(1, 3)),
+                 force_overlay=true)
+            array.push(plasma_arcs, arc_line)
+            if i_viz_glow
+                int glow_trans = f_intensity_transparency(70)
+                glow_line = line.new(
+                     arc_x, arc_start,
+                     arc_x + int(math.random(-2, 2)), arc_end,
+                     color=color.new(#FFFF00, glow_trans),
+                     width=int(math.random(4, 7)),
+                     force_overlay=true)
+                array.push(plasma_arcs, glow_line)
+var array<box> depth_layers = array.new<box>()
+var array<line> depth_separators = array.new<line>()
+if i_viz_mode == "Depth Perception" and barstate.islast
+    for b in depth_layers
+        box.delete(b)
+    array.clear(depth_layers)
+    for l in depth_separators
+        line.delete(l)
+    array.clear(depth_separators)
+    int depth_bars = 40
+    for layer = i_viz_layers to 1
+        float layer_mult = layer * (i_mult / i_viz_layers)
+        float upper_band = basis + dev * layer_mult
+        float lower_band = basis - dev * layer_mult
+        float depth_factor = layer / i_viz_layers
+        int base_trans = int(65 + depth_factor * 25)
+        int depth_trans = f_intensity_transparency(base_trans)
+        color depth_color = pct_b > 0.5 ?
+             color.new(#00FFAA, depth_trans) :
+             color.new(#FF0055, depth_trans)
+        if layer > i_viz_layers / 2
+            depth_color := color.new(#4169E1, depth_trans)
+        upper_layer = box.new(
+             bar_index - depth_bars, upper_band,
+             bar_index, basis,
+             bgcolor=depth_color,
+             border_color=na,
+             force_overlay=true)
+        array.push(depth_layers, upper_layer)
+        lower_layer = box.new(
+             bar_index - depth_bars, basis,
+             bar_index, lower_band,
+             bgcolor=depth_color,
+             border_color=na,
+             force_overlay=true)
+        array.push(depth_layers, lower_layer)
+        if i_viz_glow
+            int sep_trans = f_intensity_transparency(int(45 + depth_factor * 35))
+            upper_sep = line.new(
+                 bar_index - depth_bars, upper_band,
+                 bar_index, upper_band,
+                 color=color.new(#FFFFFF, sep_trans),
+                 width=1,
+                 style=line.style_dotted,
+                 force_overlay=true)
+            array.push(depth_separators, upper_sep)
+            lower_sep = line.new(
+                 bar_index - depth_bars, lower_band,
+                 bar_index, lower_band,
+                 color=color.new(#FFFFFF, sep_trans),
+                 width=1,
+                 style=line.style_dotted,
+                 force_overlay=true)
+            array.push(depth_separators, lower_sep)
+var array<box> spectral_bands = array.new<box>()
+var array<line> spectral_markers = array.new<line>()
+if i_viz_mode == "Spectral Analysis" and barstate.islast
+    for b in spectral_bands
+        box.delete(b)
+    array.clear(spectral_bands)
+    for l in spectral_markers
+        line.delete(l)
+    array.clear(spectral_markers)
+    int spectral_bars = 35
+    int total_bands = i_viz_layers * 2
+    float band_step = (upper - lower) / total_bands
+    for i = 0 to total_bands - 1
+        float spec_band_top = lower + (i + 1) * band_step
+        float spec_band_bottom = lower + i * band_step
+        float spectrum_position = i / total_bands
+        color spectrum_color = na
+        if spectrum_position < 0.17
+            spectrum_color := color.from_gradient(spectrum_position, 0, 0.17, #FF0000, #FF7F00)
+        else if spectrum_position < 0.33
+            spectrum_color := color.from_gradient(spectrum_position, 0.17, 0.33, #FF7F00, #FFFF00)
+        else if spectrum_position < 0.50
+            spectrum_color := color.from_gradient(spectrum_position, 0.33, 0.50, #FFFF00, #00FF00)
+        else if spectrum_position < 0.67
+            spectrum_color := color.from_gradient(spectrum_position, 0.50, 0.67, #00FF00, #0000FF)
+        else if spectrum_position < 0.83
+            spectrum_color := color.from_gradient(spectrum_position, 0.67, 0.83, #0000FF, #4B0082)
+        else
+            spectrum_color := color.from_gradient(spectrum_position, 0.83, 1.0, #4B0082, #9400D3)
+        float distance_from_price = math.abs(close - (spec_band_top + spec_band_bottom) / 2)
+        float proximity = 1 - math.min(distance_from_price / band_range, 1)
+        int base_trans = int(80 - proximity * 35)
+        int spec_trans = f_intensity_transparency(base_trans)
+        spectrum_color := color.new(spectrum_color, spec_trans)
+        spectral_box = box.new(
+             bar_index - spectral_bars, spec_band_top,
+             bar_index, spec_band_bottom,
+             bgcolor=spectrum_color,
+             border_color=na,
+             force_overlay=true)
+        array.push(spectral_bands, spectral_box)
+    if i_viz_particles
+        for mark = 0 to i_viz_layers
+            float marker_level = lower + (mark * band_range / i_viz_layers)
+            int marker_trans = f_intensity_transparency(35)
+            marker_line = line.new(
+                 bar_index - spectral_bars, marker_level,
+                 bar_index - spectral_bars + 3, marker_level,
+                 color=color.new(#FFFFFF, marker_trans),
+                 width=2,
+                 force_overlay=true)
+            array.push(spectral_markers, marker_line)
+var array<line> probability_fans = array.new<line>()
+var array<box> probability_zones = array.new<box>()
+if i_viz_mode == "Probability Cone" and barstate.islast
+    for l in probability_fans
+        line.delete(l)
+    array.clear(probability_fans)
+    for b in probability_zones
+        box.delete(b)
+    array.clear(probability_zones)
+    int cone_length = 50
+    for layer = 1 to i_viz_layers
+        float base_mult = layer * (i_mult / i_viz_layers)
+        float start_upper = basis + dev * base_mult
+        float start_lower = basis - dev * base_mult
+        float expansion_factor = 1 + (layer * 0.2)
+        float end_upper = basis + dev * base_mult * expansion_factor
+        float end_lower = basis - dev * base_mult * expansion_factor
+        float probability = 1 - (layer / i_viz_layers) * 0.7
+        int base_trans = int(65 + (1 - probability) * 25)
+        int cone_trans = f_intensity_transparency(base_trans)
+        color cone_color = is_squeeze ?
+             color.new(#FFA500, cone_trans) :
+             is_expansion ?
+             color.new(#00FF00, cone_trans) :
+             color.new(#00FFFF, cone_trans)
+        upper_fan = line.new(
+             bar_index, start_upper,
+             bar_index + cone_length, end_upper,
+             color=cone_color,
+             width=2,
+             style=line.style_solid,
+             force_overlay=true)
+        array.push(probability_fans, upper_fan)
+        lower_fan = line.new(
+             bar_index, start_lower,
+             bar_index + cone_length, end_lower,
+             color=cone_color,
+             width=2,
+             style=line.style_solid,
+             force_overlay=true)
+        array.push(probability_fans, lower_fan)
+        if i_viz_glow and layer == 1
+            int zone_trans = f_intensity_transparency(85)
+            high_prob_upper = box.new(
+                 bar_index, start_upper,
+                 bar_index + cone_length, end_upper,
+                 bgcolor=color.new(cone_color, zone_trans),
+                 border_color=na,
+                 force_overlay=true)
+            array.push(probability_zones, high_prob_upper)
+            high_prob_lower = box.new(
+                 bar_index, start_lower,
+                 bar_index + cone_length, end_lower,
+                 bgcolor=color.new(cone_color, zone_trans),
+                 border_color=na,
+                 force_overlay=true)
+            array.push(probability_zones, high_prob_lower)
+    if i_viz_particles
+        for mark = 1 to i_viz_layers
+            int marker_x = bar_index + int(cone_length * mark / i_viz_layers)
+            int marker_trans = f_intensity_transparency(75)
+            marker_line = line.new(
+                 marker_x, upper,
+                 marker_x, lower,
+                 color=color.new(#FFFFFF, marker_trans),
+                 width=1,
+                 style=line.style_dotted,
+                 force_overlay=true)
+            array.push(probability_fans, marker_line)
+var array<box> heatmap_cells = array.new<box>()
+var array<line> heatmap_lines = array.new<line>()
+if i_viz_mode == "Heat Map" and barstate.islast
+    for b in heatmap_cells
+        box.delete(b)
+    array.clear(heatmap_cells)
+    for l in heatmap_lines
+        line.delete(l)
+    array.clear(heatmap_lines)
+    int heatmap_bars = 50
+    int heat_levels = i_viz_layers * 3
+    int segments = 10
+    for bar_seg = 0 to segments - 1
+        int segment_left = bar_index - heatmap_bars + (bar_seg * int(heatmap_bars / segments))
+        int segment_right = segment_left + int(heatmap_bars / segments)
+        int lookback = heatmap_bars - (bar_seg * int(heatmap_bars / segments))
+        float past_close = close[lookback]
+        for level = 0 to heat_levels - 1
+            float cell_top = lower + ((level + 1) * band_range / heat_levels)
+            float cell_bottom = lower + (level * band_range / heat_levels)
+            float cell_mid = (cell_top + cell_bottom) / 2
+            float heat_distance = math.abs(past_close - cell_mid)
+            float heat_value = 1 - math.min(heat_distance / (band_range / 2), 1)
+            color heat_color = na
+            if heat_value > 0.8
+                heat_color := color.from_gradient(heat_value, 0.8, 1.0, #FFFF00, #FFFFFF)
+            else if heat_value > 0.6
+                heat_color := color.from_gradient(heat_value, 0.6, 0.8, #FF8C00, #FFFF00)
+            else if heat_value > 0.4
+                heat_color := color.from_gradient(heat_value, 0.4, 0.6, #FF0000, #FF8C00)
+            else if heat_value > 0.2
+                heat_color := color.from_gradient(heat_value, 0.2, 0.4, #8B008B, #FF0000)
+            else
+                heat_color := color.from_gradient(heat_value, 0, 0.2, #000080, #8B008B)
+            int base_trans = int(55 - heat_value * 35)
+            int heat_trans = f_intensity_transparency(base_trans)
+            int border_trans = f_intensity_transparency(88)
+            heatmap_cell = box.new(
+                 segment_left, cell_top,
+                 segment_right, cell_bottom,
+                 bgcolor=color.new(heat_color, heat_trans),
+                 border_color=color.new(#222222, border_trans),
+                 border_width=1,
+                 force_overlay=true)
+            array.push(heatmap_cells, heatmap_cell)
+    if i_viz_particles
+        int crosshair_trans = f_intensity_transparency(0)
+        price_line = line.new(
+             bar_index - heatmap_bars, close,
+             bar_index, close,
+             color=color.new(#FFFFFF, crosshair_trans),
+             width=2,
+             style=line.style_solid,
+             force_overlay=true)
+        array.push(heatmap_lines, price_line)
+var array<box> nebula_layers = array.new<box>()
+var array<line> nebula_core = array.new<line>()
+if i_viz_mode == "Nebula Envelope" and barstate.islast
+    for b in nebula_layers
+        box.delete(b)
+    array.clear(nebula_layers)
+    for l in nebula_core
+        line.delete(l)
+    array.clear(nebula_core)
+    int nebula_bars = 40
+    for layer = 1 to i_viz_layers
+        float layer_mult = layer * (i_mult / i_viz_layers)
+        float upper_band = basis + dev * layer_mult
+        float lower_band = basis - dev * layer_mult
+        float glow_intensity = layer / i_viz_layers
+        int base_trans = int(90 - glow_intensity * 45 * breathe)
+        int nebula_trans = f_intensity_transparency(base_trans)
+        color nebula_color = na
+        if is_squeeze
+            nebula_color := color.from_gradient(glow_intensity, 0, 1,
+                 color.new(#FF4500, nebula_trans),
+                 color.new(#FF8C00, nebula_trans))
+        else if pct_b > 0.5
+            nebula_color := color.from_gradient(glow_intensity, 0, 1,
+                 color.new(#00FF7F, nebula_trans),
+                 color.new(#00FFFF, nebula_trans))
+        else
+            nebula_color := color.from_gradient(glow_intensity, 0, 1,
+                 color.new(#9400D3, nebula_trans),
+                 color.new(#FF00FF, nebula_trans))
+        upper_nebula = box.new(
+             bar_index - nebula_bars, upper_band,
+             bar_index, basis,
+             bgcolor=nebula_color,
+             border_color=na,
+             force_overlay=true)
+        array.push(nebula_layers, upper_nebula)
+        lower_nebula = box.new(
+             bar_index - nebula_bars, basis,
+             bar_index, lower_band,
+             bgcolor=nebula_color,
+             border_color=na,
+             force_overlay=true)
+        array.push(nebula_layers, lower_nebula)
+        if i_viz_glow and layer == i_viz_layers
+            int glow_trans = f_intensity_transparency(25)
+            upper_glow = line.new(
+                 bar_index - nebula_bars, upper_band,
+                 bar_index, upper_band,
+                 color=color.new(nebula_color, glow_trans),
+                 width=3,
+                 force_overlay=true)
+            array.push(nebula_core, upper_glow)
+            lower_glow = line.new(
+                 bar_index - nebula_bars, lower_band,
+                 bar_index, lower_band,
+                 color=color.new(nebula_color, glow_trans),
+                 width=3,
+                 force_overlay=true)
+            array.push(nebula_core, lower_glow)
+    if i_viz_particles
+        int core_trans = f_intensity_transparency(15)
+        int core_glow_trans = f_intensity_transparency(65)
+        core_line = line.new(
+             bar_index - nebula_bars, basis,
+             bar_index, basis,
+             color=color.new(#FFFFFF, core_trans),
+             width=4,
+             force_overlay=true)
+        array.push(nebula_core, core_line)
+        core_glow = line.new(
+             bar_index - nebula_bars, basis,
+             bar_index, basis,
+             color=color.new(#FFFFFF, core_glow_trans),
+             width=8,
+             force_overlay=true)
+        array.push(nebula_core, core_glow)
+var array<line> crystal_edges = array.new<line>()
+var array<box> crystal_facets = array.new<box>()
+if i_viz_mode == "Crystalline Matrix" and barstate.islast
+    for l in crystal_edges
+        line.delete(l)
+    array.clear(crystal_edges)
+    for b in crystal_facets
+        box.delete(b)
+    array.clear(crystal_facets)
+    int crystal_size = 8
+    int crystals_x = 5
+    int crystals_y = i_viz_layers * 2
+    for cx = 0 to crystals_x
+        for cy = 0 to crystals_y
+            int x1 = bar_index - cx * crystal_size
+            int x2 = x1 - crystal_size
+            float y1 = lower + (cy * band_range / crystals_y)
+            float y2 = y1 + (band_range / crystals_y)
+            float crystal_center_y = (y1 + y2) / 2
+            float activation = 1 - math.min(math.abs(close - crystal_center_y) / band_range, 1)
+            int base_trans = int(85 - activation * 45)
+            int crystal_trans = f_intensity_transparency(base_trans)
+            color crystal_color = activation > 0.5 ?
+                 color.new(#00FFFF, crystal_trans) :
+                 color.new(#4A148C, crystal_trans)
+            int border_trans = f_intensity_transparency(55)
+            crystal_box = box.new(
+                 x1, y1,
+                 x2, y2,
+                 bgcolor=crystal_color,
+                 border_color=color.new(#FFFFFF, border_trans),
+                 border_width=1,
+                 force_overlay=true)
+            array.push(crystal_facets, crystal_box)
+            if i_viz_glow and activation > 0.7
+                int edge_trans = f_intensity_transparency(35)
+                edge1 = line.new(x1, y1, x2, y2, 
+                     color=color.new(#FFFFFF, edge_trans), width=2, force_overlay=true)
+                edge2 = line.new(x1, y2, x2, y1,
+                     color=color.new(#FFFFFF, edge_trans), width=2, force_overlay=true)
+                array.push(crystal_edges, edge1)
+                array.push(crystal_edges, edge2)
+var polyline flux_wave_upper = na
+var polyline flux_wave_lower = na
+var array<box> flux_distortions = array.new<box>()
+if i_viz_mode == "Temporal Flux" and barstate.islast
+    polyline.delete(flux_wave_upper)
+    polyline.delete(flux_wave_lower)
+    for b in flux_distortions
+        box.delete(b)
+    array.clear(flux_distortions)
+    var array<chart.point> upper_points = array.new<chart.point>()
+    var array<chart.point> lower_points = array.new<chart.point>()
+    array.clear(upper_points)
+    array.clear(lower_points)
+    int flux_length = 50
+    for i = 0 to flux_length
+        int x = bar_index - i
+        float time_warp = math.sin((bar_index - i) * 0.15 * i_viz_animation) * 0.3 + 1
+        float distortion = band_range * 0.1 * time_warp * total_energy
+        float upper_y = upper[i] + distortion * pulse
+        float lower_y = lower[i] - distortion * pulse
+        array.push(upper_points, chart.point.from_index(x, upper_y))
+        array.push(lower_points, chart.point.from_index(x, lower_y))
+    int flux_trans = f_intensity_transparency(int(45 - total_energy * 25))
+    color past_color = color.new(#9400D3, flux_trans)
+    color present_color = color.new(#00FFFF, math.max(0, flux_trans - 25))
+    flux_wave_upper := polyline.new(upper_points,
+         line_color=color.from_gradient(total_energy, 0, 1, past_color, present_color),
+         line_width=2,
+         force_overlay=true)
+    flux_wave_lower := polyline.new(lower_points,
+         line_color=color.from_gradient(total_energy, 0, 1, past_color, present_color),
+         line_width=2,
+         force_overlay=true)
+    if i_viz_particles
+        for i = 0 to i_viz_layers
+            int anomaly_x = bar_index - int(math.random(0, flux_length))
+            float anomaly_y = lower + math.random() * band_range
+            float anomaly_size = band_range * 0.15
+            int anomaly_trans = f_intensity_transparency(80)
+            int border_trans = f_intensity_transparency(45)
+            anomaly_box = box.new(
+                 anomaly_x - 3, anomaly_y + anomaly_size,
+                 anomaly_x + 3, anomaly_y - anomaly_size,
+                 bgcolor=color.new(#FF00FF, anomaly_trans),
+                 border_color=color.new(#FF00FF, border_trans),
+                 border_width=2,
+                 force_overlay=true)
+            array.push(flux_distortions, anomaly_box)
+// ═══════════════════════════════════════════════════════════════════════════════
+// 📊 STANDARD MODE
+// ═══════════════════════════════════════════════════════════════════════════════
+color basis_color = i_basis_color
+color upper_color = i_upper_color
+color lower_color = i_lower_color
+color fill_color = i_fill_bull
+if i_adaptive_color
+    if is_squeeze
+        basis_color := color.orange
+        upper_color := color.orange
+        lower_color := color.orange
+        fill_color := color.new(color.orange, 90)
+    else if pct_b > 1
+        fill_color := color.new(#EF5350, 85)
+        upper_color := #EF5350
+    else if pct_b < 0
+        fill_color := color.new(#26A69A, 85)
+        lower_color := #26A69A
+    else if pct_b > 0.5
+        fill_color := color.new(#26A69A, 90)
+    else
+        fill_color := color.new(#EF5350, 90)
+bool show_standard = i_viz_mode == "Standard (Classic)"
+plot(i_basis_show ? basis : na, "Basis", show_standard ? basis_color : na, i_basis_width)
+p_upper = plot(upper, "Upper Band", show_standard ? upper_color : na, i_band_width)
+p_lower = plot(lower, "Lower Band", show_standard ? lower_color : na, i_band_width)
+fill(p_upper, p_lower, i_show_fill and show_standard ? fill_color : na, "Band Fill")
+bool squeeze_event = (is_squeeze and not is_squeeze[1]) or (not is_squeeze and is_squeeze[1])
+color squeeze_color = is_squeeze and not is_squeeze[1] ? color.orange : color.blue
+plotshape(show_standard and is_squeeze and not is_squeeze[1], "Squeeze Start", shape.diamond, location.top, color.orange, size=size.tiny)
+plotshape(show_standard and not is_squeeze and is_squeeze[1], "Squeeze End", shape.diamond, location.bottom, color.blue, size=size.tiny)
+buy_color = color.new(#26A69A, 0)
+sell_color = color.new(#EF5350, 0)
+sig_size = switch i_signal_size
+    "Tiny" => size.tiny
+    "Small" => size.small
+    "Normal" => size.normal
+    => size.small
+// ═══════════════════════════════════════════════════════════════════════════════
+// PATTERN VISUALIZATION
+// ═══════════════════════════════════════════════════════════════════════════════
+plotshape(i_enable_patterns and i_show_walking and walking_upper and not walking_upper[1], 
+     "Walk Upper Start", shape.arrowup, location.abovebar, color.new(bullColor, 30), size=size.tiny)
+plotshape(i_enable_patterns and i_show_walking and walking_lower and not walking_lower[1], 
+     "Walk Lower Start", shape.arrowdown, location.belowbar, color.new(bearColor, 30), size=size.tiny)
+plotshape(i_enable_patterns and i_show_divergence and bullish_band_div and not bullish_band_div[1], 
+     "Bull Div", shape.diamond, location.belowbar, color.new(bullColor, 0), size=size.tiny)
+plotshape(i_enable_patterns and i_show_divergence and bearish_band_div and not bearish_band_div[1], 
+     "Bear Div", shape.diamond, location.abovebar, color.new(bearColor, 0), size=size.tiny)
+bgcolor(i_enable_patterns and i_show_squeeze_type and squeeze_type == "COILING" ? 
+     color.new(squeezeColor, 92) : na, title="Coiling Squeeze BG")
+bgcolor(i_enable_patterns and i_show_squeeze_type and squeeze_type == "COMPRESSION" ? 
+     color.new(squeezeColor, 95) : na, title="Compression Squeeze BG")
+plot(i_basis_show ? basis : na, "Basis", basis_color, i_basis_width)
+plot(i_basis_show and i_glow_effect ? basis : na, "Basis Glow", color.new(basis_color, 70), i_basis_width + 2)
+plot(i_glow_effect ? upper : na, "Upper Glow", color.new(upper_color, 70), i_band_width + 2)
+plot(i_glow_effect ? lower : na, "Lower Glow", color.new(lower_color, 70), i_band_width + 2)
+plot(i_show_mid_bands ? upper_mid : na, "Upper Mid", color.new(upper_color, 70), 1, plot.style_circles)
+plot(i_show_mid_bands ? lower_mid : na, "Lower Mid", color.new(lower_color, 70), 1, plot.style_circles)
+fill(p_upper, p_lower, i_show_fill ? fill_color : na, "Band Fill")
+plotshape(is_squeeze and is_squeeze[1] == false, "Squeeze Start", shape.diamond, location.top, color.orange, size=size.tiny)
+plotshape(not is_squeeze and is_squeeze[1], "Squeeze End", shape.diamond, location.bottom, color.new(color.blue, 0), size=size.tiny)
+plotshape(i_show_signals and buy_signal and i_signal_size == "Tiny", "Buy T", shape.triangleup, location.belowbar, buy_color, size=size.tiny)
+plotshape(i_show_signals and buy_signal and i_signal_size == "Small", "Buy S", shape.labelup, location.belowbar, buy_color, text="BUY", textcolor=color.white, size=size.small)
+plotshape(i_show_signals and buy_signal and i_signal_size == "Normal", "Buy N", shape.labelup, location.belowbar, buy_color, text="BUY", textcolor=color.white, size=size.normal)
+plotshape(i_show_signals and sell_signal and i_signal_size == "Tiny", "Sell T", shape.triangledown, location.abovebar, sell_color, size=size.tiny)
+plotshape(i_show_signals and sell_signal and i_signal_size == "Small", "Sell S", shape.labeldown, location.abovebar, sell_color, text="SELL", textcolor=color.white, size=size.small)
+plotshape(i_show_signals and sell_signal and i_signal_size == "Normal", "Sell N", shape.labeldown, location.abovebar, sell_color, text="SELL", textcolor=color.white, size=size.normal)
+// ═══════════════════════════════════════════════════════════════════════════════
+// 📍 ZONE DRAWING
+// ═══════════════════════════════════════════════════════════════════════════════
+if barstate.islast and i_enable_zones
+    for b in zone_boxes
+        box.delete(b)
+    array.clear(zone_boxes)
+    for l in zone_labels
+        label.delete(l)
+    array.clear(zone_labels)
+    zone_height = atr14 * i_zone_size
+    if array.size(upper_zones) > 0
+        for i = 0 to math.min(array.size(upper_zones) - 1, i_max_zones - 1)
+            level = array.get(upper_zones, i)
+            strength = array.get(upper_strengths, i)
+            zone_bar = array.get(upper_bars, i)
+            if bar_index - zone_bar < i_zone_lookback and strength >= i_zone_strength
+                trans = i_zone_transparency - int((strength - 50) * 0.3)
+                zb = box.new(zone_bar, level + zone_height/2, bar_index + 15, level - zone_height/2,
+                     bgcolor=color.new(bearColor, trans), border_color=color.new(bearColor, trans-20), border_width=1)
+                array.push(zone_boxes, zb)
+                if i_show_zone_labels
+                    zl = label.new(bar_index + 17, level, "🔴 " + str.tostring(math.round(strength)) + "%",
+                         style=label.style_label_left, color=color.new(bearColor, 70), 
+                         textcolor=color.white, size=size.tiny)
+                    array.push(zone_labels, zl)
+    if array.size(lower_zones) > 0
+        for i = 0 to math.min(array.size(lower_zones) - 1, i_max_zones - 1)
+            level = array.get(lower_zones, i)
+            strength = array.get(lower_strengths, i)
+            zone_bar = array.get(lower_bars, i)
+            if bar_index - zone_bar < i_zone_lookback and strength >= i_zone_strength
+                trans = i_zone_transparency - int((strength - 50) * 0.3)
+                zb = box.new(zone_bar, level + zone_height/2, bar_index + 15, level - zone_height/2,
+                     bgcolor=color.new(bullColor, trans), border_color=color.new(bullColor, trans-20), border_width=1)
+                array.push(zone_boxes, zb)
+                if i_show_zone_labels
+                    zl = label.new(bar_index + 17, level, "🟢 " + str.tostring(math.round(strength)) + "%",
+                         style=label.style_label_left, color=color.new(bullColor, 70), 
+                         textcolor=color.white, size=size.tiny)
+                    array.push(zone_labels, zl)
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🌐 MTF HORIZON DRAWING
+// ═══════════════════════════════════════════════════════════════════════════════
+var array<chart.point> hp1 = array.new<chart.point>()
+var array<chart.point> hp2 = array.new<chart.point>()
+var array<chart.point> hp3 = array.new<chart.point>()
+var polyline pw1 = na
+var polyline pw2 = na
+var polyline pw3 = na
+var polyline pg1 = na
+var polyline pg2 = na
+var polyline pg3 = na
+var box hbg1 = na
+var box hbg2 = na
+var box hbg3 = na
+var box hh1 = na
+var box hh2 = na
+var box hh3 = na
+var label ht1 = na
+var label ht2 = na
+var label ht3 = na
+var label hv1 = na
+var label hv2 = na
+var label hv3 = na
+var line hz1 = na
+var line hz2 = na
+var line hz3 = na
+if i_enable_mtf and barstate.islast
+    polyline.delete(pw1)
+    polyline.delete(pw2)
+    polyline.delete(pw3)
+    polyline.delete(pg1)
+    polyline.delete(pg2)
+    polyline.delete(pg3)
+    box.delete(hbg1)
+    box.delete(hbg2)
+    box.delete(hbg3)
+    box.delete(hh1)
+    box.delete(hh2)
+    box.delete(hh3)
+    label.delete(ht1)
+    label.delete(ht2)
+    label.delete(ht3)
+    label.delete(hv1)
+    label.delete(hv2)
+    label.delete(hv3)
+    line.delete(hz1)
+    line.delete(hz2)
+    line.delete(hz3)
+    box_height = chart_range * i_mtf_height / 100
+    vert_base = i_mtf_location == "Top" ? chart_high + chart_range * 0.02 : chart_low - box_height - chart_range * 0.02
+    box_top = vert_base + box_height
+    box_bottom = vert_base
+    base_x = bar_index + i_mtf_offset
+    current_x = base_x
+    if i_h1_show
+        h1_left = current_x
+        h1_right = h1_left + i_mtf_box_width
+        hbg1 := box.new(h1_left, box_top, h1_right, box_bottom,
+             bgcolor=color.new(i_h1_color, 85), border_color=color.new(i_h1_color, 40), border_width=2)
+        header_h = box_height * 0.12
+        hh1 := box.new(h1_left, box_top, h1_right, box_top - header_h,
+             bgcolor=color.new(i_h1_color, 60), border_color=color.new(i_h1_color, 30), border_width=1)
+        h1_mid = (box_top + box_bottom) / 2
+        hz1 := line.new(h1_left, h1_mid, h1_right, h1_mid, color=color.new(color.white, 70), style=line.style_dotted, width=1)
+        if i_mtf_show_labels
+            ht1 := label.new(h1_left + i_mtf_box_width/2, box_top - header_h/2,
+                 f_metricShort(i_h1_metric) + " " + f_formatTF(i_h1_tf),
+                 style=label.style_none, textcolor=color.white, size=size.small)
+        if i_mtf_show_values
+            val_col = h1_metric >= 0 ? bullColor : bearColor
+            hv1 := label.new(h1_left + i_mtf_box_width/2, box_bottom + box_height * 0.08,
+                 str.tostring(h1_metric, "#.##"),
+                 style=label.style_none, textcolor=val_col, size=size.small)
+        array.clear(hp1)
+        hist_size = math.min(array.size(h1_history), i_mtf_depth)
+        if hist_size > 1
+            min_val = array.min(h1_history)
+            max_val = array.max(h1_history)
+            val_range = max_val - min_val
+            if val_range == 0
+                val_range := 1.0
+            wave_top = box_top - header_h - box_height * 0.05
+            wave_bottom = box_bottom + box_height * 0.08
+            wave_height = wave_top - wave_bottom
+            for idx = 0 to hist_size - 1
+                val = array.get(h1_history, idx)
+                norm = (val - min_val) / val_range
+                price_y = wave_bottom + norm * wave_height
+                bar_x = h1_right - int(idx * i_mtf_box_width / hist_size)
+                array.push(hp1, chart.point.from_index(bar_x, price_y))
+            if array.size(hp1) > 1
+                if i_mtf_glow
+                    pg1 := polyline.new(hp1, line_color=color.new(i_h1_color, 60), line_width=5)
+                pw1 := polyline.new(hp1, line_color=i_h1_color, line_width=2)
+        current_x := h1_right + i_mtf_box_spacing
+    if i_h2_show
+        h2_left = current_x
+        h2_right = h2_left + i_mtf_box_width
+        hbg2 := box.new(h2_left, box_top, h2_right, box_bottom,
+             bgcolor=color.new(i_h2_color, 85), border_color=color.new(i_h2_color, 40), border_width=2)
+        header_h2 = box_height * 0.12
+        hh2 := box.new(h2_left, box_top, h2_right, box_top - header_h2,
+             bgcolor=color.new(i_h2_color, 60), border_color=color.new(i_h2_color, 30), border_width=1)
+        h2_mid = (box_top + box_bottom) / 2
+        hz2 := line.new(h2_left, h2_mid, h2_right, h2_mid, color=color.new(color.white, 70), style=line.style_dotted, width=1)
+        if i_mtf_show_labels
+            ht2 := label.new(h2_left + i_mtf_box_width/2, box_top - header_h2/2,
+                 f_metricShort(i_h2_metric) + " " + f_formatTF(i_h2_tf),
+                 style=label.style_none, textcolor=color.white, size=size.small)
+        if i_mtf_show_values
+            val_col2 = h2_metric >= 0 ? bullColor : bearColor
+            hv2 := label.new(h2_left + i_mtf_box_width/2, box_bottom + box_height * 0.08,
+                 str.tostring(h2_metric, "#.##"),
+                 style=label.style_none, textcolor=val_col2, size=size.small)
+        array.clear(hp2)
+        hist_size2 = math.min(array.size(h2_history), i_mtf_depth)
+        if hist_size2 > 1
+            min_val2 = array.min(h2_history)
+            max_val2 = array.max(h2_history)
+            val_range2 = max_val2 - min_val2
+            if val_range2 == 0
+                val_range2 := 1.0
+            wave_top2 = box_top - header_h2 - box_height * 0.05
+            wave_bottom2 = box_bottom + box_height * 0.08
+            wave_height2 = wave_top2 - wave_bottom2
+            for idx = 0 to hist_size2 - 1
+                val = array.get(h2_history, idx)
+                norm = (val - min_val2) / val_range2
+                price_y = wave_bottom2 + norm * wave_height2
+                bar_x = h2_right - int(idx * i_mtf_box_width / hist_size2)
+                array.push(hp2, chart.point.from_index(bar_x, price_y))
+            if array.size(hp2) > 1
+                if i_mtf_glow
+                    pg2 := polyline.new(hp2, line_color=color.new(i_h2_color, 60), line_width=5)
+                pw2 := polyline.new(hp2, line_color=i_h2_color, line_width=2)
+        current_x := h2_right + i_mtf_box_spacing
+    if i_h3_show
+        h3_left = current_x
+        h3_right = h3_left + i_mtf_box_width
+        hbg3 := box.new(h3_left, box_top, h3_right, box_bottom,
+             bgcolor=color.new(i_h3_color, 85), border_color=color.new(i_h3_color, 40), border_width=2)
+        header_h3 = box_height * 0.12
+        hh3 := box.new(h3_left, box_top, h3_right, box_top - header_h3,
+             bgcolor=color.new(i_h3_color, 60), border_color=color.new(i_h3_color, 30), border_width=1)
+        h3_mid = (box_top + box_bottom) / 2
+        hz3 := line.new(h3_left, h3_mid, h3_right, h3_mid, color=color.new(color.white, 70), style=line.style_dotted, width=1)
+        if i_mtf_show_labels
+            ht3 := label.new(h3_left + i_mtf_box_width/2, box_top - header_h3/2,
+                 f_metricShort(i_h3_metric) + " " + f_formatTF(i_h3_tf),
+                 style=label.style_none, textcolor=color.white, size=size.small)
+        if i_mtf_show_values
+            val_col3 = h3_metric >= 0 ? bullColor : bearColor
+            hv3 := label.new(h3_left + i_mtf_box_width/2, box_bottom + box_height * 0.08,
+                 str.tostring(h3_metric, "#.##"),
+                 style=label.style_none, textcolor=val_col3, size=size.small)
+        array.clear(hp3)
+        hist_size3 = math.min(array.size(h3_history), i_mtf_depth)
+        if hist_size3 > 1
+            min_val3 = array.min(h3_history)
+            max_val3 = array.max(h3_history)
+            val_range3 = max_val3 - min_val3
+            if val_range3 == 0
+                val_range3 := 1.0
+            wave_top3 = box_top - header_h3 - box_height * 0.05
+            wave_bottom3 = box_bottom + box_height * 0.08
+            wave_height3 = wave_top3 - wave_bottom3
+            for idx = 0 to hist_size3 - 1
+                val = array.get(h3_history, idx)
+                norm = (val - min_val3) / val_range3
+                price_y = wave_bottom3 + norm * wave_height3
+                bar_x = h3_right - int(idx * i_mtf_box_width / hist_size3)
+                array.push(hp3, chart.point.from_index(bar_x, price_y))
+            if array.size(hp3) > 1
+                if i_mtf_glow
+                    pg3 := polyline.new(hp3, line_color=color.new(i_h3_color, 60), line_width=5)
+                pw3 := polyline.new(hp3, line_color=i_h3_color, line_width=2)
+// ═══════════════════════════════════════════════════════════════════════════════
+// 📋 DASHBOARD
+// ═══════════════════════════════════════════════════════════════════════════════
+table_pos = switch i_dash_position
+    "Top Right" => position.top_right
+    "Top Left" => position.top_left
+    "Bottom Right" => position.bottom_right
+    "Bottom Left" => position.bottom_left
+    => position.top_right
+sz = switch i_dash_text_size
+    "Tiny" => size.tiny
+    "Small" => size.small
+    "Normal" => size.normal
+    "Large" => size.large
+    => size.small
+szS = switch i_dash_text_size
+    "Tiny" => size.tiny
+    "Small" => size.tiny
+    "Normal" => size.small
+    "Large" => size.normal
+    => size.tiny
+var table dash = table.new(table_pos, 3, 20, bgcolor=color.new(bgColor, 5), 
+     border_width=0, frame_width=2, frame_color=color.new(frameColor, 40))
+if barstate.islast and i_dash_show
+    table.clear(dash, 0, 0, 2, 19) 
+    if i_dash_size == "Full Dashboard"
+        table.cell(dash, 0, 0, "BANDS", bgcolor=color.new(frameColor, 70), text_color=accentColor1, text_size=sz)
+        table.cell(dash, 1, 0, "LAB", bgcolor=color.new(frameColor, 70), text_color=color.white, text_size=sz)
+        viz_short = switch i_viz_mode
+            "1: Quantum Field" => "◎ QUANTUM"
+            "2: Plasma Flow" => "≋ PLASMA"
+            "3: Neural Network" => "◆ NEURAL"
+            "4: Gravity Wells" => "◉ GRAVITY"
+            "5: Holographic Prism" => "◈ PRISM"
+            "6: Nebula Pulse" => "✦ NEBULA"
+            "OFF: Classic Only" => "★ CLASSIC"
+            => "VIZ"
+        table.cell(dash, 2, 0, viz_short, bgcolor=color.new(frameColor, 70), text_color=accentColor3, text_size=szS)
+        table.cell(dash, 0, 1, "───", text_color=color.new(neutralColor, 60), text_size=szS)
+        table.cell(dash, 1, 1, " POSITION ", text_color=color.new(neutralColor, 40), text_size=szS)
+        table.cell(dash, 2, 1, "───", text_color=color.new(neutralColor, 60), text_size=szS)
+        pctb_txt = pct_b > 1 ? "ABOVE ↑" : pct_b < 0 ? "BELOW ↓" : str.tostring(pct_b * 100, "#.0") + "%"
+        pctb_col = pct_b > 1 ? bearColor : pct_b < 0 ? bullColor : pct_b > 0.8 ? color.orange : pct_b < 0.2 ? bullColor : color.white
+        table.cell(dash, 0, 2, "%B", text_color=neutralColor, text_size=sz)
+        table.cell(dash, 1, 2, pctb_txt, text_color=pctb_col, text_size=sz)
+        table.cell(dash, 2, 2, is_squeeze ? "🔴" : is_expansion ? "🟢" : "⚪", text_color=color.white, text_size=sz)
+        table.cell(dash, 0, 3, "WIDTH", text_color=neutralColor, text_size=sz)
+        table.cell(dash, 1, 3, str.tostring(bandwidth_pct, "#.##") + "%", text_color=color.white, text_size=sz)
+        table.cell(dash, 2, 3, vol_regime, text_color=vol_regime == "HIGH" ? bearColor : vol_regime == "LOW" ? bullColor : neutralColor, text_size=szS)
+        table.cell(dash, 0, 4, "───", text_color=color.new(neutralColor, 60), text_size=szS)
+        table.cell(dash, 1, 4, " PATTERN ", text_color=color.new(neutralColor, 40), text_size=szS)
+        table.cell(dash, 2, 4, "───", text_color=color.new(neutralColor, 60), text_size=szS)
+        pat_col = str.contains(current_pattern, "↑") or str.contains(current_pattern, "BULLISH") ? bullColor :
+                  str.contains(current_pattern, "↓") or str.contains(current_pattern, "BEARISH") ? bearColor :
+                  str.contains(current_pattern, "SQUEEZE") ? squeezeColor : neutralColor
+        table.cell(dash, 0, 5, "", text_size=sz)
+        table.cell(dash, 1, 5, current_pattern, text_color=pat_col, text_size=szS)
+        table.cell(dash, 2, 5, str.tostring(math.round(pattern_strength * 100)) + "%", text_color=accentColor3, text_size=szS)
+        table.cell(dash, 0, 6, "───", text_color=color.new(neutralColor, 60), text_size=szS)
+        table.cell(dash, 1, 6, " SIGNALS ", text_color=color.new(neutralColor, 40), text_size=szS)
+        table.cell(dash, 2, 6, "───", text_color=color.new(neutralColor, 60), text_size=szS)
+        sig_txt = strong_buy ? "★ BUY ★" : strong_sell ? "★ SELL ★" : buy_signal ? "▲ BUY" : sell_signal ? "▼ SELL" : "• WAIT •"
+        sig_col = strong_buy ? bullColor : strong_sell ? bearColor : buy_signal ? color.new(bullColor, 40) : sell_signal ? color.new(bearColor, 40) : neutralColor
+        table.cell(dash, 0, 7, "", text_size=sz)
+        table.cell(dash, 1, 7, sig_txt, text_color=sig_col, text_size=sz)
+        table.cell(dash, 2, 7, str.tostring(math.round(signal_strength * 100)) + "%", text_color=frameColor, text_size=szS)
+        table.cell(dash, 0, 8, "MODE", text_color=neutralColor, text_size=szS)
+        table.cell(dash, 1, 8, i_signal_mode, text_color=accentColor1, text_size=szS)
+        table.cell(dash, 2, 8, filter_pass ? "✓" : "✗", text_color=filter_pass ? bullColor : bearColor, text_size=szS)
+        table.cell(dash, 0, 9, "───", text_color=color.new(neutralColor, 60), text_size=szS)
+        table.cell(dash, 1, 9, " ZONES ", text_color=color.new(neutralColor, 40), text_size=szS)
+        table.cell(dash, 2, 9, "───", text_color=color.new(neutralColor, 60), text_size=szS)
+        table.cell(dash, 0, 10, "🟢 " + str.tostring(array.size(lower_zones)), text_color=bullColor, text_size=szS)
+        table.cell(dash, 1, 10, "ACTIVE", text_color=neutralColor, text_size=szS)
+        table.cell(dash, 2, 10, "🔴 " + str.tostring(array.size(upper_zones)), text_color=bearColor, text_size=szS)
+        if i_opt_enable
+            table.cell(dash, 0, 11, "───", text_color=color.new(accentColor3, 50), text_size=szS)
+            table.cell(dash, 1, 11, " OPTIMIZER ", text_color=accentColor3, text_size=szS)
+            table.cell(dash, 2, 11, "───", text_color=color.new(accentColor3, 50), text_size=szS)
+            wr_col = win_rate >= 55 ? bullColor : win_rate >= 45 ? accentColor3 : bearColor
+            table.cell(dash, 0, 12, "WIN RATE", text_color=neutralColor, text_size=sz)
+            table.cell(dash, 1, 12, str.tostring(win_rate, "#.#") + "%", text_color=wr_col, text_size=sz)
+            table.cell(dash, 2, 12, str.tostring(stats.trades) + " trades", text_color=frameColor, text_size=szS)
+            pf_col = profit_factor >= 1.5 ? bullColor : profit_factor >= 1.0 ? accentColor3 : bearColor
+            table.cell(dash, 0, 13, "P.FACTOR", text_color=neutralColor, text_size=sz)
+            table.cell(dash, 1, 13, str.tostring(profit_factor, "#.##"), text_color=pf_col, text_size=sz)
+            table.cell(dash, 2, 13, "", text_size=szS)
+            table.cell(dash, 0, 14, "STATUS", text_color=neutralColor, text_size=sz)
+            table.cell(dash, 1, 14, robustness_text, text_color=robustness_color, text_size=sz)
+            table.cell(dash, 2, 14, str.tostring(robustness_score) + "/100", text_color=robustness_color, text_size=szS)
+            table.cell(dash, 0, 15, "", text_size=szS)
+            table.cell(dash, 1, 15, "★ DAFE Trading Systems ★", text_color=color.new(accentColor1, 40), text_size=szS)
+            table.cell(dash, 2, 15, "", text_size=szS)
+        else
+            table.cell(dash, 0, 11, "", text_size=szS)
+            table.cell(dash, 1, 11, "★ DAFE Trading Systems ★", text_color=color.new(accentColor1, 40), text_size=szS)
+            table.cell(dash, 2, 11, "", text_size=szS)
+    else if i_dash_size == "Compact"
+        table.cell(dash, 0, 0, "BANDS ULTRA", text_color=accentColor1, bgcolor=color.new(frameColor, 70), text_size=sz)
+        pctb_txt = pct_b > 1 ? "↑" + str.tostring((pct_b-1)*100, "#") + "%" : 
+                   pct_b < 0 ? "↓" + str.tostring(math.abs(pct_b)*100, "#") + "%" : 
+                   str.tostring(pct_b * 100, "#") + "%"
+        table.cell(dash, 0, 1, "%B: " + pctb_txt, text_color=pct_b > 0.5 ? bullColor : bearColor, text_size=sz)
+        table.cell(dash, 0, 2, "BW: " + str.tostring(bandwidth_pct, "#.#") + "%", text_color=color.white, text_size=sz)
+        squeeze_txt = is_squeeze ? "🔴 SQUEEZE" : is_expansion ? "🟢 EXPAND" : "⚪ NORMAL"
+        table.cell(dash, 0, 3, squeeze_txt, text_color=is_squeeze ? squeezeColor : is_expansion ? bullColor : neutralColor, text_size=sz)
+        sig_txt = strong_buy ? "★ BUY" : strong_sell ? "★ SELL" : "• WAIT"
+        sig_col = strong_buy ? bullColor : strong_sell ? bearColor : neutralColor
+        table.cell(dash, 0, 4, sig_txt, text_color=sig_col, text_size=sz)
+        table.cell(dash, 0, 5, "🟢" + str.tostring(array.size(lower_zones)) + " 🔴" + str.tostring(array.size(upper_zones)), text_color=neutralColor, text_size=sz)
+        if i_opt_enable
+            table.cell(dash, 0, 6, "WR: " + str.tostring(win_rate, "#.#") + "%", text_color=win_rate >= 55 ? bullColor : win_rate >= 45 ? accentColor3 : bearColor, text_size=sz)
+    else
+        pctb_txt = str.tostring(pct_b * 100, "#") + "%"
+        table.cell(dash, 0, 0, pctb_txt, text_color=pct_b > 0.5 ? bullColor : bearColor, bgcolor=color.new(bgColor, 30), text_size=sz)
+        sig_icon = strong_buy ? "▲ BUY" : strong_sell ? "▼ SELL" : is_squeeze ? "◆ SQZ" : "● —"
+        sig_col = strong_buy ? bullColor : strong_sell ? bearColor : is_squeeze ? accentColor3 : neutralColor
+        table.cell(dash, 0, 1, sig_icon, text_color=sig_col, bgcolor=color.new(bgColor, 30), text_size=sz)
+// ═══════════════════════════════════════════════════════════════════════════════
+// ALERTS
+// ═══════════════════════════════════════════════════════════════════════════════
+alertcondition(buy_signal, "Buy Signal", "🎯 Bands Lab: BUY on {{ticker}}")
+alertcondition(sell_signal, "Sell Signal", "🎯 Bands Lab: SELL on {{ticker}}")
+alertcondition(close > upper, "Above Upper", "🎯 Price above upper band on {{ticker}}")
+alertcondition(close < lower, "Below Lower", "🎯 Price below lower band on {{ticker}}")
+alertcondition(is_squeeze and not is_squeeze[1], "Squeeze Start", "🎯 Volatility squeeze detected on {{ticker}}")
+alertcondition(not is_squeeze and is_squeeze[1], "Squeeze End", "🎯 Squeeze released on {{ticker}}")
+alertcondition(is_expansion and not is_expansion[1], "Expansion", "🎯 Volatility expansion on {{ticker}}")
+alertcondition(bullish_divergence, "Bullish Divergence", "🎯 Bullish Band Divergence on {{ticker}} - Price vs Bandwidth")
+alertcondition(bearish_divergence, "Bearish Divergence", "🎯 Bearish Band Divergence on {{ticker}} - Price vs Bandwidth")
+alertcondition(band_touch_lower, "Lower Band Touch", "🎯 Price touched lower band on {{ticker}}")
+alertcondition(band_touch_upper, "Upper Band Touch", "🎯 Price touched upper band on {{ticker}}")
+alertcondition(mean_reversion_buy, "Mean Reversion Buy", "🎯 Mean Reversion BUY setup on {{ticker}}")
+alertcondition(mean_reversion_sell, "Mean Reversion Sell", "🎯 Mean Reversion SELL setup on {{ticker}}")
+alertcondition(trend_breakout_bull, "Trend Breakout Bull", "🎯 Bullish Trend BREAKOUT on {{ticker}}")
+alertcondition(trend_breakout_bear, "Trend Breakout Bear", "🎯 Bearish Trend BREAKDOWN on {{ticker}}")
+// ╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+// ║                                                                                                               ║
+// ║                          BANDS & CHANNELS LAB - THEORY & USER GUIDE                                           ║
+// ║                                                                                                               ║
+// ╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+//
+// ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+// │ 1. PHILOSOPHY: BEYOND BOLLINGER                                                                               │
+// └───────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+//
+//   Traditional bands (Bollinger) use SMA (Basis) and Standard Deviation (Width).
+//   This assumes price distribution is normal (Gaussian). It rarely is.
+//   DAFE Band Theory allows you to mix and match the math to fit the asset class.
+//
+//   • Crypto: Use "DAFE Flux Bands" (Basis = Flux, Dev = Volatility Ratio). Adapts instantly to pumps.
+//   • Stocks: Use "Garman-Klass" volatility. It accounts for overnight gaps (Open/Close variance).
+//   • Forex: Use "Keltner Channel" (ATR based). Better for steady trends.
+//
+// ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+// │ 2. DAFE PROPRIETARY ENGINES (The "Special Sauce")                                                             │
+// └───────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+//
+//   A. DAFE FLUX BANDS
+//      Uses a volatility-gated algorithm. When volatility expands, the basis line speeds up to catch the trend.
+//      When volatility contracts, it slows down to avoid chop.
+//
+//   B. DAFE QUANTUM BANDS
+//      The bands only expand if price moves more than 0.5 ATR. This filters out "noise expansion" where
+//      bands widen just because of a single wick.
+//
+//   C. DAFE GRAVITY BANDS
+//      Volume-Weighted. High volume candles pull the bands tighter (Gravity). Low volume candles
+//      allow the bands to drift. This respects "Real Money" levels.
+//
+//   D. DAFE ENTROPY DEVIATION
+//      Uses Information Theory.
+//      • High Entropy (Chaos): Bands widen significantly to keep you safe.
+//      • Low Entropy (Order): Bands tighten to prepare for the breakout.
+//
+// ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+// │ 3. PATTERN RECOGNITION STRATEGIES                                                                             │
+// └───────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+//
+//   • THE SQUEEZE:
+//     When bandwidth drops to a historic low (default 20th percentile).
+//     Action: Wait for the breakout. Do not trade inside the squeeze.
+//
+//   • WALKING THE BANDS:
+//     When price closes outside the bands for 3+ candles consecutively.
+//     Meaning: Extreme momentum. Indicators like RSI will be overbought, but you should NOT sell.
+//     Action: Trend follow until price closes back inside the bands.
+//
+//   • BAND DIVERGENCE:
+//     Price makes a Higher High, but Bandwidth makes a Lower High (Volatility is drying up).
+//     Meaning: The trend is running out of fuel. Reversal imminent.
+//
+// ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+// │ 4. VISUALIZATION MODES                                                                                        │
+// └───────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+//
+//   • QUANTUM FIELD: Best for seeing "Probability Clouds."
+//   • PLASMA STORM: Best for seeing "Energy Flow" (Squeeze vs Expansion).
+//   • NEURAL NETWORK: Best for identifying key support/resistance nodes.
+//   • TEMPORAL FLUX: Warps the bands based on time-intensity.
+//
+// ══════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+//                                            DAFE TRADING SYSTEMS
+//                                       "Quantifying the Unseen"
+// ══════════════════════════════════════════════════════════════════════════════════════════════════════════════════

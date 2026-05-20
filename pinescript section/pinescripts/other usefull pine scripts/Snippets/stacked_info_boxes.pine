@@ -1,0 +1,129 @@
+// ============================================================
+// SNIPPET: Stacked Floating Info Boxes (Right-of-Price Panel)
+// ============================================================
+// Concept extracted from: Multi-Asset SuperTrend Map [BigBeluga]
+// © BigBeluga — original concept
+//
+// WHAT THIS DOES:
+//   Draws N boxes to the right of the last bar, stacked vertically.
+//   Each box has a title (top-right) and a value (bottom-right).
+//   Boxes are deleted and redrawn every bar so they stay current.
+//
+// HOW TO ADAPT IT:
+//   - Replace the `panels` array contents with whatever data you want
+//   - Change `boxWidth` to control how many bars wide each panel is
+//   - Change `hOffset` to push the panel further right
+//   - Change `rowHeight` to make panels taller/shorter
+//   - Stack direction can be flipped (go downward from close instead of upward)
+//
+// KEY PATTERN:
+//   box b = box.new(...)
+//   box.delete(b[1])          // <-- this is what refreshes it each bar
+//
+// LIMITS: TradingView caps max_boxes_count at 500 total.
+//   With N panels × 2 boxes each, set max_boxes_count = N * 2 + buffer.
+// ============================================================
+
+//@version=6
+indicator("Stacked Info Boxes — Snippet Demo", overlay=true, max_boxes_count=50)
+
+// ── INPUTS ──────────────────────────────────────────────────
+hOffset  = input.int(8,   "Horizontal Offset (bars right)", minval=1)
+boxWidth = input.int(20,  "Box Width (bars)",               minval=5)
+rowHeight = input.float(0.0, "Row Height (0 = auto via ATR)", minval=0.0, step=0.1,
+             tooltip="Leave 0 to auto-size rows using ATR. Set manually to override.")
+
+bullCol = input.color(color.lime,    "Positive Color")
+bearCol = input.color(color.red,     "Negative Color")
+neutCol = input.color(color.gray,    "Neutral Color")
+
+// ── SIZING ───────────────────────────────────────────────────
+atrVal   = ta.atr(14)
+rowH     = rowHeight == 0.0 ? atrVal * 1.5 : rowHeight   // auto or manual row height
+gapH     = atrVal * 0.3                                   // gap between boxes
+
+// ── YOUR DATA GOES HERE ──────────────────────────────────────
+// Each entry: [label, value_string, direction]
+//   direction:  1 = bull (green),  -1 = bear (red),  0 = neutral (gray)
+//
+// Replace these with real calculated values in your script.
+// Examples of things you might show:
+//   RSI bucket, ATR state, volume delta, bias label, HTF trend, etc.
+
+type Panel
+    string label
+    string value
+    int    dir    // 1 bull | -1 bear | 0 neutral
+
+// Example: 4 panels populated with dummy/real data
+rsiVal   = ta.rsi(close, 14)
+rsiDir   = rsiVal > 55 ? 1 : rsiVal < 45 ? -1 : 0
+
+volDelta = close > open ? volume : -volume
+cumDelta = math.sum(volDelta, 20)
+deltaDir = cumDelta > 0 ? 1 : -1
+
+trendDir = close > ta.ema(close, 50) ? 1 : -1
+atrDir   = atrVal > ta.sma(atrVal, 20) ? 1 : -1   // expanding vs compressing
+
+panels = array.from(
+  Panel.new("RSI",        str.tostring(math.round(rsiVal, 1)),             rsiDir),
+  Panel.new("Δ Vol 20",   str.tostring(cumDelta, format.volume),           deltaDir),
+  Panel.new("Trend",      trendDir == 1 ? "Above EMA50" : "Below EMA50",  trendDir),
+  Panel.new("Volatility", atrDir   == 1 ? "Expanding"   : "Compressing",  atrDir)
+)
+
+// ── DRAW BOXES ───────────────────────────────────────────────
+// Only draw/update on the last bar to avoid thousands of boxes
+if barstate.islast
+    // Start stacking from `close` upward (flip sign to stack downward)
+    float stackTop = close + gapH
+
+    for i = 0 to panels.size() - 1
+        p = panels.get(i)
+
+        boxTop = stackTop + rowH
+        boxBot = stackTop
+
+        col = p.dir == 1 ? bullCol : p.dir == -1 ? bearCol : neutCol
+
+        // Background + title box
+        b = box.new(
+          bar_index + hOffset,     boxTop,
+          bar_index + hOffset + boxWidth, boxBot,
+          border_color = color.new(color.gray, 60),
+          bgcolor      = color.new(col, 90),
+          text         = p.label,
+          text_halign  = text.align_right,
+          text_valign  = text.align_top,
+          text_size    = size.normal,
+          text_color   = col)
+
+        // Value box (layered on top, transparent bg)
+        b2 = box.new(
+          bar_index + hOffset,     boxTop,
+          bar_index + hOffset + boxWidth, boxBot,
+          border_color = color.new(color.gray, 100),
+          bgcolor      = color(na),
+          text         = p.value,
+          text_halign  = text.align_right,
+          text_valign  = text.align_bottom,
+          text_size    = size.normal,
+          text_color   = color.new(col, 20))
+
+        // ── THE KEY PATTERN: delete previous bar's boxes ──────
+        box.delete(b[1])
+        box.delete(b2[1])
+        // ──────────────────────────────────────────────────────
+
+        stackTop := boxTop + gapH  // advance stack upward
+
+// ── NOTES ────────────────────────────────────────────────────
+// To stack DOWNWARD instead of upward:
+//   float stackTop = close - gapH
+//   boxTop = stackTop
+//   boxBot = stackTop - rowH
+//   stackTop := boxBot - gapH
+
+// To position relative to a FIXED price level instead of close:
+//   replace `close` with your anchor price (e.g., a pivot, VWAP, etc.)

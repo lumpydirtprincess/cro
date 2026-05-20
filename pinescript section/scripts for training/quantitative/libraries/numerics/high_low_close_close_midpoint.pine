@@ -1,0 +1,29 @@
+// The MIT License (MIT)
+// © mihakralj
+//@version=6
+
+// 
+// Category: numerics
+// Auto-converted to TradingView v6 Library
+//
+library("", "v1.0.0", overlay=false)
+
+
+//@function Calculates the weighted close price with double weight on close
+//@param h High price series
+//@param l Low price series
+//@param c Close price series
+//@returns float The weighted close (high + low + close × 2) * 0.25
+//@optimized Uses multiplication instead of division for performance
+export hlcc4(series float h, series float l, series float c) =>
+    (h + l + c + c ) * 0.25
+
+
+// ---------- Main loop ----------
+
+// Calculation
+result = hlcc4(high, low, close)
+
+// Plot
+// plot(result, "HLCC4", color=color.yellow, linewidth=2)  // Disabled in library
+

@@ -1,0 +1,482 @@
+//@version=6
+indicator("Trend State [DAFE]", "⟡ TS", overlay=true, max_bars_back=2000, max_labels_count=200, max_boxes_count=50)
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║                                                                              ║
+// ║   Trend State                                                                ║
+// ║   State-Driven Confidence Trend Engine                                       ║
+// ║   ──────────────────────────────────────                                     ║
+// ║   • Rolling confidence evidence buckets                                      ║
+// ║   • 3-state engine (Bull / Transition / Bear)                                ║
+// ║   • Damage detection + accelerated deterioration                             ║
+// ║   • Footprint-enhanced evidence (optional)                                   ║
+// ║   • DafeVisLib powered visuals & gauges                                      ║
+// ║   ──────────────────────────────────────                                     ║
+// ║                                                                              ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+import DskyzInvestments/DafeVisLib/1 as viz
+// ═══════════════════════════════════════════════════════════════════════════════
+// INPUTS
+// ═══════════════════════════════════════════════════════════════════════════════
+grpCore = "╔═══ CORE ENGINE ═══╗"
+src          = input.source(hlc3, "Source", group=grpCore, tooltip="Price source for anchor calculation. HLC3 recommended for smoothness.")
+anchorLen    = input.int(21, "Anchor Length", minval=2, maxval=100, group=grpCore, tooltip="EMA period for the price anchor baseline.")
+atrLen       = input.int(21, "ATR Length", minval=1, maxval=100, group=grpCore, tooltip="ATR period for volatility-based width calculation.")
+baseMult     = input.float(3.0, "Base Width Multiplier", minval=0.1, maxval=10.0, step=0.1, group=grpCore, tooltip="Master multiplier for trail distance. Higher = wider bands, fewer flips.")
+decayRate    = input.float(0.80, "Bucket Decay", minval=0.50, maxval=0.99, step=0.01, group=grpCore, tooltip="Per-bar decay rate for evidence buckets. Lower = faster memory loss.")
+grpWeights = "╔═══ BUCKET WEIGHTS ═══╗"
+wImpulse      = input.float(1.20, "Impulse", minval=0.1, maxval=3.0, step=0.05, group=grpWeights, tooltip="Weight for directional thrust bars.")
+wStructure    = input.float(1.35, "Structure", minval=0.1, maxval=3.0, step=0.05, group=grpWeights, tooltip="Weight for swing breaks, reclaims, sweeps.")
+wExhaustion   = input.float(1.15, "Exhaustion", minval=0.1, maxval=3.0, step=0.05, group=grpWeights, tooltip="Weight for reversal pressure (wicks, failed follow-through).")
+wContinuation = input.float(1.00, "Continuation", minval=0.1, maxval=3.0, step=0.05, group=grpWeights, tooltip="Weight for trend persistence evidence.")
+wCompression  = input.float(0.90, "Compression", minval=0.1, maxval=3.0, step=0.05, group=grpWeights, tooltip="Weight for range contraction / energy buildup.")
+grpState = "╔═══ STATE ENGINE ═══╗"
+enterNetTh    = input.float(12.0, "Enter Net Threshold", minval=0.1, maxval=100.0, step=0.1, group=grpState, tooltip="Minimum net confidence required to enter Bull or Bear state.")
+holdNetTh     = input.float(5.0, "Hold Net Threshold", minval=0.0, maxval=100.0, step=0.1, group=grpState, tooltip="Net confidence below which active state transitions to Transition.")
+domTh         = input.float(0.18, "Dominance Threshold", minval=0.01, maxval=1.0, step=0.01, group=grpState, tooltip="Minimum dominance ratio to confirm state entry.")
+flipPressTh   = input.float(0.58, "Opposing Pressure Threshold", minval=0.05, maxval=0.95, step=0.01, group=grpState, tooltip="Opposing pressure above this forces transition.")
+grpDamage = "╔═══ DAMAGE LAYER ═══╗"
+enableDamage      = input.bool(true, "Enable Damage Detection", group=grpDamage, tooltip="Detect when active trend is structurally compromised.")
+damageThreshold   = input.float(4.0, "Damage Score Threshold", minval=1.0, maxval=10.0, step=0.5, group=grpDamage, tooltip="Damage score above this flags trend as damaged.")
+damageDecayMult   = input.float(1.75, "Decay Multiplier When Damaged", minval=1.0, maxval=5.0, step=0.05, group=grpDamage, tooltip="How aggressively continuation decays when damaged.")
+damageImpulseCut  = input.float(0.88, "Impulse Retention When Damaged", minval=0.1, maxval=1.0, step=0.01, group=grpDamage, tooltip="Impulse multiplier when trend is damaged.")
+damageFlipEase    = input.float(0.80, "Hold Threshold Ease", minval=0.1, maxval=1.0, step=0.05, group=grpDamage, tooltip="Reduces hold threshold when damaged, making transition easier.")
+damagePressEase   = input.float(0.92, "Pressure Threshold Ease", minval=0.1, maxval=1.0, step=0.05, group=grpDamage, tooltip="Reduces pressure threshold when damaged.")
+damageWiden       = input.float(1.10, "Damage Width Expansion", minval=1.0, maxval=3.0, step=0.05, group=grpDamage, tooltip="Widens trail when trend is damaged.")
+grpFP = "╔═══ FOOTPRINT ═══╗"
+useFP         = input.bool(true, "Use Footprint Data", group=grpFP, tooltip="Enhance evidence with order flow data when available.")
+fpTicks       = input.int(100, "Ticks per Row", minval=10, maxval=500, group=grpFP, tooltip="Footprint row granularity.")
+fpVA          = input.int(70, "Value Area %", minval=50, maxval=90, group=grpFP, tooltip="Value Area percentage for footprint calculations.")
+fpImpulseBoost= input.float(1.5, "FP Impulse Boost", minval=0.0, maxval=5.0, step=0.1, group=grpFP, tooltip="Extra impulse score when delta confirms direction.")
+fpExhaustBoost= input.float(1.0, "FP Exhaustion Boost", minval=0.0, maxval=5.0, step=0.1, group=grpFP, tooltip="Extra exhaustion when volume diverges from price.")
+grpLine = "╔═══ BOUNDARY ENGINE ═══╗"
+confTighten   = input.float(0.45, "Confidence Tightening", minval=0.0, maxval=1.0, step=0.01, group=grpLine, tooltip="How much dominance compresses trail width.")
+transDrift    = input.float(0.12, "Transition Drift Rate", minval=0.0, maxval=0.5, step=0.01, group=grpLine, tooltip="Rate at which transition line drifts toward anchor.")
+grpVis = "╔═══ VISUALS ═══╗"
+i_theme       = input.string("DAFE Signature", "Theme", options=["DAFE Signature", "Neon", "Cyber", "Matrix", "Gold", "Ice", "Blood", "Clean"], group=grpVis)
+showSignals   = input.bool(true, "Show State Markers", group=grpVis)
+showDamage    = input.bool(true, "Show Damage Markers", group=grpVis)
+showCloud     = input.bool(true, "Show Trend Cloud", group=grpVis)
+showAnchor    = input.bool(false, "Show Anchor", group=grpVis)
+showDash      = input.bool(true, "Show Gauges Dashboard", group=grpVis)
+showNarr      = input.bool(true, "Show Narrative Panel", group=grpVis)
+colorBars     = input.bool(true, "Color Bars", group=grpVis)
+// ═══════════════════════════════════════════════════════════════════════════════
+// THEME & HELPERS
+// ═══════════════════════════════════════════════════════════════════════════════
+viz.Theme TH = viz.get_theme(i_theme)
+f_compact(v) =>
+    float ab = math.abs(v)
+    ab >= 1000000 ? str.tostring(v / 1000000, "#.##") + "M" :
+     ab >= 1000 ? str.tostring(v / 1000, "#.##") + "K" :
+     str.tostring(v, "#.##")
+// ═══════════════════════════════════════════════════════════════════════════════
+// EARLY DECLARATIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+var int state = 0
+int prevState = nz(state[1], 0)
+// ═══════════════════════════════════════════════════════════════════════════════
+// FOOTPRINT DATA
+// ═══════════════════════════════════════════════════════════════════════════════
+footprint fp = useFP ? request.footprint(fpTicks, fpVA) : na
+bool fpOn = not na(fp)
+float fpDelta = fpOn ? fp.delta() : na
+float fpBuyVol = fpOn ? fp.buy_volume() : na
+float fpSellVol = fpOn ? fp.sell_volume() : na
+float fpTotalVol = fpOn ? fpBuyVol + fpSellVol : na
+bool fpBullDelta = fpOn ? fpDelta > 0 : false
+bool fpBearDelta = fpOn ? fpDelta < 0 : false
+float fpDeltaRatio = fpOn and fpTotalVol > 0 ? math.abs(fpDelta) / fpTotalVol : 0.0
+bool fpStrongDelta = fpDeltaRatio > 0.25
+// ═══════════════════════════════════════════════════════════════════════════════
+// BASIC SERIES
+// ═══════════════════════════════════════════════════════════════════════════════
+atr = ta.atr(atrLen)
+anchor = ta.ema(src, anchorLen)
+rng = high - low
+body = math.abs(close - open)
+bodyAvg = ta.sma(body, 10)
+rngAvg = ta.sma(rng, 10)
+volAvg = ta.sma(volume, 20)
+volR = volAvg > 0 ? volume / volAvg : 1.0
+bullBody = close > open
+bearBody = close < open
+closePos = rng > 0 ? (close - low) / rng : 0.5
+slope = anchor - nz(anchor[1])
+swingLen = 5
+swHi = ta.highest(high, swingLen)
+swLo = ta.lowest(low, swingLen)
+brokeUp = close > swHi[1]
+brokeDn = close < swLo[1]
+reclaimBull = low < swLo[1] and close > swLo[1] and close > open
+reclaimBear = high > swHi[1] and close < swHi[1] and close < open
+lowerWick = math.min(open, close) - low
+upperWick = high - math.max(open, close)
+lowerWickR = rng > 0 ? lowerWick / rng : 0.0
+upperWickR = rng > 0 ? upperWick / rng : 0.0
+atrSlow = ta.sma(atr, 30)
+atrComp = atrSlow > 0 ? atr / atrSlow : 1.0
+narrowBar = rngAvg > 0 ? rng < rngAvg * 0.8 : false
+aboveAnchor = close > anchor
+belowAnchor = close < anchor
+crossedAbove = close > anchor and close[1] <= anchor[1]
+crossedBelow = close < anchor and close[1] >= anchor[1]
+// ═══════════════════════════════════════════════════════════════════════════════
+// ROLLING EVIDENCE BUCKETS
+// ═══════════════════════════════════════════════════════════════════════════════
+var float bullImpulse = 0.0
+var float bearImpulse = 0.0
+var float bullStructure = 0.0
+var float bearStructure = 0.0
+var float bullExhaustion = 0.0
+var float bearExhaustion = 0.0
+var float bullContinuation = 0.0
+var float bearContinuation = 0.0
+var float bullCompression = 0.0
+var float bearCompression = 0.0
+bullImpulse      := nz(bullImpulse[1]) * decayRate
+bearImpulse      := nz(bearImpulse[1]) * decayRate
+bullStructure    := nz(bullStructure[1]) * decayRate
+bearStructure    := nz(bearStructure[1]) * decayRate
+bullExhaustion   := nz(bullExhaustion[1]) * decayRate
+bearExhaustion   := nz(bearExhaustion[1]) * decayRate
+bullContinuation := nz(bullContinuation[1]) * decayRate
+bearContinuation := nz(bearContinuation[1]) * decayRate
+bullCompression  := nz(bullCompression[1]) * decayRate
+bearCompression  := nz(bearCompression[1]) * decayRate
+bullImpulseCond = bullBody and body > nz(bodyAvg, body) * 1.15 and closePos > 0.7 and rng > nz(rngAvg, rng) * 1.05
+bearImpulseCond = bearBody and body > nz(bodyAvg, body) * 1.15 and closePos < 0.3 and rng > nz(rngAvg, rng) * 1.05
+if bullImpulseCond
+    bullImpulse += 4.0 + (volR > 1.2 ? 1.5 : 0.0)
+    if fpOn and fpBullDelta and fpStrongDelta
+        bullImpulse += fpImpulseBoost
+if bearImpulseCond
+    bearImpulse += 4.0 + (volR > 1.2 ? 1.5 : 0.0)
+    if fpOn and fpBearDelta and fpStrongDelta
+        bearImpulse += fpImpulseBoost
+if brokeUp
+    bullStructure += 6.0
+if brokeDn
+    bearStructure += 6.0
+if reclaimBull
+    bullStructure += 5.5
+    bullExhaustion += 2.0
+if reclaimBear
+    bearStructure += 5.5
+    bearExhaustion += 2.0
+if low < swLo[1] and close > swLo[1]
+    bullStructure += 4.0
+if high > swHi[1] and close < swHi[1]
+    bearStructure += 4.0
+bullExhaustCond = bearBody and lowerWickR > 0.45 and volR > 1.2
+bearExhaustCond = bullBody and upperWickR > 0.45 and volR > 1.2
+if bullExhaustCond
+    bullExhaustion += 4.5
+    if fpOn and fpBullDelta
+        bullExhaustion += fpExhaustBoost
+if bearExhaustCond
+    bearExhaustion += 4.5
+    if fpOn and fpBearDelta
+        bearExhaustion += fpExhaustBoost
+if fpOn and fpStrongDelta
+    if bullBody and fpBearDelta
+        bearExhaustion += fpExhaustBoost * 0.75
+    if bearBody and fpBullDelta
+        bullExhaustion += fpExhaustBoost * 0.75
+if slope > 0 and aboveAnchor and close > close[1]
+    bullContinuation += 2.0
+if slope < 0 and belowAnchor and close < close[1]
+    bearContinuation += 2.0
+if belowAnchor and bullContinuation > 0
+    bullContinuation *= 0.62
+if aboveAnchor and bearContinuation > 0
+    bearContinuation *= 0.62
+if crossedBelow and bullContinuation > 0
+    bullContinuation *= 0.50
+if crossedAbove and bearContinuation > 0
+    bearContinuation *= 0.50
+if narrowBar and atrComp < 0.95 and aboveAnchor
+    bullCompression += 1.5
+if narrowBar and atrComp < 0.95 and belowAnchor
+    bearCompression += 1.5
+bullImpulse      := math.min(bullImpulse, 25)
+bearImpulse      := math.min(bearImpulse, 25)
+bullStructure    := math.min(bullStructure, 30)
+bearStructure    := math.min(bearStructure, 30)
+bullExhaustion   := math.min(bullExhaustion, 20)
+bearExhaustion   := math.min(bearExhaustion, 20)
+bullContinuation := math.min(bullContinuation, 20)
+bearContinuation := math.min(bearContinuation, 20)
+bullCompression  := math.min(bullCompression, 15)
+bearCompression  := math.min(bearCompression, 15)
+// ═══════════════════════════════════════════════════════════════════════════════
+// FIRST-PASS CONFIDENCE
+// ═══════════════════════════════════════════════════════════════════════════════
+bullConf0 = bullImpulse * wImpulse + bullStructure * wStructure + bullExhaustion * wExhaustion + bullContinuation * wContinuation + bullCompression * wCompression
+bearConf0 = bearImpulse * wImpulse + bearStructure * wStructure + bearExhaustion * wExhaustion + bearContinuation * wContinuation + bearCompression * wCompression
+activity0 = bullConf0 + bearConf0
+bullPressure0 = activity0 > 0 ? bullConf0 / activity0 : 0.0
+bearPressure0 = activity0 > 0 ? bearConf0 / activity0 : 0.0
+// ═══════════════════════════════════════════════════════════════════════════════
+// DAMAGE SCORE
+// ═══════════════════════════════════════════════════════════════════════════════
+float bullDamageScore = 0.0
+float bearDamageScore = 0.0
+if enableDamage
+    if prevState == 1
+        if belowAnchor
+            bullDamageScore += 1.5
+        if bearImpulseCond
+            bullDamageScore += 1.0
+        if upperWickR > 0.35
+            bullDamageScore += 0.75
+        if slope < 0
+            bullDamageScore += 1.0
+        if bearPressure0 > 0.45
+            bullDamageScore += 1.0
+        if close <= close[1] and high <= high[1]
+            bullDamageScore += 0.75
+        if crossedBelow
+            bullDamageScore += 1.25
+        if fpOn and fpBearDelta and fpStrongDelta
+            bullDamageScore += 0.75
+    if prevState == -1
+        if aboveAnchor
+            bearDamageScore += 1.5
+        if bullImpulseCond
+            bearDamageScore += 1.0
+        if lowerWickR > 0.35
+            bearDamageScore += 0.75
+        if slope > 0
+            bearDamageScore += 1.0
+        if bullPressure0 > 0.45
+            bearDamageScore += 1.0
+        if close >= close[1] and low >= low[1]
+            bearDamageScore += 0.75
+        if crossedAbove
+            bearDamageScore += 1.25
+        if fpOn and fpBullDelta and fpStrongDelta
+            bearDamageScore += 0.75
+bullDamaged = prevState == 1 and bullDamageScore >= damageThreshold
+bearDamaged = prevState == -1 and bearDamageScore >= damageThreshold
+// ═══════════════════════════════════════════════════════════════════════════════
+// DAMAGE RESPONSE
+// ═══════════════════════════════════════════════════════════════════════════════
+if bullDamaged
+    bullContinuation *= math.max(0.0, 1.0 - (0.25 * damageDecayMult))
+    bullImpulse *= damageImpulseCut
+    bullStructure *= 0.92
+    bearExhaustion += 1.5
+    bearImpulse += 1.0
+if bearDamaged
+    bearContinuation *= math.max(0.0, 1.0 - (0.25 * damageDecayMult))
+    bearImpulse *= damageImpulseCut
+    bearStructure *= 0.92
+    bullExhaustion += 1.5
+    bullImpulse += 1.0
+bullImpulse      := math.min(math.max(bullImpulse, 0), 25)
+bearImpulse      := math.min(math.max(bearImpulse, 0), 25)
+bullStructure    := math.min(math.max(bullStructure, 0), 30)
+bearStructure    := math.min(math.max(bearStructure, 0), 30)
+bullExhaustion   := math.min(math.max(bullExhaustion, 0), 20)
+bearExhaustion   := math.min(math.max(bearExhaustion, 0), 20)
+bullContinuation := math.min(math.max(bullContinuation, 0), 20)
+bearContinuation := math.min(math.max(bearContinuation, 0), 20)
+bullCompression  := math.min(math.max(bullCompression, 0), 15)
+bearCompression  := math.min(math.max(bearCompression, 0), 15)
+// ═══════════════════════════════════════════════════════════════════════════════
+// FINAL CONFIDENCE
+// ═══════════════════════════════════════════════════════════════════════════════
+bullConf = bullImpulse * wImpulse + bullStructure * wStructure + bullExhaustion * wExhaustion + bullContinuation * wContinuation + bullCompression * wCompression
+bearConf = bearImpulse * wImpulse + bearStructure * wStructure + bearExhaustion * wExhaustion + bearContinuation * wContinuation + bearCompression * wCompression
+activity = bullConf + bearConf
+netConf = bullConf - bearConf
+dominance = activity > 0 ? netConf / activity : 0.0
+bullPressure = activity > 0 ? bullConf / activity : 0.0
+bearPressure = activity > 0 ? bearConf / activity : 0.0
+var float bullPeak = 0.0
+var float bearPeak = 0.0
+bullPeak := bullConf > nz(bullPeak[1]) ? bullConf : nz(bullPeak[1]) * 0.985
+bearPeak := bearConf > nz(bearPeak[1]) ? bearConf : nz(bearPeak[1]) * 0.985
+bullErosion = math.max(0.0, bullPeak - bullConf)
+bearErosion = math.max(0.0, bearPeak - bearConf)
+// ═══════════════════════════════════════════════════════════════════════════════
+// STATE ENGINE
+// ═══════════════════════════════════════════════════════════════════════════════
+prevState := nz(state[1], 0)
+enterBull = netConf > enterNetTh and dominance > domTh
+enterBear = netConf < -enterNetTh and dominance < -domTh
+holdThEff = prevState == 1 and bullDamaged ? holdNetTh * damageFlipEase : prevState == -1 and bearDamaged ? holdNetTh * damageFlipEase : holdNetTh
+pressThEff = prevState == 1 and bullDamaged ? flipPressTh * damagePressEase : prevState == -1 and bearDamaged ? flipPressTh * damagePressEase : flipPressTh
+bullLosing = prevState == 1 and (netConf < holdThEff or bearPressure > pressThEff or bullErosion > bullConf * 0.35)
+bearLosing = prevState == -1 and (netConf > -holdThEff or bullPressure > pressThEff or bearErosion > bearConf * 0.35)
+state := prevState
+if prevState == 0
+    if enterBull
+        state := 1
+    else if enterBear
+        state := -1
+else if prevState == 1
+    state := bullLosing ? 0 : 1
+else if prevState == -1
+    state := bearLosing ? 0 : -1
+if state == 0
+    if enterBull
+        state := 1
+    else if enterBear
+        state := -1
+bullShift = state == 1 and prevState != 1
+bearShift = state == -1 and prevState != -1
+transShift = state == 0 and prevState != 0
+// ═══════════════════════════════════════════════════════════════════════════════
+// BOUNDARY ENGINE
+// ═══════════════════════════════════════════════════════════════════════════════
+confStrength = activity > 0 ? math.min(math.abs(dominance), 1.0) : 0.0
+baseWidth = atr * baseMult * (1.0 - confStrength * confTighten)
+width = (bullDamaged or bearDamaged) ? baseWidth * damageWiden : baseWidth
+width := math.max(syminfo.mintick, width)
+bullBase = anchor - width
+bearBase = anchor + width
+var float bullLine = na
+var float bearLine = na
+var float trendLine = na
+bullLine := na(bullLine[1]) ? bullBase : math.max(bullBase, bullLine[1])
+bearLine := na(bearLine[1]) ? bearBase : math.min(bearBase, bearLine[1])
+if bullShift
+    bullLine := bullBase
+if bearShift
+    bearLine := bearBase
+if state == 1
+    trendLine := bullLine
+else if state == -1
+    trendLine := bearLine
+else
+    prevLine = nz(trendLine[1], anchor)
+    trendLine := prevLine + (anchor - prevLine) * transDrift
+// ═══════════════════════════════════════════════════════════════════════════════
+// VISUALS
+// ═══════════════════════════════════════════════════════════════════════════════
+lineCol = bullDamaged ? color.new(TH.a, 0) : bearDamaged ? color.new(TH.a, 0) : state == 1 ? TH.bull : state == -1 ? TH.bear : color.new(TH.a, 30)
+pTrend = plot(trendLine, "Control Shift Trend", color=lineCol, linewidth=2)
+pAnchor = plot(showAnchor ? anchor : na, "Anchor", color=color.new(TH.txt_lo, 70))
+pCloud = plot(showCloud ? anchor : na, "Cloud Ref", color=na, display=display.none)
+cloudCol = state == 1 ? color.new(TH.bull, 88) : state == -1 ? color.new(TH.bear, 88) : color.new(TH.neu, 92)
+fill(pTrend, pCloud, color=showCloud ? cloudCol : na, title="Trend Cloud")
+if showSignals and bullShift
+    [sigCol, sigStyle, txtCol] = viz.get_signal_style("long", TH)
+    label.new(bar_index, low - atr * 0.5, "▲ BULL", style=label.style_label_up, color=color.new(sigCol, 20), textcolor=txtCol, size=size.tiny)
+if showSignals and bearShift
+    [sigCol, sigStyle, txtCol] = viz.get_signal_style("short", TH)
+    label.new(bar_index, high + atr * 0.5, "▼ BEAR", style=label.style_label_down, color=color.new(sigCol, 20), textcolor=txtCol, size=size.tiny)
+if showSignals and transShift
+    label.new(bar_index, trendLine, "◆", style=label.style_label_center, color=color.new(TH.a, 50), textcolor=TH.txt_hi, size=size.tiny)
+if showDamage and bullDamaged
+    label.new(bar_index, high + atr * 0.25, "!", style=label.style_label_center, color=color.new(TH.a, 60), textcolor=TH.a, size=size.tiny)
+if showDamage and bearDamaged
+    label.new(bar_index, low - atr * 0.25, "!", style=label.style_label_center, color=color.new(TH.a, 60), textcolor=TH.a, size=size.tiny)
+barcolor(colorBars ? (state == 1 ? color.new(TH.bull, 70) : state == -1 ? color.new(TH.bear, 70) : na) : na)
+// ═══════════════════════════════════════════════════════════════════════════════
+// DAFE GAUGE DASHBOARD
+// ═══════════════════════════════════════════════════════════════════════════════
+if showDash and barstate.islast
+    var table dash = viz.create_pane("TopRight", 38, 3, TH)
+    int r = 0
+    viz.fill_header(dash, r, "⟡ Trend State Synthesizer", TH)
+    table.merge_cells(dash, 0, r, 2, r), r += 1
+    stTxt = state == 1 ? "▲ BULL" : state == -1 ? "▼ BEAR" : "◆ TRANSITION"
+    stCol = state == 1 ? TH.bull : state == -1 ? TH.bear : TH.a
+    fpTxt = fpOn ? "✅ FP" : "⚡ Est"
+    table.cell(dash, 0, r, " State", text_color=TH.txt_lo, text_size=size.tiny, bgcolor=TH.bg, text_font_family=font.family_monospace)
+    table.cell(dash, 1, r, " " + stTxt, text_color=stCol, text_size=size.tiny, bgcolor=TH.bg, text_font_family=font.family_monospace)
+    table.cell(dash, 2, r, " " + fpTxt, text_color=fpOn ? TH.bull : TH.a, text_size=size.tiny, bgcolor=TH.bg, text_font_family=font.family_monospace)
+    r += 1
+    if fpOn
+        fpArrow = nz(fpDelta) > 0 ? "▲" : "▼"
+        fpCol = nz(fpDelta) > 0 ? TH.bull : TH.bear
+        table.cell(dash, 0, r, " Delta", text_color=TH.txt_lo, text_size=size.tiny, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 1, r, " " + f_compact(nz(fpDelta)), text_color=fpCol, text_size=size.tiny, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        table.cell(dash, 2, r, " " + fpArrow + " " + str.tostring(fpDeltaRatio * 100, "#") + "%", text_color=fpCol, text_size=size.tiny, bgcolor=TH.bg, text_font_family=font.family_monospace)
+        r += 1
+    viz.fill_separator(dash, r, "Confidence Engine", 3, TH)
+    table.merge_cells(dash, 0, r, 2, r), r += 1
+    float maxConf = 130.0 
+    viz.fill_metric(dash, r, "Bull Conf", bullConf, 6, 0.0, maxConf, TH), r += 1
+    viz.fill_metric(dash, r, "Bear Conf", bearConf, 6, 0.0, maxConf, TH), r += 1
+    viz.fill_metric(dash, r, "Net Conf", netConf, 6, -maxConf, maxConf, TH), r += 1
+    viz.fill_separator(dash, r, "Pressure Kinetics", 3, TH)
+    table.merge_cells(dash, 0, r, 2, r), r += 1
+    viz.fill_metric(dash, r, "Dominance", dominance * 100, 6, -100.0, 100.0, TH), r += 1
+    viz.fill_metric(dash, r, "Bull Press", bullPressure * 100, 6, 0.0, 100.0, TH), r += 1
+    viz.fill_metric(dash, r, "Bear Press", bearPressure * 100, 6, 0.0, 100.0, TH), r += 1
+    viz.fill_separator(dash, r, "Structural Damage", 3, TH)
+    table.merge_cells(dash, 0, r, 2, r), r += 1
+    dmgTxt = bullDamaged ? "BULL DMG" : bearDamaged ? "BEAR DMG" : "INTACT"
+    dmgCol = (bullDamaged or bearDamaged) ? TH.a : TH.s
+    table.cell(dash, 0, r, " Status", text_color=TH.txt_lo, text_size=size.tiny, bgcolor=TH.bg, text_font_family=font.family_monospace)
+    table.cell(dash, 1, r, " " + dmgTxt, text_color=dmgCol, text_size=size.tiny, bgcolor=(bullDamaged or bearDamaged) ? color.new(TH.a, 90) : TH.bg, text_font_family=font.family_monospace)
+    table.cell(dash, 2, r, " Thresh:" + str.tostring(damageThreshold, "#.0"), text_color=TH.txt_lo, text_size=size.tiny, bgcolor=TH.bg, text_font_family=font.family_monospace)
+    r += 1
+    viz.fill_metric(dash, r, "Bull Dmg", bullDamageScore, 6, 0.0, damageThreshold * 1.5, TH), r += 1
+    viz.fill_metric(dash, r, "Bear Dmg", bearDamageScore, 6, 0.0, damageThreshold * 1.5, TH), r += 1
+    viz.fill_separator(dash, r, "Bull Evidence Arrays", 3, TH)
+    table.merge_cells(dash, 0, r, 2, r), r += 1
+    viz.fill_metric(dash, r, "Impulse", bullImpulse, 6, 0.0, 25.0, TH), r += 1
+    viz.fill_metric(dash, r, "Structure", bullStructure, 6, 0.0, 30.0, TH), r += 1
+    viz.fill_metric(dash, r, "Exhaustion", bullExhaustion, 6, 0.0, 20.0, TH), r += 1
+    viz.fill_metric(dash, r, "Continue", bullContinuation, 6, 0.0, 20.0, TH), r += 1
+    viz.fill_metric(dash, r, "Compress", bullCompression, 6, 0.0, 15.0, TH), r += 1
+    viz.fill_separator(dash, r, "Bear Evidence Arrays", 3, TH)
+    table.merge_cells(dash, 0, r, 2, r), r += 1
+    viz.fill_metric(dash, r, "Impulse", bearImpulse, 6, 0.0, 25.0, TH), r += 1
+    viz.fill_metric(dash, r, "Structure", bearStructure, 6, 0.0, 30.0, TH), r += 1
+    viz.fill_metric(dash, r, "Exhaustion", bearExhaustion, 6, 0.0, 20.0, TH), r += 1
+    viz.fill_metric(dash, r, "Continue", bearContinuation, 6, 0.0, 20.0, TH), r += 1
+    viz.fill_metric(dash, r, "Compress", bearCompression, 6, 0.0, 15.0, TH), r += 1
+    viz.fill_separator(dash, r, "", 3, TH)
+    table.merge_cells(dash, 0, r, 2, r), r += 1
+    table.cell(dash, 0, r, "⟡ DAFE Trading Systems", text_color=TH.p, text_size=size.tiny, bgcolor=color.new(TH.p, 92), text_font_family=font.family_monospace)
+    table.merge_cells(dash, 0, r, 2, r)
+// ═══════════════════════════════════════════════════════════════════════════════
+// NARRATIVE PANEL
+// ═══════════════════════════════════════════════════════════════════════════════
+if showNarr and barstate.islast
+    var table narr = viz.create_pane("BottomLeft", 12, 2, TH)
+    int nr = 0
+    viz.fill_header(narr, nr, "📖 Trend Narrative", TH)
+    table.merge_cells(narr, 0, nr, 1, nr), nr += 1
+    string stN = state == 1 ? "Bullish control established" : state == -1 ? "Bearish control established" : "Transition / Indecision"
+    viz.fill_separator(narr, nr, "Regime", 2, TH)
+    table.merge_cells(narr, 0, nr, 1, nr), nr += 1
+    table.cell(narr, 0, nr, " " + stN, text_color=state == 1 ? TH.bull : state == -1 ? TH.bear : TH.s, text_size=size.tiny, bgcolor=TH.bg, text_font_family=font.family_monospace)
+    table.merge_cells(narr, 0, nr, 1, nr), nr += 1
+    string dN = math.abs(dominance) > 0.6 ? "Heavy directional dominance" : math.abs(dominance) > 0.2 ? "Moderate trend pressure" : "Contested market activity"
+    viz.fill_separator(narr, nr, "Kinetics", 2, TH)
+    table.merge_cells(narr, 0, nr, 1, nr), nr += 1
+    table.cell(narr, 0, nr, " " + dN, text_color=math.abs(dominance) > 0.6 ? TH.p : TH.s, text_size=size.tiny, bgcolor=TH.bg, text_font_family=font.family_monospace)
+    table.merge_cells(narr, 0, nr, 1, nr), nr += 1
+    string dmgN = bullDamaged ? "Bull structure compromised" : bearDamaged ? "Bear structure compromised" : "Trend structure intact"
+    color dmgC = (bullDamaged or bearDamaged) ? TH.a : TH.bull
+    if state == 0
+        dmgN := "Awaiting structural confirmation"
+        dmgC := TH.s
+    viz.fill_separator(narr, nr, "Structure", 2, TH)
+    table.merge_cells(narr, 0, nr, 1, nr), nr += 1
+    table.cell(narr, 0, nr, " " + dmgN, text_color=dmgC, text_size=size.tiny, bgcolor=TH.bg, text_font_family=font.family_monospace)
+    table.merge_cells(narr, 0, nr, 1, nr), nr += 1
+    string fpN = not fpOn ? "Footprint data inactive" : fpStrongDelta and fpBullDelta ? "Aggressive market buying" : fpStrongDelta and fpBearDelta ? "Aggressive market selling" : "Balanced / Mixed order flow"
+    color fpC = not fpOn ? TH.txt_lo : (fpStrongDelta and fpBullDelta) ? TH.bull : (fpStrongDelta and fpBearDelta) ? TH.bear : TH.s
+    viz.fill_separator(narr, nr, "Order Flow", 2, TH)
+    table.merge_cells(narr, 0, nr, 1, nr), nr += 1
+    table.cell(narr, 0, nr, " " + fpN, text_color=fpC, text_size=size.tiny, bgcolor=TH.bg, text_font_family=font.family_monospace)
+    table.merge_cells(narr, 0, nr, 1, nr), nr += 1
+    viz.fill_separator(narr, nr, "", 2, TH)
+    table.merge_cells(narr, 0, nr, 1, nr), nr += 1
+    table.cell(narr, 0, nr, "⟡ Dskyz (DAFE) Trading Systems", text_color=TH.p, text_size=size.tiny, bgcolor=color.new(TH.p, 92), text_font_family=font.family_monospace)
+    table.merge_cells(narr, 0, nr, 1, nr)
+// ═══════════════════════════════════════════════════════════════════════════════
+// ALERTS
+// ═══════════════════════════════════════════════════════════════════════════════
+alertcondition(bullShift, "⟡ TS Bull Shift", "TS V1.2: Confirmed BULL state")
+alertcondition(bearShift, "⟡ TS Bear Shift", "TS V1.2: Confirmed BEAR state")
+alertcondition(transShift, "⟡ TS Transition", "TS V1.2: Entered TRANSITION")
+alertcondition(bullDamaged, "⟡ TS Bull Damaged", "TS V1.2: Bull trend damaged")
+alertcondition(bearDamaged, "⟡ TS Bear Damaged", "TS V1.2: Bear trend damaged")

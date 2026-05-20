@@ -1,0 +1,821 @@
+//@version=6
+indicator("Siege Structure Engine: Multi-TF [DAFE]", shorttitle="⟡ SSE", overlay=true, max_labels_count=500, max_lines_count=500, max_boxes_count=300, max_bars_back=1000)
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+//    Siege Structure Engine: MULTI-TIMEFRAME SHOWCASE
+//    Siege Corridors | POC/VA | Confluence Zones | Liquidity at Structure
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+// 📐 INPUTS
+// ───────────────────────────────────────────────────────────────────────────────
+grpTF = "⏱ Timeframes"
+bool   i_tf1On  = input.bool(true, "TF1 Enable", inline="tf1", group=grpTF, tooltip= "Enables the primary, or base, structural analysis layer. This timeframe is typically set to the current chart's timeframe (by leaving the TF1 input blank) and provides the most immediate, high-resolution structural context.")
+string i_tf1    = input.timeframe("", "TF1", inline="tf1", group=grpTF, tooltip= "Sets the timeframe for the first structural layer. Leave blank to automatically use the chart's current timeframe. This layer provides the micro-structure details.")
+bool   i_tf2On  = input.bool(true, "TF2 Enable", inline="tf2", group=grpTF, tooltip= "Enables the second, higher-timeframe (HTF) structural layer. This is used to overlay major structural levels from a broader market perspective onto your chart.")
+string i_tf2    = input.timeframe("15", "TF2", inline="tf2", group=grpTF, tooltip= "Sets the timeframe for the second structural layer. This should be a higher timeframe than TF1 (e.g., 15min on a 5min chart) to identify more significant 'macro' levels of support and resistance.")
+bool   i_tf3On  = input.bool(true, "TF3 Enable", inline="tf3", group=grpTF, tooltip= "Enables the third, even higher-timeframe structural layer. This provides the macro context, identifying major weekly or daily zones that can exert significant influence on intraday price action.")
+string i_tf3    = input.timeframe("60", "TF3", inline="tf3", group=grpTF, tooltip= "Sets the timeframe for the third structural layer (e.g., 60min or 4H). This layer maps the most dominant structural battlegrounds.")
+bool   i_tf4On  = input.bool(false, "TF4 Enable", inline="tf4", group=grpTF, tooltip= "Enables the fourth and highest-timeframe layer, typically used for position trading or mapping ultimate market structure from daily or weekly charts.")
+string i_tf4    = input.timeframe("240", "TF4", inline="tf4", group=grpTF, tooltip= "Sets the timeframe for the fourth structural layer. Use this for the highest-level overview of market structure.")
+grpStruct = "🏗 Structure Detection"
+int    i_pivotLen   = input.int(2, "Pivot Length", minval=2, maxval=20, group=grpStruct, tooltip= "The number of bars to the left and right of a candle required to confirm a valid swing high or low. This is the core sensitivity setting for the entire structural engine.\n\n" + "• Lower values (e.g., 2-4): Detects minor, short-term pivots, creating a more granular structural map.\n" + "• Higher values (e.g., 8-15): Identifies only major, significant swing points, providing a cleaner but less detailed structural map.")
+int    i_maxPivots  = input.int(10, "Max Pivots Stored", minval=4, maxval=20, group=grpStruct, tooltip= "The maximum number of recent swing highs and lows to store in memory for each timeframe. This ensures the analysis remains focused on the most relevant, recent market structure and optimizes performance.")
+int    i_pocBars    = input.int(60, "POC/VA Lookback Bars", minval=20, maxval=200, group=grpStruct, tooltip= "The number of historical bars used to calculate the Point of Control (POC) and Value Area (VA) for each timeframe. This defines the 'session' or 'range' for the volume profile analysis.")
+int    i_pocRows    = input.int(24, "Profile Rows", minval=12, maxval=48, group=grpStruct, tooltip= "The number of price rows used to build the volume profile. This controls the granularity or 'resolution' of the POC/VA calculation.\n\n" + "• More rows = Higher resolution, more precise levels.\n" + "• Fewer rows = Lower resolution, more generalized levels.")
+grpFP = "📊 Footprint"
+bool   i_useFP       = input.bool(true, "Use Footprint Data", group=grpFP, tooltip= "If enabled, the script will request real-time, tick-level footprint data to calculate POC/VA and liquidity metrics. This provides the highest fidelity analysis.\n\n" + "If disabled or unavailable for the current symbol/exchange, the script will fall back to a sophisticated OHLCV-based approximation method.")
+int    i_fpTicks     = input.int(100, "Ticks Per Row", minval=1, maxval=500, group=grpFP, tooltip= "Defines the price granularity for the footprint profile. This is the number of ticks aggregated into a single price row. Calibrate this to your instrument's tick size for optimal accuracy.")
+int    i_fpVA        = input.int(70, "Value Area %", minval=1, maxval=99, group=grpFP, tooltip= "The percentage of total volume to be included in the footprint's Value Area calculation. This determines the width of the VAH and VAL levels for the most recent bar.")
+bool   i_showFPLines = input.bool(false, "Show FP Step Lines", group=grpFP, tooltip= "Toggles the visibility of the POC, VAH, and VAL lines derived from the *single, most recent bar's* footprint data. This provides a micro-level view of the current bar's auction, complementing the multi-bar POC/VA analysis.")
+grpViz = "🎨 Visualization"
+bool   i_showPOC    = input.bool(true, "Show POC Lines (All TFs)", group=grpViz, tooltip= "Toggles the visibility of all Point of Control (POC) lines across all enabled timeframes. These lines represent the price level with the highest traded volume.")
+bool   i_showVA     = input.bool(true, "Show Value Area Bands", group=grpViz, tooltip= "Toggles the visibility of all Value Area High (VAH) and Low (VAL) lines and their corresponding shaded bands. These zones represent where the majority of trading volume occurred.")
+bool   i_showSiege  = input.bool(true, "Show Siege Corridors", group=grpViz, tooltip= "Toggles the visibility of the dynamic, predictive trend channels built from key swing pivots. Siege Corridors represent major structural boundaries and project potential areas of future support and resistance.")
+bool   i_showConfl  = input.bool(true, "Show Confluence Zones", group=grpViz, tooltip= "Toggles the visibility of shaded boxes highlighting Confluence Zones. These zones are automatically detected areas where multiple structural levels (POCs, VAs, Pivots) from different timeframes overlap, indicating a powerful, multi-layered support or resistance area.")
+bool   i_showPivots = input.bool(true, "Show Pivot Markers", group=grpViz, tooltip= "Toggles small diamond markers on the chart to indicate where the base timeframe's swing high and swing low pivots have been confirmed.")
+bool   i_showLiqAt  = input.bool(true, "Show Liquidity at Structure", group=grpViz, tooltip= "Displays real-time liquidity analysis labels (e.g., '◆ DEFEND', '◈ ABSORB') when price interacts with a key structural level on the base timeframe. This provides insight into the order flow dynamics occurring at critical price points.")
+bool   i_intrabar   = input.bool(true, "Enable Intra-bar Alerts", group=grpViz, tooltip= "If enabled, the script will monitor for price touching key structural levels on every tick, providing immediate alerts and visual cues. If disabled, alerts are only checked at the close of each bar.")
+string i_theme      = input.string("CyberPunk", "Theme", options=["CyberPunk", "DeepSpace", "Institutional"], group=grpViz, tooltip= "Selects a pre-designed color palette for all indicator visuals, including lines, fills, labels, and the dashboard.")
+grpDash = "📋 Dashboard"
+bool   i_showDash   = input.bool(true, "Show Dashboard", group=grpDash, tooltip= "Toggles the visibility of the main dashboard, which provides a comprehensive, real-time summary of the current structural state, active corridors, liquidity metrics, and more.")
+string i_dashPos    = input.string("top_right", "Position", options=["top_left", "top_right", "bottom_left", "bottom_right"], group=grpDash, tooltip= "Sets the corner position for the dashboard on the chart.")
+// ─────────────────────────────────────────────────────────────────────────────
+// 🎨 THEME
+// ─────────────────────────────────────────────────────────────────────────────
+color cBull     = i_theme == "CyberPunk" ? #00F5D4 : i_theme == "DeepSpace" ? #22D3EE : #00C853
+color cBear     = i_theme == "CyberPunk" ? #FF4D6D : i_theme == "DeepSpace" ? #FB7185 : #D50000
+color cConfl    = i_theme == "CyberPunk" ? #9C4EFF : i_theme == "DeepSpace" ? #A78BFA : #7C4DFF
+color cDim      = i_theme == "CyberPunk" ? color.new(#94A3B8, 0) : i_theme == "DeepSpace" ? color.new(#CBD5E1, 0) : color.new(#B0BEC5, 0)
+color cBg       = i_theme == "CyberPunk" ? color.new(#080A11, 5) : i_theme == "DeepSpace" ? color.new(#04101C, 5) : color.new(#111111, 5)
+color cBorder   = i_theme == "CyberPunk" ? color.new(#2A1B5A, 0) : i_theme == "DeepSpace" ? color.new(#1E3A8A, 0) : color.new(#333333, 0)
+color cPOC1 = i_theme == "CyberPunk" ? #FFD700 : i_theme == "DeepSpace" ? #FBBF24 : #FF9100
+color cPOC2 = i_theme == "CyberPunk" ? #FFC233 : i_theme == "DeepSpace" ? #F59E0B : #E68200
+color cPOC3 = i_theme == "CyberPunk" ? #FFAD66 : i_theme == "DeepSpace" ? #D97706 : #CC7400
+color cPOC4 = i_theme == "CyberPunk" ? #FF9999 : i_theme == "DeepSpace" ? #B45309 : #B36500
+color cVAH1 = i_theme == "CyberPunk" ? #FF6B35 : i_theme == "DeepSpace" ? #F97316 : #E65100
+color cVAH2 = i_theme == "CyberPunk" ? #FF8555 : i_theme == "DeepSpace" ? #FB923C : #EF6C00
+color cVAH3 = i_theme == "CyberPunk" ? #FF9F75 : i_theme == "DeepSpace" ? #FDBA74 : #F57C00
+color cVAH4 = i_theme == "CyberPunk" ? #FFB995 : i_theme == "DeepSpace" ? #FED7AA : #FF8F00
+color cVAL1 = i_theme == "CyberPunk" ? #00CC88 : i_theme == "DeepSpace" ? #10B981 : #2E7D32
+color cVAL2 = i_theme == "CyberPunk" ? #33D69F : i_theme == "DeepSpace" ? #34D399 : #388E3C
+color cVAL3 = i_theme == "CyberPunk" ? #66E0B6 : i_theme == "DeepSpace" ? #6EE7B7 : #43A047
+color cVAL4 = i_theme == "CyberPunk" ? #99EACD : i_theme == "DeepSpace" ? #A7F3D0 : #4CAF50
+color cSiegeRes1 = i_theme == "CyberPunk" ? #FF4D6D : i_theme == "DeepSpace" ? #FB7185 : #C62828
+color cSiegeRes2 = i_theme == "CyberPunk" ? #FF6B8A : i_theme == "DeepSpace" ? #F9A8D4 : #D32F2F
+color cSiegeRes3 = i_theme == "CyberPunk" ? #FF8FA8 : i_theme == "DeepSpace" ? #FDA4AF : #E53935
+color cSiegeRes4 = i_theme == "CyberPunk" ? #FFB3C6 : i_theme == "DeepSpace" ? #FECDD3 : #EF5350
+color cSiegeSup1 = i_theme == "CyberPunk" ? #00F5D4 : i_theme == "DeepSpace" ? #22D3EE : #1B5E20
+color cSiegeSup2 = i_theme == "CyberPunk" ? #33F7DD : i_theme == "DeepSpace" ? #67E8F9 : #2E7D32
+color cSiegeSup3 = i_theme == "CyberPunk" ? #66F9E6 : i_theme == "DeepSpace" ? #A5F3FC : #388E3C
+color cSiegeSup4 = i_theme == "CyberPunk" ? #99FBEF : i_theme == "DeepSpace" ? #CFFAFE : #43A047
+f_pocColor(int ti) => ti == 0 ? cPOC1 : ti == 1 ? cPOC2 : ti == 2 ? cPOC3 : cPOC4
+f_vahColor(int ti) => ti == 0 ? cVAH1 : ti == 1 ? cVAH2 : ti == 2 ? cVAH3 : cVAH4
+f_valColor(int ti) => ti == 0 ? cVAL1 : ti == 1 ? cVAL2 : ti == 2 ? cVAL3 : cVAL4
+f_siegeResColor(int ti) => ti == 0 ? cSiegeRes1 : ti == 1 ? cSiegeRes2 : ti == 2 ? cSiegeRes3 : cSiegeRes4
+f_siegeSupColor(int ti) => ti == 0 ? cSiegeSup1 : ti == 1 ? cSiegeSup2 : ti == 2 ? cSiegeSup3 : cSiegeSup4
+f_tfAlpha(int ti) => ti == 0 ? 15 : ti == 1 ? 30 : ti == 2 ? 45 : 55
+f_tfWidth(int ti) => ti == 0 ? 2 : ti == 1 ? 2 : 1
+f_tfLabel(int ti) => ti == 0 ? (i_tf1 == "" ? timeframe.period : i_tf1) : ti == 1 ? i_tf2 : ti == 2 ? i_tf3 : i_tf4
+// ─────────────────────────────────────────────────────────────────────────────
+// 🧮 TYPES
+// ─────────────────────────────────────────────────────────────────────────────
+type LevelLiquidity
+    float  delta_at_level       = 0.0
+    float  absorption_rate      = 0.0
+    float  spread_quality       = 0.5
+    float  volume_quality       = 0.5
+    float  aggressor_ratio      = 0.5
+    float  hold_probability     = 0.5
+    float  break_probability    = 0.5
+    string action_type          = "neutral"
+    int    sample_count         = 0
+type StructureLevel
+    float  price                = na
+    string level_type           = ""
+    string timeframe            = ""
+    float  strength             = 0.5
+    int    age                  = 0
+    int    touch_count          = 0
+    int    last_touch_bar       = 0
+    float  delta_at_level       = 0.0
+    bool   is_broken            = false
+    LevelLiquidity liquidity    = na
+type SiegeCorridor
+    float  anchor_price_a       = na
+    int    anchor_bar_a         = na
+    float  anchor_price_b       = na
+    int    anchor_bar_b         = na
+    int    direction             = 0
+    float  slope                = 0.0
+    int    hit_count            = 0
+    float  decay                = 1.0
+    float  pressure             = 0.0
+    float  delta_align          = 0.0
+    bool   third_push           = false
+    float  break_prob           = 0.0
+    float  fail_prob            = 0.0
+    string timeframe            = ""
+    bool   is_active            = false
+type TimeframeStructure
+    string                  tf              = ""
+    float                   poc             = na
+    float                   vah             = na
+    float                   val_            = na
+    array<StructureLevel>   levels          = na
+    SiegeCorridor           res_corridor    = na
+    SiegeCorridor           sup_corridor    = na
+    float                   bias            = 0.0
+    int                     last_update_bar = 0
+    bool                    is_valid        = false
+type MultiTFStructure
+    TimeframeStructure tf1      = na
+    TimeframeStructure tf2      = na
+    TimeframeStructure tf3      = na
+    TimeframeStructure tf4      = na
+    int                active_count = 0
+type ConfluenceZone
+    float  price                = na
+    float  width                = 0.0
+    int    level_count          = 0
+    float  combined_strength    = 0.0
+    int    contributing_tfs     = 0
+    string dominant_type        = ""
+    float  bias                 = 0.0
+    float  hold_probability     = 0.5
+    float  liquidity_quality    = 0.5
+type StructureState
+    float  nearest_support      = na
+    float  nearest_resistance   = na
+    float  support_hold_prob    = 0.5
+    float  resistance_hold_prob = 0.5
+    int    confluence_count     = 0
+    float  net_bias             = 0.0
+    bool   inside_value         = false
+    bool   at_siege             = false
+    float  structure_quality    = 0.0
+// ─────────────────────────────────────────────────────────────────────────────
+// 🧮 HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+float EPS = 1e-10
+_clamp(float x, float lo, float hi) => math.max(lo, math.min(hi, x))
+_sgn(float x) => x > 0 ? 1.0 : x < 0 ? -1.0 : 0.0
+_siege_decay(int h) => h == 0 ? 1.0 : h == 1 ? 0.9 : h == 2 ? 0.75 : h == 3 ? 0.5 : 0.1
+_empty_liq() => LevelLiquidity.new()
+_make_corr(string tf, int dir) => SiegeCorridor.new(na,na,na,na,dir,0.0,0,1.0,0.0,0.0,false,0.0,0.0,tf,false)
+_make_tf(string tf) => TimeframeStructure.new(tf,na,na,na,array.new<StructureLevel>(),_make_corr(tf,1),_make_corr(tf,-1),0.0,0,false)
+est_bar_delta(float o, float h, float l, float c, float v) =>
+    float rng = h - l
+    if rng <= 0 or v <= 0
+        [0.0, v/2.0, v/2.0, 0.5]
+    else
+        float bp = (c-l)/rng, float bb = c > o ? 1.1 : c < o ? 0.9 : 1.0
+        float bv = v*bp*bb, float sv = v*(1.0-bp)*(2.0-bb)
+        float t = bv+sv
+        bv := t > 0 ? bv/t*v : v/2.0, sv := t > 0 ? sv/t*v : v/2.0
+        [bv-sv, bv, sv, bv/math.max(v,EPS)]
+calc_spread_proxy(float h, float l, int lb) =>
+    float hl = h > 0 and l > 0 ? math.log(h/l) : 0.0
+    float phl = nz(h[1]) > 0 and nz(l[1]) > 0 ? math.log(h[1]/l[1]) : 0.0
+    float beta = nz(ta.sma(hl*hl + phl*phl, lb),0.0)/2.0
+    float g = math.max(h,nz(h[1],h)) > 0 and math.min(l,nz(l[1],l)) > 0 ?
+         math.log(math.max(h,nz(h[1],h))/math.min(l,nz(l[1],l))) : 0.0
+    float gs = nz(ta.sma(g*g,lb),0.0)
+    float s2 = math.sqrt(2.0), float dn = 3.0-2.0*s2
+    float a = 0.0
+    if beta > 0
+        a := (s2-1.0)*math.sqrt(beta)/dn
+        if gs > beta
+            a := (s2-1.0)*(math.sqrt(math.max(gs,0.0))-math.sqrt(beta))/dn
+    math.max(0.0, 2.0*(math.exp(_clamp(a,-5.0,5.0))-1.0)/(1.0+math.exp(_clamp(a,-5.0,5.0)))*100.0)
+calc_vol_quality(float v, float av) => av > 0 ? _clamp(v/av,0.0,3.0)/3.0 : 0.5
+classify_action(float d, float sp, float vq, float ab, int dir) =>
+    float al = d*dir
+    ab > 0.6 and vq > 0.4 ? "absorbing" : al > 0 and vq > 0.5 and sp < 0.15 ? "defending" : al < 0 and vq > 0.3 ? "attacking" : vq < 0.2 ? "abandoning" : "neutral"
+// ─────────────────────────────────────────────────────────────────────────────
+// 🧮 POC/VA FROM ARRAYS
+// ─────────────────────────────────────────────────────────────────────────────
+calc_poc_va(array<float> ha, array<float> la, array<float> ca, array<float> va, int rows) =>
+    float poc = na, float vah = na, float val_ = na
+    int sz = math.min(array.size(ha),math.min(array.size(la),math.min(array.size(ca),array.size(va))))
+    if sz > 0
+        float ph = array.max(ha), float pl = array.min(la), float pr = ph-pl
+        if pr > 0
+            array<float> prof = array.new_float(rows,0.0)
+            float rh = pr/rows
+            for i = 0 to sz-1
+                int lr = math.max(0,math.min(rows-1,int(math.floor((array.get(la,i)-pl)/rh))))
+                int hr = math.max(0,math.min(rows-1,int(math.floor((array.get(ha,i)-pl)/rh))))
+                int cr = math.max(0,math.min(rows-1,int(math.floor((array.get(ca,i)-pl)/rh))))
+                int sp = hr-lr+1
+                float vpr = sp > 0 ? array.get(va,i)/sp : array.get(va,i)
+                for r = lr to hr
+                    array.set(prof,r,array.get(prof,r)+vpr*(r==cr?1.5:1.0))
+            float mv = 0.0, int pr_row = 0
+            for r = 0 to rows-1
+                if array.get(prof,r) > mv
+                    mv := array.get(prof,r), pr_row := r
+            poc := pl+(pr_row+0.5)*rh
+            float tv = array.sum(prof), float vt = tv*0.70
+            float vv = array.get(prof,pr_row)
+            int vlr = pr_row, int vhr = pr_row
+            while vv < vt and (vlr > 0 or vhr < rows-1)
+                float al = vlr > 0 ? array.get(prof,vlr-1) : 0.0
+                float ah = vhr < rows-1 ? array.get(prof,vhr+1) : 0.0
+                if ah >= al and vhr < rows-1
+                    vhr += 1, vv += ah
+                else if vlr > 0
+                    vlr -= 1, vv += al
+                else if vhr < rows-1
+                    vhr += 1, vv += ah
+                else
+                    break
+            vah := pl+(vhr+1)*rh, val_ := pl+vlr*rh
+    [poc, vah, val_]
+// ─────────────────────────────────────────────────────────────────────────────
+// 🧮 SIEGE CORRIDOR
+// ─────────────────────────────────────────────────────────────────────────────
+build_corridor(float pa, int ba, float pb, int bb, int dir, string tf, float av) =>
+    SiegeCorridor c = SiegeCorridor.new()
+    c.anchor_price_a := pa, c.anchor_bar_a := ba
+    c.anchor_price_b := pb, c.anchor_bar_b := bb
+    c.direction := dir, c.timeframe := tf, c.is_active := true
+    int sp = bb-ba
+    c.slope := sp != 0 ? (pb-pa)/sp : 0.0
+    float tol = nz(av,1.0)*0.25
+    int hits = 0, int da = 0
+    float press = 0.0, float brk = 0.0, float fail = 0.0
+    bool prev = false
+    for i = 1 to math.min(100,bar_index)
+        int bi = bar_index-i
+        if bi >= ba
+            float ref = pa+c.slope*(bi-ba)
+            bool touched = high[i] >= ref-tol and low[i] <= ref+tol
+            if touched and not prev
+                hits += 1
+                [ed,_,_,_] = est_bar_delta(open[i],high[i],low[i],close[i],volume[i])
+                if _sgn(ed) == dir
+                    da += 1
+                press += (close[i]>open[i]?1.0:close[i]<open[i]?-1.0:0.0)*dir
+                brk += (dir==1?close[i]>ref+tol*0.15:close[i]<ref-tol*0.15)?1.0:0.0
+                fail += (dir==1?close[i]<ref:close[i]>ref)?1.0:0.0
+            prev := touched
+    c.hit_count := hits, c.decay := _siege_decay(hits)
+    c.pressure := hits>0?press/hits:0.0, c.delta_align := hits>0?float(da)/float(hits):0.0
+    c.third_push := hits==3
+    float h = math.max(float(hits),1.0)
+    c.break_prob := hits>0?_clamp(0.15+c.delta_align*0.30+math.max(c.pressure,0.0)*0.20+(1.0-c.decay)*0.10+(c.third_push?0.10:0.0)+brk/h*0.25,0.0,1.0):0.0
+    c.fail_prob := hits>0?_clamp(0.10+(1.0-c.delta_align)*0.20+math.max(-c.pressure,0.0)*0.20+(c.decay<0.6?0.10:0.0)+(c.third_push?0.15:0.0)+fail/h*0.25,0.0,1.0):0.0
+    c
+project_price(SiegeCorridor c, int tb) =>
+    na(c) or not c.is_active or na(c.anchor_price_a) or na(c.anchor_bar_a) ? float(na) : c.anchor_price_a+c.slope*(tb-c.anchor_bar_a)
+at_siege(float p, SiegeCorridor c, float av) =>
+    if na(c) or not c.is_active
+        false
+    else
+        float proj = project_price(c,bar_index)
+        float tol = nz(av,1.0)*0.25
+        not na(proj) and p >= proj-tol and p <= proj+tol
+// ─────────────────────────────────────────────────────────────────────────────
+// 🧮 STRUCTURE UPDATE
+// ─────────────────────────────────────────────────────────────────────────────
+update_structure(TimeframeStructure ts, float poc, float vah, float val_,
+     array<float> shp, array<int> shb, array<float> slp, array<int> slb, string tf, float av) =>
+    ts.tf := tf, ts.poc := poc, ts.vah := vah, ts.val_ := val_
+    ts.last_update_bar := bar_index
+    ts.is_valid := not na(poc) or array.size(shp) >= 2 or array.size(slp) >= 2
+    array.clear(ts.levels)
+    if not na(poc)
+        array.push(ts.levels, StructureLevel.new(poc,"poc",tf,1.0,0,0,bar_index,0.0,false,_empty_liq()))
+    if not na(vah)
+        array.push(ts.levels, StructureLevel.new(vah,"vah",tf,0.8,0,0,bar_index,0.0,false,_empty_liq()))
+    if not na(val_)
+        array.push(ts.levels, StructureLevel.new(val_,"val",tf,0.8,0,0,bar_index,0.0,false,_empty_liq()))
+    int shc = math.min(array.size(shp),array.size(shb))
+    for i = 0 to (shc > 0 ? shc-1 : na)
+        float sp = array.get(shp,i), int sb = array.get(shb,i)
+        if not na(sp) and not na(sb)
+            array.push(ts.levels, StructureLevel.new(sp,"swing_high",tf,_clamp(1.0-float(bar_index-sb)/500.0,0.1,1.0),bar_index-sb,0,sb,0.0,false,_empty_liq()))
+    int slc = math.min(array.size(slp),array.size(slb))
+    for i = 0 to (slc > 0 ? slc-1 : na)
+        float sp = array.get(slp,i), int sb = array.get(slb,i)
+        if not na(sp) and not na(sb)
+            array.push(ts.levels, StructureLevel.new(sp,"swing_low",tf,_clamp(1.0-float(bar_index-sb)/500.0,0.1,1.0),bar_index-sb,0,sb,0.0,false,_empty_liq()))
+    float rpa = shc>=2?array.get(shp,1):na, int rba = shc>=2?array.get(shb,1):na
+    float rpb = shc>=2?array.get(shp,0):na, int rbb = shc>=2?array.get(shb,0):na
+    bool rok = not na(rpa) and not na(rba) and not na(rpb) and not na(rbb) and rbb!=rba
+    SiegeCorridor rc = build_corridor(nz(rpa,0.0),nz(rba,0),nz(rpb,0.0),nz(rbb,1),1,tf,av)
+    rc.is_active := rok, ts.res_corridor := rc
+    float spa = slc>=2?array.get(slp,1):na, int sba = slc>=2?array.get(slb,1):na
+    float spb = slc>=2?array.get(slp,0):na, int sbb = slc>=2?array.get(slb,0):na
+    bool sok = not na(spa) and not na(sba) and not na(spb) and not na(sbb) and sbb!=sba
+    SiegeCorridor sc = build_corridor(nz(spa,0.0),nz(sba,0),nz(spb,0.0),nz(sbb,1),-1,tf,av)
+    sc.is_active := sok, ts.sup_corridor := sc
+    float bias = 0.0
+    if not na(poc)
+        bias += close>poc?0.25:-0.25
+    if not na(vah) and not na(val_)
+        bias += close>vah?0.25:close<val_?-0.25:0.0
+    if rc.is_active
+        bias -= rc.fail_prob*0.25
+    if sc.is_active
+        bias += sc.fail_prob*0.25
+    ts.bias := _clamp(bias,-1.0,1.0)
+    ts
+get_tfs(MultiTFStructure m, int i) => i==0?m.tf1:i==1?m.tf2:i==2?m.tf3:m.tf4
+// ─────────────────────────────────────────────────────────────────────────────
+// 🧮 CONFLUENCE
+// ─────────────────────────────────────────────────────────────────────────────
+find_zones(MultiTFStructure m, float tp) =>
+    array<ConfluenceZone> zones = array.new<ConfluenceZone>()
+    array<StructureLevel> all = array.new<StructureLevel>()
+    for ti = 0 to 3
+        TimeframeStructure tfs = get_tfs(m,ti)
+        if tfs.is_valid and array.size(tfs.levels) > 0
+            for i = 0 to array.size(tfs.levels)-1
+                array.push(all, array.get(tfs.levels,i))
+    int total = array.size(all)
+    if total >= 2
+        array<bool> used = array.new_bool(total,false)
+        for i = 0 to total-1
+            if i < array.size(used) and not array.get(used,i)
+                StructureLevel base = array.get(all,i)
+                if not na(base.price)
+                    float tol = base.price*(tp/100.0)
+                    float sp = base.price, float ss = base.strength
+                    float sh = not na(base.liquidity)?base.liquidity.hold_probability:0.5
+                    float sq = not na(base.liquidity)?base.liquidity.volume_quality:0.5
+                    int cnt = 1, float minp = base.price, float maxp = base.price
+                    array<string> seen = array.new_string()
+                    array.push(seen, base.timeframe)
+                    int sup = 0, int dem = 0
+                    if base.level_type=="swing_high" or base.level_type=="vah"
+                        sup += 1
+                    else
+                        dem += 1
+                    array.set(used,i,true)
+                    for j = i+1 to total-1
+                        if j < array.size(used) and not array.get(used,j)
+                            StructureLevel cand = array.get(all,j)
+                            if not na(cand.price) and cand.price>=base.price-tol and cand.price<=base.price+tol
+                                sp += cand.price, ss += cand.strength
+                                sh += not na(cand.liquidity)?cand.liquidity.hold_probability:0.5
+                                sq += not na(cand.liquidity)?cand.liquidity.volume_quality:0.5
+                                cnt += 1, minp := math.min(minp,cand.price), maxp := math.max(maxp,cand.price)
+                                if cand.level_type=="swing_high" or cand.level_type=="vah"
+                                    sup += 1
+                                else
+                                    dem += 1
+                                bool found = false
+                                for k = 0 to array.size(seen)-1
+                                    if array.get(seen,k)==cand.timeframe
+                                        found := true, break
+                                if not found
+                                    array.push(seen,cand.timeframe)
+                                array.set(used,j,true)
+                    if cnt >= 2
+                        array.push(zones, ConfluenceZone.new(sp/cnt,maxp-minp,cnt,ss,array.size(seen),
+                             sup>dem?"supply":"demand",_clamp(float(dem-sup)/float(cnt),-1.0,1.0),sh/cnt,sq/cnt))
+        int zn = array.size(zones)
+        if zn > 1
+            for i = 0 to zn-2
+                for j = 0 to zn-i-2
+                    if array.get(zones,j+1).combined_strength > array.get(zones,j).combined_strength
+                        ConfluenceZone tmp = array.get(zones,j)
+                        array.set(zones,j,array.get(zones,j+1)), array.set(zones,j+1,tmp)
+    zones
+get_conf_bias(array<ConfluenceZone> z, float p) =>
+    float d = 0.0, float s = 0.0
+    for i = 0 to (array.size(z)>0?array.size(z)-1:na)
+        ConfluenceZone zz = array.get(z,i)
+        float w = math.exp(-math.abs(zz.price-p)/p*15.0)
+        if zz.dominant_type=="demand" and zz.price<p
+            d += zz.combined_strength*w
+        else if zz.dominant_type=="supply" and zz.price>p
+            s += zz.combined_strength*w
+    float t = d+s
+    t > 0 ? _clamp((d-s)/t,-1.0,1.0) : 0.0
+// ─────────────────────────────────────────────────────────────────────────────
+// 📊 GLOBAL PRECALCULATIONS
+// ─────────────────────────────────────────────────────────────────────────────
+float atr_val = ta.atr(14)
+float avg_vol = ta.sma(volume, 20)
+float spread_raw = calc_spread_proxy(high, low, 20)
+float avg_spread = ta.sma(spread_raw, 20)
+[cur_delta, cur_buy, cur_sell, cur_agg] = est_bar_delta(open, high, low, close, volume)
+float vol_quality = calc_vol_quality(volume, avg_vol)
+float absorption = ((close>open and cur_delta<0) or (close<open and cur_delta>0)) ? 1.0 :
+     (math.abs(close-open)<(high-low)*0.3 and volume>avg_vol) ? 0.7 : 0.0
+// ─────────────────────────────────────────────────────────────────────────────
+// 📊 FOOTPRINT ENGINE
+// ─────────────────────────────────────────────────────────────────────────────
+footprint fp = i_useFP ? request.footprint(i_fpTicks, i_fpVA) : na
+bool fp_ok = not na(fp)
+float fp_buy = na, float fp_sell = na, float fp_delta = na
+float fp_vah = na, float fp_val = na, float fp_poc_u = na, float fp_poc_l = na, float fp_poc_m = na
+if fp_ok
+    fp_buy := fp.buy_volume(), fp_sell := fp.sell_volume(), fp_delta := fp.delta()
+    volume_row vr = fp.vah(), volume_row vlr = fp.val(), volume_row pr = fp.poc()
+    fp_vah := vr.up_price(), fp_val := vlr.down_price()
+    fp_poc_u := pr.up_price(), fp_poc_l := pr.down_price()
+    fp_poc_m := (fp_poc_u+fp_poc_l)/2.0
+float u_delta = fp_ok ? nz(fp_delta,cur_delta) : cur_delta
+float u_buy = fp_ok ? nz(fp_buy,cur_buy) : cur_buy
+float u_sell = fp_ok ? nz(fp_sell,cur_sell) : cur_sell
+float u_agg = (u_buy+u_sell)>0 ? u_buy/(u_buy+u_sell) : 0.5
+float u_absorption = fp_ok ?
+     ((close>open and fp_delta<0) or (close<open and fp_delta>0)?1.0:
+      math.abs(close-open)<(high-low)*0.3 and volume>avg_vol?0.7:0.0) : absorption
+float fp_poc_shift = fp_ok and not na(fp_poc_m) and not na(fp_poc_m[1]) ?
+     (fp_poc_m-fp_poc_m[1])/math.max(atr_val,syminfo.mintick) : 0.0
+plot(i_showFPLines and fp_ok ? fp_vah : na, "FP VAH", color.new(cVAH1,40), 2, plot.style_stepline)
+plot(i_showFPLines and fp_ok ? fp_val : na, "FP VAL", color.new(cVAL1,40), 2, plot.style_stepline)
+plot(i_showFPLines and fp_ok ? fp_poc_u : na, "FP POC↑", color.new(cPOC1,25), 3, plot.style_stepline)
+plot(i_showFPLines and fp_ok ? fp_poc_l : na, "FP POC↓", color.new(cPOC1,25), 3, plot.style_stepline)
+// ─────────────────────────────────────────────────────────────────────────────
+// 📌 PIVOTS & HTF DATA
+// ─────────────────────────────────────────────────────────────────────────────
+float sh_p_raw = ta.pivothigh(high,i_pivotLen,i_pivotLen)
+float sl_p_raw = ta.pivotlow(low,i_pivotLen,i_pivotLen)
+float ph2 = request.security(syminfo.tickerid,i_tf2,ta.pivothigh(high,i_pivotLen,i_pivotLen))
+float pl2 = request.security(syminfo.tickerid,i_tf2,ta.pivotlow(low,i_pivotLen,i_pivotLen))
+float ph3 = request.security(syminfo.tickerid,i_tf3,ta.pivothigh(high,i_pivotLen,i_pivotLen))
+float pl3 = request.security(syminfo.tickerid,i_tf3,ta.pivotlow(low,i_pivotLen,i_pivotLen))
+float ph4 = request.security(syminfo.tickerid,i_tf4,ta.pivothigh(high,i_pivotLen,i_pivotLen))
+float pl4 = request.security(syminfo.tickerid,i_tf4,ta.pivotlow(low,i_pivotLen,i_pivotLen))
+[h2,l2,c2,v2] = request.security(syminfo.tickerid,i_tf2,[high,low,close,volume])
+[h3,l3,c3,v3] = request.security(syminfo.tickerid,i_tf3,[high,low,close,volume])
+[h4,l4,c4,v4] = request.security(syminfo.tickerid,i_tf4,[high,low,close,volume])
+// ─────────────────────────────────────────────────────────────────────────────
+// 🏗 STORAGE
+// ─────────────────────────────────────────────────────────────────────────────
+var MultiTFStructure structure = MultiTFStructure.new(_make_tf(""),_make_tf(""),_make_tf(""),_make_tf(""),0)
+var array<float> sh1p=array.new_float(), var array<int> sh1b=array.new_int()
+var array<float> sl1p=array.new_float(), var array<int> sl1b=array.new_int()
+var array<float> sh2p=array.new_float(), var array<int> sh2b=array.new_int()
+var array<float> sl2p=array.new_float(), var array<int> sl2b=array.new_int()
+var array<float> sh3p=array.new_float(), var array<int> sh3b=array.new_int()
+var array<float> sl3p=array.new_float(), var array<int> sl3b=array.new_int()
+var array<float> sh4p=array.new_float(), var array<int> sh4b=array.new_int()
+var array<float> sl4p=array.new_float(), var array<int> sl4b=array.new_int()
+var array<float> h1a=array.new_float(),var array<float> l1a=array.new_float()
+var array<float> c1a=array.new_float(),var array<float> v1a=array.new_float()
+var array<float> h2a=array.new_float(),var array<float> l2a=array.new_float()
+var array<float> c2a=array.new_float(),var array<float> v2a=array.new_float()
+var array<float> h3a=array.new_float(),var array<float> l3a=array.new_float()
+var array<float> c3a=array.new_float(),var array<float> v3a=array.new_float()
+var array<float> h4a=array.new_float(),var array<float> l4a=array.new_float()
+var array<float> c4a=array.new_float(),var array<float> v4a=array.new_float()
+var float prev_h2=na, var float prev_c2=na
+var float prev_h3=na, var float prev_c3=na
+var float prev_h4=na, var float prev_c4=na
+array.push(h1a,high),array.push(l1a,low),array.push(c1a,close),array.push(v1a,volume)
+if array.size(h1a)>i_pocBars
+    array.shift(h1a),array.shift(l1a),array.shift(c1a),array.shift(v1a)
+if not na(c2) and (na(prev_c2) or c2!=prev_c2 or h2!=prev_h2)
+    array.push(h2a,h2),array.push(l2a,l2),array.push(c2a,c2),array.push(v2a,v2)
+    if array.size(h2a)>i_pocBars
+        array.shift(h2a),array.shift(l2a),array.shift(c2a),array.shift(v2a)
+    prev_c2:=c2, prev_h2:=h2
+if not na(c3) and (na(prev_c3) or c3!=prev_c3 or h3!=prev_h3)
+    array.push(h3a,h3),array.push(l3a,l3),array.push(c3a,c3),array.push(v3a,v3)
+    if array.size(h3a)>i_pocBars
+        array.shift(h3a),array.shift(l3a),array.shift(c3a),array.shift(v3a)
+    prev_c3:=c3, prev_h3:=h3
+if not na(c4) and (na(prev_c4) or c4!=prev_c4 or h4!=prev_h4)
+    array.push(h4a,h4),array.push(l4a,l4),array.push(c4a,c4),array.push(v4a,v4)
+    if array.size(h4a)>i_pocBars
+        array.shift(h4a),array.shift(l4a),array.shift(c4a),array.shift(v4a)
+    prev_c4:=c4, prev_h4:=h4
+// ─────────────────────────────────────────────────────────────────────────────
+// 📌 PIVOT COLLECTION
+// ─────────────────────────────────────────────────────────────────────────────
+if not na(sh_p_raw)
+    array.unshift(sh1p,sh_p_raw),array.unshift(sh1b,bar_index-i_pivotLen)
+    if array.size(sh1p)>i_maxPivots
+        array.pop(sh1p),array.pop(sh1b)
+if not na(sl_p_raw)
+    array.unshift(sl1p,sl_p_raw),array.unshift(sl1b,bar_index-i_pivotLen)
+    if array.size(sl1p)>i_maxPivots
+        array.pop(sl1p),array.pop(sl1b)
+if not na(ph2) and (array.size(sh2p)==0 or ph2!=array.get(sh2p,0))
+    array.unshift(sh2p,ph2),array.unshift(sh2b,bar_index)
+    if array.size(sh2p)>i_maxPivots
+        array.pop(sh2p),array.pop(sh2b)
+if not na(pl2) and (array.size(sl2p)==0 or pl2!=array.get(sl2p,0))
+    array.unshift(sl2p,pl2),array.unshift(sl2b,bar_index)
+    if array.size(sl2p)>i_maxPivots
+        array.pop(sl2p),array.pop(sl2b)
+if not na(ph3) and (array.size(sh3p)==0 or ph3!=array.get(sh3p,0))
+    array.unshift(sh3p,ph3),array.unshift(sh3b,bar_index)
+    if array.size(sh3p)>i_maxPivots
+        array.pop(sh3p),array.pop(sh3b)
+if not na(pl3) and (array.size(sl3p)==0 or pl3!=array.get(sl3p,0))
+    array.unshift(sl3p,pl3),array.unshift(sl3b,bar_index)
+    if array.size(sl3p)>i_maxPivots
+        array.pop(sl3p),array.pop(sl3b)
+if not na(ph4) and (array.size(sh4p)==0 or ph4!=array.get(sh4p,0))
+    array.unshift(sh4p,ph4),array.unshift(sh4b,bar_index)
+    if array.size(sh4p)>i_maxPivots
+        array.pop(sh4p),array.pop(sh4b)
+if not na(pl4) and (array.size(sl4p)==0 or pl4!=array.get(sl4p,0))
+    array.unshift(sl4p,pl4),array.unshift(sl4b,bar_index)
+    if array.size(sl4p)>i_maxPivots
+        array.pop(sl4p),array.pop(sl4b)
+// ─────────────────────────────────────────────────────────────────────────────
+// 📊 MULTI-TF POC/VA
+// ─────────────────────────────────────────────────────────────────────────────
+float poc1=na,float vah1=na,float val1=na
+if fp_ok and not na(fp_poc_m)
+    poc1 := fp_poc_m, vah1 := fp_vah, val1 := fp_val
+else
+    [_p,_vh,_vl] = calc_poc_va(h1a,l1a,c1a,v1a,i_pocRows)
+    poc1 := _p, vah1 := _vh, val1 := _vl
+[poc2,vah2,val2] = calc_poc_va(h2a,l2a,c2a,v2a,i_pocRows)
+[poc3,vah3,val3] = calc_poc_va(h3a,l3a,c3a,v3a,i_pocRows)
+[poc4,vah4,val4] = calc_poc_va(h4a,l4a,c4a,v4a,i_pocRows)
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔄 STRUCTURE UPDATES
+// ─────────────────────────────────────────────────────────────────────────────
+if barstate.isconfirmed
+    if i_tf1On
+        structure.tf1 := update_structure(structure.tf1,poc1,vah1,val1,sh1p,sh1b,sl1p,sl1b,i_tf1==""?timeframe.period:i_tf1,atr_val)
+    if i_tf2On
+        structure.tf2 := update_structure(structure.tf2,poc2,vah2,val2,sh2p,sh2b,sl2p,sl2b,i_tf2,atr_val)
+    if i_tf3On
+        structure.tf3 := update_structure(structure.tf3,poc3,vah3,val3,sh3p,sh3b,sl3p,sl3b,i_tf3,atr_val)
+    if i_tf4On
+        structure.tf4 := update_structure(structure.tf4,poc4,vah4,val4,sh4p,sh4b,sl4p,sl4b,i_tf4,atr_val)
+    structure.active_count := (i_tf1On?1:0)+(i_tf2On?1:0)+(i_tf3On?1:0)+(i_tf4On?1:0)
+// ─────────────────────────────────────────────────────────────────────────────
+// 🎯 STATE
+// ─────────────────────────────────────────────────────────────────────────────
+bool s1r=at_siege(close,structure.tf1.res_corridor,atr_val)
+bool s1s=at_siege(close,structure.tf1.sup_corridor,atr_val)
+bool s2r=at_siege(close,structure.tf2.res_corridor,atr_val)
+bool s2s=at_siege(close,structure.tf2.sup_corridor,atr_val)
+bool s3r=at_siege(close,structure.tf3.res_corridor,atr_val)
+bool s3s=at_siege(close,structure.tf3.sup_corridor,atr_val)
+bool s4r=at_siege(close,structure.tf4.res_corridor,atr_val)
+bool s4s=at_siege(close,structure.tf4.sup_corridor,atr_val)
+bool anySiege=s1r or s1s or s2r or s2s or s3r or s3s or s4r or s4s
+array<ConfluenceZone> zones = find_zones(structure,0.3)
+float conf_bias = get_conf_bias(zones,close)
+var StructureState ss = StructureState.new()
+ss.at_siege := anySiege, ss.inside_value := false
+float minSD=1e18, float minRD=1e18, float bSum=0.0
+int bCnt=0, int tLvls=0
+for ti=0 to 3
+    TimeframeStructure tfs=get_tfs(structure,ti)
+    if tfs.is_valid
+        bSum+=tfs.bias, bCnt+=1, tLvls+=array.size(tfs.levels)
+        if not na(tfs.vah) and not na(tfs.val_) and close>=tfs.val_ and close<=tfs.vah
+            ss.inside_value := true
+        for i=0 to (array.size(tfs.levels)>0?array.size(tfs.levels)-1:na)
+            StructureLevel lv=array.get(tfs.levels,i)
+            if not na(lv.price)
+                float d=lv.price-close
+                if (lv.level_type=="swing_low" or lv.level_type=="val") and d<0 and math.abs(d)<minSD
+                    minSD:=math.abs(d), ss.nearest_support:=lv.price
+                    ss.support_hold_prob:=not na(lv.liquidity)?lv.liquidity.hold_probability:0.5
+                if (lv.level_type=="swing_high" or lv.level_type=="vah") and d>0 and d<minRD
+                    minRD:=d, ss.nearest_resistance:=lv.price
+                    ss.resistance_hold_prob:=not na(lv.liquidity)?lv.liquidity.hold_probability:0.5
+ss.net_bias:=bCnt>0?_clamp(bSum/bCnt,-1.0,1.0):0.0
+int cCnt=0
+for i=0 to (array.size(zones)>0?array.size(zones)-1:na)
+    if math.abs(array.get(zones,i).price-close)<=atr_val
+        cCnt+=1
+ss.confluence_count:=cCnt
+ss.structure_quality:=_clamp(float(tLvls)/20.0,0.0,1.0)*_clamp(float(bCnt)/4.0,0.0,1.0)
+// ─────────────────────────────────────────────────────────────────────────────
+// 🎨 DRAWING ENGINE
+// ─────────────────────────────────────────────────────────────────────────────
+var array<line> dL=array.new_line(), var array<label> dLb=array.new_label(), var array<box> dB=array.new_box()
+f_clear()=>
+    if array.size(dL)>0
+        for i=array.size(dL)-1 to 0
+            line.delete(array.get(dL,i))
+        array.clear(dL)
+    if array.size(dLb)>0
+        for i=array.size(dLb)-1 to 0
+            label.delete(array.get(dLb,i))
+        array.clear(dLb)
+    if array.size(dB)>0
+        for i=array.size(dB)-1 to 0
+            box.delete(array.get(dB,i))
+        array.clear(dB)
+f_ln(line ln)=>
+    if not na(ln)
+        array.push(dL,ln)
+        if array.size(dL)>450
+            line.delete(array.shift(dL))
+f_lb(label lb)=>
+    if not na(lb)
+        array.push(dLb,lb)
+        if array.size(dLb)>450
+            label.delete(array.shift(dLb))
+f_bx(box bx)=>
+    if not na(bx)
+        array.push(dB,bx)
+        if array.size(dB)>250
+            box.delete(array.shift(dB))
+plotshape(i_showPivots and not na(sh_p_raw),"SH",shape.diamond,location.abovebar,color.new(cBear,30),size=size.tiny)
+plotshape(i_showPivots and not na(sl_p_raw),"SL",shape.diamond,location.belowbar,color.new(cBull,30),size=size.tiny)
+bgcolor(ss.inside_value?color.new(cConfl,97):na,title="Inside VA")
+// ─────────────────────────────────────────────────────────────────────────────
+// 📐 LAST-BAR DRAWINGS
+// ─────────────────────────────────────────────────────────────────────────────
+if barstate.islast
+    f_clear()
+    int ext=bar_index+15
+    int maxLB=bar_index-900 
+    float[] allPoc=array.from(poc1,poc2,poc3,poc4)
+    float[] allVah=array.from(vah1,vah2,vah3,vah4)
+    float[] allVal=array.from(val1,val2,val3,val4)
+    bool[]  allOn =array.from(i_tf1On,i_tf2On,i_tf3On,i_tf4On)
+    for ti=0 to 3
+        if array.get(allOn,ti)
+            float tPoc=array.get(allPoc,ti), float tVah=array.get(allVah,ti), float tVal=array.get(allVal,ti)
+            int al=f_tfAlpha(ti), int lw=f_tfWidth(ti)
+            string tl=f_tfLabel(ti)
+            color pc=f_pocColor(ti), color vc=f_vahColor(ti), color lc=f_valColor(ti)
+            if i_showPOC and not na(tPoc)
+                f_ln(line.new(math.max(bar_index-i_pocBars,maxLB),tPoc,ext,tPoc,color=color.new(pc,al),width=lw+1))
+                f_lb(label.new(ext,tPoc,"POC "+tl+" "+str.tostring(tPoc,format.mintick),style=label.style_label_left,color=color.new(pc,85),textcolor=color.new(pc,al),size=size.tiny))
+            if i_showVA
+                if not na(tVah)
+                    f_ln(line.new(math.max(bar_index-i_pocBars,maxLB),tVah,ext,tVah,color=color.new(vc,al+20),width=lw,style=line.style_dashed))
+                    f_lb(label.new(ext,tVah,"VAH "+tl,style=label.style_label_left,color=color.new(vc,85),textcolor=color.new(vc,al+10),size=size.tiny))
+                if not na(tVal)
+                    f_ln(line.new(math.max(bar_index-i_pocBars,maxLB),tVal,ext,tVal,color=color.new(lc,al+20),width=lw,style=line.style_dashed))
+                    f_lb(label.new(ext,tVal,"VAL "+tl,style=label.style_label_left,color=color.new(lc,85),textcolor=color.new(lc,al+10),size=size.tiny))
+                if not na(tVah) and not na(tVal)
+                    f_bx(box.new(math.max(bar_index-i_pocBars,maxLB),tVah,ext,tVal,border_color=na,bgcolor=color.new(cConfl,93+al/5)))
+    if i_showSiege
+        for ti=0 to 3
+            TimeframeStructure tfs=get_tfs(structure,ti)
+            if tfs.is_valid
+                int al=f_tfAlpha(ti), int lw=f_tfWidth(ti)
+                string tl=f_tfLabel(ti)
+                float tb=nz(atr_val,1.0)*0.25
+                color rC=f_siegeResColor(ti), color sC=f_siegeSupColor(ti)
+                if tfs.res_corridor.is_active
+                    int sb=math.max(tfs.res_corridor.anchor_bar_a,maxLB) // CLAMP
+                    float ps=project_price(tfs.res_corridor,sb)
+                    float pe=project_price(tfs.res_corridor,ext)
+                    if not na(ps) and not na(pe)
+                        f_ln(line.new(sb,ps,ext,pe,color=color.new(rC,al),width=lw,style=line.style_dashed))
+                        f_ln(line.new(sb,ps+tb,ext,pe+tb,color=color.new(rC,al+25),width=1,style=line.style_dotted))
+                        f_ln(line.new(sb,ps-tb,ext,pe-tb,color=color.new(rC,al+25),width=1,style=line.style_dotted))
+                        f_lb(label.new(ext+1,pe,"R "+tl+" H:"+str.tostring(tfs.res_corridor.hit_count)+
+                             " B:"+str.tostring(tfs.res_corridor.break_prob*100,"0")+"% F:"+str.tostring(tfs.res_corridor.fail_prob*100,"0")+"%",
+                             style=label.style_label_left,color=color.new(rC,80),textcolor=color.new(rC,al),size=size.tiny))
+                if tfs.sup_corridor.is_active
+                    int sb=math.max(tfs.sup_corridor.anchor_bar_a,maxLB) // CLAMP
+                    float ps=project_price(tfs.sup_corridor,sb)
+                    float pe=project_price(tfs.sup_corridor,ext)
+                    if not na(ps) and not na(pe)
+                        f_ln(line.new(sb,ps,ext,pe,color=color.new(sC,al),width=lw,style=line.style_dashed))
+                        f_ln(line.new(sb,ps+tb,ext,pe+tb,color=color.new(sC,al+25),width=1,style=line.style_dotted))
+                        f_ln(line.new(sb,ps-tb,ext,pe-tb,color=color.new(sC,al+25),width=1,style=line.style_dotted))
+                        f_lb(label.new(ext+1,pe,"S "+tl+" H:"+str.tostring(tfs.sup_corridor.hit_count)+
+                             " B:"+str.tostring(tfs.sup_corridor.break_prob*100,"0")+"% F:"+str.tostring(tfs.sup_corridor.fail_prob*100,"0")+"%",
+                             style=label.style_label_left,color=color.new(sC,80),textcolor=color.new(sC,al),size=size.tiny))
+    if i_showConfl and array.size(zones)>0
+        for i=0 to math.min(array.size(zones)-1,5)
+            ConfluenceZone z=array.get(zones,i)
+            float hw=math.max(z.width/2.0,atr_val*0.1)
+            color zc=z.dominant_type=="demand"?cBull:cBear
+            int za=z.contributing_tfs>=3?85:z.contributing_tfs>=2?90:93
+            f_bx(box.new(math.max(bar_index-20,maxLB),z.price+hw,ext,z.price-hw,border_color=color.new(zc,za-10),bgcolor=color.new(zc,za)))
+            f_lb(label.new(ext+2,z.price,(z.dominant_type=="demand"?"▲":"▼")+" "+str.tostring(z.contributing_tfs)+"TF "+str.tostring(z.level_count)+"lvl H:"+str.tostring(z.hold_probability*100,"0")+"%",
+                 style=label.style_label_left,color=color.new(zc,80),textcolor=zc,size=size.tiny))
+    if i_showLiqAt and structure.tf1.is_valid and array.size(structure.tf1.levels)>0
+        for i=0 to math.min(array.size(structure.tf1.levels)-1,10)
+            StructureLevel lv=array.get(structure.tf1.levels,i)
+            if not na(lv.price) and math.abs(close-lv.price)<=atr_val*0.5
+                int ld=lv.level_type=="swing_low" or lv.level_type=="val"?1:-1
+                string act=classify_action(u_delta,spread_raw,vol_quality,u_absorption,ld)
+                color lc=act=="defending"?cBull:act=="absorbing"?cPOC1:act=="attacking"?cBear:act=="abandoning"?color.new(cBear,40):cDim
+                string lt=act=="defending"?"◆ DEF":act=="absorbing"?"◈ ABS":act=="attacking"?"◇ ATK":act=="abandoning"?"○ ABN":""
+                if lt!=""
+                    f_lb(label.new(bar_index,lv.price,lt,style=label.style_none,color=color(na),textcolor=lc,size=size.tiny))
+// ─────────────────────────────────────────────────────────────────────────────
+// ⚡ INTRA-BAR
+// ─────────────────────────────────────────────────────────────────────────────
+float ib_tol=atr_val*0.2
+var bool ib_poc=false,var bool ib_vah=false,var bool ib_val=false
+var bool ib_sr=false,var bool ib_ss=false,var bool ib_cf=false
+if i_intrabar
+    ib_poc:=not na(poc1) and math.abs(close-poc1)<=ib_tol
+    ib_vah:=not na(vah1) and math.abs(close-vah1)<=ib_tol
+    ib_val:=not na(val1) and math.abs(close-val1)<=ib_tol
+    ib_sr:=s1r or s2r or s3r or s4r, ib_ss:=s1s or s2s or s3s or s4s
+    ib_cf:=false
+    if array.size(zones)>0
+        for i=0 to math.min(array.size(zones)-1,5)
+            if math.abs(array.get(zones,i).price-close)<=ib_tol
+                ib_cf:=true, break
+else
+    ib_poc:=false,ib_vah:=false,ib_val:=false,ib_sr:=false,ib_ss:=false,ib_cf:=false
+plotshape(i_intrabar and ib_poc,"IB POC",shape.circle,location.abovebar,color.new(cPOC1,30),size=size.auto)
+plotshape(i_intrabar and ib_sr,"IB Siege R",shape.diamond,location.abovebar,color.new(cSiegeRes1,20),size=size.auto)
+plotshape(i_intrabar and ib_ss,"IB Siege S",shape.diamond,location.belowbar,color.new(cSiegeSup1,20),size=size.auto)
+plotshape(i_intrabar and ib_cf,"IB Confl",shape.square,location.belowbar,color.new(cConfl,15),size=size.auto)
+// ─────────────────────────────────────────────────────────────────────────────
+// 📋 DASHBOARD
+// ─────────────────────────────────────────────────────────────────────────────
+dPos=i_dashPos=="top_left"?position.top_left:i_dashPos=="bottom_left"?position.bottom_left:i_dashPos=="bottom_right"?position.bottom_right:position.top_right
+var table dash=na
+if barstate.islast
+    if not na(dash)
+        table.delete(dash)
+    dash:=table.new(dPos,4,32,bgcolor=cBg,border_color=cBorder,border_width=1,frame_color=cBorder,frame_width=2)
+f_sec(table t,int r,int c,string s,color cl)=>
+    table.cell(t,c,r,s,text_color=cl,text_size=size.tiny,bgcolor=color.new(cl,88))
+    table.cell(t,c+1,r,"",text_color=cl,text_size=size.tiny,bgcolor=color.new(cl,88))
+    table.merge_cells(t,c,r,c+1,r)
+f_pair(table t,int r,int c,string k,string v,color vc)=>
+    table.cell(t,c,r,k,text_color=cDim,text_size=size.tiny,text_halign=text.align_left,bgcolor=color.new(cBg,0))
+    table.cell(t,c+1,r,v,text_color=vc,text_size=size.tiny,text_halign=text.align_right,bgcolor=color.new(cBg,0))
+if barstate.islast and i_showDash and not na(dash)
+    table.cell(dash,0,0,"⟡ Siege Structure Engine — MULTI-TF                DAFE",text_color=color.white,text_size=size.small,text_halign=text.align_center,bgcolor=color.new(cConfl,85))
+    table.merge_cells(dash,0,0,3,0)
+    int l=1, int r=1
+    f_sec(dash,l,0,"⟡ STRUCTURE STATE",cConfl), l+=1
+    f_pair(dash,l,0,"Nearest Sup",not na(ss.nearest_support)?str.tostring(ss.nearest_support,format.mintick):"—",not na(ss.nearest_support)?cBull:cDim), l+=1
+    f_pair(dash,l,0,"Sup Hold",str.tostring(ss.support_hold_prob*100,"0")+"%",ss.support_hold_prob>0.6?cBull:ss.support_hold_prob<0.4?cBear:cDim), l+=1
+    f_pair(dash,l,0,"Nearest Res",not na(ss.nearest_resistance)?str.tostring(ss.nearest_resistance,format.mintick):"—",not na(ss.nearest_resistance)?cBear:cDim), l+=1
+    f_pair(dash,l,0,"Res Hold",str.tostring(ss.resistance_hold_prob*100,"0")+"%",ss.resistance_hold_prob>0.6?cBear:ss.resistance_hold_prob<0.4?cBull:cDim), l+=1
+    f_pair(dash,l,0,"Net Bias",str.tostring(ss.net_bias,"0.00"),ss.net_bias>0.15?cBull:ss.net_bias<-0.15?cBear:cDim), l+=1
+    f_pair(dash,l,0,"Inside VA",ss.inside_value?"YES":"NO",ss.inside_value?cPOC1:cDim), l+=1
+    f_pair(dash,l,0,"At Siege",ss.at_siege?"YES":"NO",ss.at_siege?cBear:cDim), l+=1
+    f_pair(dash,l,0,"Confluence",str.tostring(ss.confluence_count)+" zones",ss.confluence_count>=2?cConfl:cDim), l+=1
+    f_pair(dash,l,0,"Conf Bias",str.tostring(conf_bias,"0.00"),conf_bias>0.2?cBull:conf_bias<-0.2?cBear:cDim), l+=1
+    f_sec(dash,l,0,"📊 MULTI-TF POC/VA",cPOC1), l+=1
+    float[] dPoc=array.from(poc1,poc2,poc3,poc4)
+    bool[] dOn=array.from(i_tf1On,i_tf2On,i_tf3On,i_tf4On)
+    for ti=0 to 3
+        if array.get(dOn,ti) and not na(array.get(dPoc,ti))
+            string tn=f_tfLabel(ti)
+            color pc=f_pocColor(ti)
+            f_pair(dash,l,0,"POC "+tn,str.tostring(array.get(dPoc,ti),format.mintick),pc), l+=1
+    if i_intrabar
+        string ibs=ib_cf?"◆ CONFLUENCE":ib_sr?"◆ SIEGE RES":ib_ss?"◆ SIEGE SUP":ib_poc?"◆ POC":ib_vah?"◆ VAH":ib_val?"◆ VAL":"○ CLEAR"
+        color ibc=ib_cf?cConfl:ib_sr?cSiegeRes1:ib_ss?cSiegeSup1:ib_poc?cPOC1:ib_vah?cVAH1:ib_val?cVAL1:cDim
+        f_pair(dash,l,0,"⚡ Intra-bar",ibs,ibc), l+=1
+    f_sec(dash,r,2,"🏗 SIEGE CORRIDORS",cSiegeRes1), r+=1
+    for ti=0 to 3
+        TimeframeStructure tfs=get_tfs(structure,ti)
+        if tfs.is_valid
+            string tn=f_tfLabel(ti)
+            if tfs.res_corridor.is_active
+                f_pair(dash,r,2,"R "+tn,"H:"+str.tostring(tfs.res_corridor.hit_count)+" B:"+str.tostring(tfs.res_corridor.break_prob*100,"0")+"% F:"+str.tostring(tfs.res_corridor.fail_prob*100,"0")+"%",
+                     tfs.res_corridor.fail_prob>tfs.res_corridor.break_prob?f_siegeResColor(ti):cBull), r+=1
+            if tfs.sup_corridor.is_active
+                f_pair(dash,r,2,"S "+tn,"H:"+str.tostring(tfs.sup_corridor.hit_count)+" B:"+str.tostring(tfs.sup_corridor.break_prob*100,"0")+"% F:"+str.tostring(tfs.sup_corridor.fail_prob*100,"0")+"%",
+                     tfs.sup_corridor.fail_prob>tfs.sup_corridor.break_prob?f_siegeSupColor(ti):cBear), r+=1
+    f_sec(dash,r,2,"🔬 LIQUIDITY",cPOC1), r+=1
+    f_pair(dash,r,2,"FP Status",fp_ok?"◆ ACTIVE":"○ PROXY",fp_ok?cBull:cDim), r+=1
+    f_pair(dash,r,2,"Delta",str.tostring(u_delta,"0"),u_delta>0?cBull:u_delta<0?cBear:cDim), r+=1
+    f_pair(dash,r,2,"Spread",str.tostring(spread_raw,"0.000")+"%",spread_raw>avg_spread*1.5?cBear:cDim), r+=1
+    f_pair(dash,r,2,"Vol Qual",str.tostring(vol_quality*100,"0")+"%",vol_quality>0.5?cBull:vol_quality<0.2?cBear:cDim), r+=1
+    f_pair(dash,r,2,"Absorption",str.tostring(u_absorption*100,"0")+"%",u_absorption>0.5?cPOC1:cDim), r+=1
+    f_pair(dash,r,2,"Aggressor",str.tostring(u_agg*100,"0")+"% buy",u_agg>0.55?cBull:u_agg<0.45?cBear:cDim), r+=1
+    if fp_ok
+        f_pair(dash,r,2,"POC Shift",str.tostring(fp_poc_shift,"0.00"),fp_poc_shift>0.1?cBull:fp_poc_shift<-0.1?cBear:cDim), r+=1
+    f_sec(dash,r,2,"🎯 CONFLUENCE",cConfl), r+=1
+    int mZ=math.min(array.size(zones),4)
+    if mZ>0
+        for i=0 to mZ-1
+            ConfluenceZone z=array.get(zones,i)
+            f_pair(dash,r,2,(z.dominant_type=="demand"?"▲":"▼")+" "+str.tostring(z.contributing_tfs)+"TF",
+                 str.tostring(z.price,format.mintick)+" "+str.tostring(z.hold_probability*100,"0")+"%",
+                 z.dominant_type=="demand"?cBull:cBear), r+=1
+    else
+        f_pair(dash,r,2,"Zones","NONE",cDim), r+=1
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔔 ALERTS
+// ─────────────────────────────────────────────────────────────────────────────
+var bool prevVA=false
+bool leftVA=not ss.inside_value and prevVA
+prevVA:=ss.inside_value
+alertcondition(anySiege,"At Siege","⟡ MSE: Price at siege corridor")
+alertcondition(ss.confluence_count>=2,"Multi-TF Confluence","⟡ MSE: Multi-TF confluence zone")
+alertcondition(leftVA,"Left VA","⟡ MSE: Price left Value Area")
+alertcondition(i_intrabar and ib_poc,"IB POC","⟡ MSE: Intra-bar POC touch")
+alertcondition(i_intrabar and ib_sr,"IB Siege Res","⟡ MSE: Intra-bar siege resistance")
+alertcondition(i_intrabar and ib_ss,"IB Siege Sup","⟡ MSE: Intra-bar siege support")
+alertcondition(i_intrabar and ib_cf,"IB Confluence","⟡ MSE: Intra-bar confluence touch")
+// ─────────────────────────────────────────────────────────────────────────────
+// 📊 DATA WINDOW
+// ─────────────────────────────────────────────────────────────────────────────
+plot(ss.net_bias,"Net Bias",color.new(color.white,100),display=display.data_window)
+plot(conf_bias,"Conf Bias",color.new(color.white,100),display=display.data_window)
+plot(float(ss.confluence_count),"Conf Count",color.new(color.white,100),display=display.data_window)
+plot(u_delta,"Delta",color.new(color.white,100),display=display.data_window)
+plot(spread_raw,"Spread",color.new(color.white,100),display=display.data_window)
+plot(vol_quality,"Vol Qual",color.new(color.white,100),display=display.data_window)
+plot(u_absorption,"Absorption",color.new(color.white,100),display=display.data_window)
+plot(fp_ok?1.0:0.0,"FP Active",color.new(color.white,100),display=display.data_window)
+plot(fp_poc_shift,"POC Shift",color.new(color.white,100),display=display.data_window)

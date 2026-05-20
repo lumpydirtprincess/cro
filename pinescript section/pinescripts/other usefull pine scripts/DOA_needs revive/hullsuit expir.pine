@@ -1,0 +1,46 @@
+orginal insilico set
+
+// ====== HMA FUNCTIONS ======
+HMA(_src, _length) =>
+    ta.wma(2 * ta.wma(_src, _length / 2) - ta.wma(_src, _length), math.round(math.sqrt(_length)))
+
+EHMA(_src, _length) =>
+    ta.ema(2 * ta.ema(_src, _length / 2) - ta.ema(_src, _length), math.round(math.sqrt(_length)))
+
+THMA(_src, _length) =>
+    ta.wma(ta.wma(_src, _length / 3) * 3 - ta.wma(_src, _length / 2) - ta.wma(_src, _length), _length)
+//. WHEN THMA IS CALLED LATER 
+thma = thma(src, len/2)
+
+// TRYING TO RE QRITEW THMA 
+hma3(_src, _length)=>
+    p = length/2
+    ta.wma(ta.wma(close,p/3)*3 - ta.wma(close,p/2) - ta.wma(close,p),p)
+
+hma4(_src, _length)=>
+    p = length/2
+    ta.wma(ta.wma(close,p/4)*4 - ta.wma(close,p/3) - ta.wma(close,p/2) - ta.wma(close,p),p)
+
+//
+EMPIREMTNT SET 1 THMA  HM>DEHMS>THMA/HMA3 LOGIC FOLLOW
+
+thma3(_src, _length) =>
+    ta.wma(ta.wma(_src, _length / 3) * 3 - ta.wma(_src, _length / 2) - ta.wma(_src, _length), _length)
+thma4(_src, _length) =>
+    ta.wma(ta.wma(_src, _length / 4) * 4 - ta.wma(_src, _length / 3) - ta.wma(_src, _length / 2) - ta.wma(_src, _length), _length)
+thma5(_src, _length) =>
+    ta.wma(ta.wma(_src, _length / 5) * 5 - ta.wma(_src, _length / 4) - ta.wma(_src, _length / 3) - ta.wma(_src, _length / 2) - ta.wma(_src, _length), _length)
+thma6(_src, _length) =>
+    ta.wma(ta.wma(_src, _length / 6) * 6 - ta.wma(_src, _length / 5) - ta.wma(_src, _length / 4) - ta.wma(_src, _length / 3) - ta.wma(_src, _length / 2) - ta.wma(_src, _length), _length)
+
+
+HMA4th(_src,_length) => ta.wma(4 * ta.wma(source, length / 4) - 6 * ta.wma(source, length / 4 * 2) + 4 * ta.wma(source, length / 4 * 3) - ta.wma(source, length), rndin(math.sqrt(length)))    
+// this one below worked very well
+
+hma4th(_src,_length) => ta.wma(4 * ta.wma(source, length / 4) - 6 * ta.wma(source, length / 4 * 2) + 4 * ta.wma(source, length / 4 * 3) - ta.wma(source, length), rndin(math.sqrt(length)))
+
+hma5th(_src,_length) => ta.wma(5 * ta.wma(source, length / 5) - 10 * ta.wma(source, length / 5 * 2) + 10 * ta.wma(source, length / 5 * 3) - 5 * ta.wma(source, length / 5 * 4) + ta.wma(source, length), rndin(math.sqrt(length)))
+hma6th(_src,_length) => ta.wma(6 * ta.wma(source, length / 6) - 15 * ta.wma(source, length / 6 * 2) + 20 * ta.wma(source, length / 6 * 3) - 15 * ta.wma(source, length / 6 * 4) + 6 * ta.wma(source, length / 6 * 5) - ta.wma(source, length), rndin(math.sqrt(length)))
+
+RMAHMA(_src, _length) =>
+    ta.rma(ta.rma(_src, _length / 3) * 3 - ta.rma(_src, _length / 2) - ta.rma(_src, _length), _length)

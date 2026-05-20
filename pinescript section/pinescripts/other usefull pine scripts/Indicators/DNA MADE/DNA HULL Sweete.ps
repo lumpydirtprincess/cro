@@ -1,0 +1,250 @@
+//@version=6
+indicator("HMA sweete", overlay=true, max_bars_back=1000)
+
+// ====== HMA SECTION ======
+// HMA Inputs
+src_hull = input(close, 'HMA Source', group='HMA Settings')
+
+// MA1 Settings
+ma1_plot = input.bool(true, 'enable  ma1','ma1 Settings')
+ma1_mode = input.string('Hma', 'MA1 Type', ['Hma', 'Thma', 'Ehma','zhm', 'zrm', 'zthma', 'zehma','ema','sma'], group='MA1 Settings')
+length_hull1 = input.float(25.0, 'MA1 Length', group='MA1 Settings')
+lengthMult1 = input.float(1.0, 'MA1 Length Multiplier', 0.1, 50, 0.1, group='MA1 Settings')
+hist = input.int(6, 'History Bars1', group='MA1 Settings')
+
+// MA2 Settings
+ma2_enabled = input.bool(false, 'Enable MA2?', group='MA2 Settings')
+ma2_mode = input.string('Thma', 'MA2 Type', ['Hma', 'Thma', 'Ehma','zhm', 'zrm', 'zthma', 'zehma','ema','sma'], group='MA2 Settings')
+length_hull2 = input.float(27.5, 'MA2 Length', group='MA2 Settings')
+lengthMult2 = input.float(1.0, 'MA2 Length Multiplier', 0.1, 50, 0.1, group='MA2 Settings')
+hist2 = input.int(2, 'History Bars2', group='MA1 Settings')
+
+// MA3 Settings
+ma3_enabled = input.bool(false, 'Enable MA3?', group='MA3 Settings')
+ma3_mode = input.string('Ehma', 'MA3 Type', ['Hma', 'Thma', 'Ehma','zhm', 'zrm', 'zthma', 'zehma','ema','sma'], group='MA3 Settings')
+length_hull3 = input.float(55, 'MA3 Length', minval=1, group='MA3 Settings')
+lengthMult3 = input.float(1.0, 'MA3 Length Multiplier', 0.1, 50, 0.1, group='MA3 Settings')
+hist3 = input.int(2, 'History Bars3', group='MA3 Settings')
+
+
+// ====== COLOR SPECTRUM SETTINGS ======
+// Fill Transparency
+fill_transparency = input.int(25, 'Fill Transparency', 0, 100,20, group='Visual Settings')
+
+
+
+
+
+
+// ====== HMA FUNCTIONS ======
+HMA(_src, _length) =>
+    ta.wma(2 * ta.wma(_src, _length / 2) - ta.wma(_src, _length), math.round(math.sqrt(_length)))
+
+EHMA(_src, _length) =>
+    ta.ema(2 * ta.ema(_src, _length / 2) - ta.ema(_src, _length), math.round(math.sqrt(_length)))
+
+RHMA(_src, _length) =>
+    ta.rma(2 * ta.rma(_src, _length / 2) - ta.rma(_src, _length), math.round(math.sqrt(_length)))
+SHMA(_src, _length) =>
+    ta.sma(2 * ta.sma(_src, _length / 2) - ta.sma(_src, _length), math.round(math.sqrt(_length)))
+VWHMA(_src, _length) =>
+    ta.vwma(2 * ta.vwma(_src, _length / 2) - ta.vwma(_src, _length), math.round(math.sqrt(_length)))
+VWAPHMA(_src, _length) =>
+    ta.vwap(2 * ta.vwap(_src, _length / 2) - ta.vwap(_src, _length), math.round(math.sqrt(_length)))
+
+THMA(_src, _length) =>
+    _LENGTH
+      ta.wma(ta.wma(_src, _length / 3) * 3 - ta.wma(_src, _length / 2) - ta.wma(_src, _length), _length)
+
+
+
+hma = ta.hma(close, 30)
+rma = ta.rma(close,21)
+
+sma = ta.sma(close,21)
+ema = ta.ema(close,21)
+
+hmalen = input.int(21,'zhma')
+rmalen = input.int(21,'zrma')
+
+ehmalen = input.int(21 ,'zwma' )
+thmalen = input.int(21,'vwma')
+smalen = input.int(21, 'zema') 
+emalen = input.int(21, 'zsma')
+f_zhm(_src, _length) =>
+    var _l = (_length + 1) / 2
+    _srcL = _src + nz(ta.mom(_src, _l))
+    _zhma = ta.hma(close,hmalen)
+
+
+
+f_zrm(_src, _length) =>
+    var _l = (_length + 1) / 2
+    _srcL = _src + nz(ta.mom(_src, _l))
+    _zrma = ta.rma(_srcL,rmalen )
+
+
+
+
+f_em(_src, _length) =>
+    var _l = (_length + 1) / 2
+    _srcL = _src + nz(ta.mom(_src, _l))
+    _zema = ta.ema(_srcL,smalen)
+f_sm(_src, _length) =>
+    var _l = (_length + 1) / 2
+    _srcL = _src + nz(ta.mom(_src, _l))
+    _zsma = ta.sma(_srcL, emalen)
+
+
+
+
+
+f_zehma(_src, _length) =>
+    var _l = (_length + 1) / 2
+    _srcL = _src + nz(ta.mom(_src, _l))
+    _zehma = EHMA(close, hmalen)
+
+
+
+// ====== HMA FUNCTIONS ======
+
+// Clean Switch Functions for each HMA
+get_ma1(src, len) =>
+    switch ma1_mode
+        'Hma' => HMA(src, len)
+        'Thma' => THMA(src, len / 2)
+        'Ehma' => EHMA(src, len)
+        'zhm'  => f_zhm(src,len)
+        'zrm' =>  f_zrm(src,len)
+        'ema' =>  f_em(src,len)
+        'sma' => f_sm( src,len)
+     
+        'zehma' => f_zehma(src,len)
+ 
+
+get_ma2(src, len) =>
+    switch ma2_mode
+        'Hma' => HMA(src, len)
+        'Thma' => THMA(src, len / 2)
+        'Ehma' => EHMA(src, len)
+        'zhm'  => f_zhm(src,len)
+        'zrm' =>  f_zrm(src,len)
+        'ema' =>  f_em(src,len)
+        'sma' => f_sm( src,len)
+        'zehma' => f_zehma(src,len)
+
+get_ma3(src, len) =>
+    switch ma3_mode
+        'Hma' => HMA(src, len)
+        'Thma' => THMA(src, len / 2)
+        'Ehma' => EHMA(src, len)
+        'zhm'  => f_zhm(src,len)
+        'zrm' =>  f_zrm(src,len)
+        'ema' =>  f_em(src,len)
+        'sma' => f_sm( src,len)
+        'zehma' => f_zehma(src,len)
+
+// ====== COLOR CALCULATION FUNCTIONS ======
+// Slope-based color function
+f_slopeColor(bool direction, int previ) =>
+    up = ta.rising(close,previ)
+    down =ta.falling(close,previ)
+     
+    bool slope = direction ? up : down
+    
+
+
+// ====== CALCULATIONS ======
+// Calculate HMAs using clean switch logic
+ma1 = get_ma1(src_hull, int(length_hull1 * lengthMult1))
+ma2 = ma2_enabled ? get_ma2(src_hull, int(length_hull2 * lengthMult2)) : na
+ma3 = ma3_enabled ? get_ma3(src_hull, int(length_hull3 * lengthMult3)) : na
+
+// Current and historical values
+MHULL1 = ma1[0]
+MHULL2 = ma2[0]
+MHULL3 = ma3[0]
+SHULL1 = MHULL1[hist]
+SHULL2 = MHULL2[hist2]
+SHULL3 = MHULL3[hist3]
+// Define User Hex Colors
+c1 = input.color(#ff79ff, 'ML (Mid Negative)', inline='neg', group='Negative Slope Colors')
+c2 = input.color(#e600ff, 'HL (Low Negative)', inline='neg', group='Negative Slope Colors')
+c3 = input.color(color.rgb(157, 20, 136), 'MH (Mid Positive)', inline='pos', group='Positive Slope Colors')
+
+c4 = input.color(color.rgb(111, 0, 17), 'HH (Very Positive)', inline='pos', group='Positive Slope Colors')
+c5 = input.color(color.rgb(141, 71, 109), 'ML (Mid Negative)', inline='neg', group='Negative Slope Colors')
+c6 = input.color(color.rgb(155, 74, 192), 'HL (Low Negative)', inline='neg', group='Negative Slope Colors')
+c7 = input.color(color.rgb(126, 55, 207), 'LL (Very Negative)', inline='neg', group='Negative Slope Colors')
+c8 = input.color(#7eadf3, 'LH (Low Positive)', inline='pos', group='Positive Slope Colors')
+c9 = input.color(color.rgb(81, 200, 255), 'MH (Mid Positive)', inline='pos', group='Positive Slope Colors')
+ca = input.color(#009dff, 'HH (Very Positive)', inline='pos', group='Positive Slope Colors')
+cb = input.color(#237400, 'LL (Very Negative)', inline='neg', group='Negative Slope Colors')
+cc = input.color(#6bbc49, 'LL (Very Negative)', inline='neg', group='Negative Slope Colors')
+cd = input.color(#1ba071, 'LL (Very Negative)', inline='neg', group='Negative Slope Colors')
+ce = input.color(color.rgb(42, 255, 198), 'LL (Very Negative)', inline='neg', group='Negative Slope Colors')
+cf = input.color(color.rgb(31, 148, 178), 'LL (Very Negative)', inline='neg', group='Negative Slope Colors')
+
+
+colorUpBottom = color.new(#09a3b8, 0) // Dark Teal (Bottom of Upward range, Bottom of Downward range)
+colorUpTop = color.new(#a517e7, 0) // Bright Magenta (Top of Upward range)
+colorDownTop = color.new(#360079, 0) // Purple/Magenta (Top of Downward range)
+
+n=input.int(1,'n')
+// Calculate dynamic slope range
+slope = MHULL1 - MHULL1[n] // Slope calculation
+rangeLen = 50 // Period to check historical slope range
+maxSlope = ta.highest(math.abs(slope), rangeLen)
+minSlope = 0.0 // Slope can be normalized around 0 for up/down logic
+normalizedSlope = math.sign(slope) * (math.abs(slope) / maxSlope) // Range will be approximately -1 to 1 dynamically
+
+m1Xup  = ta.crossover(MHULL1,SHULL1)
+m2Xup  = ta.crossover(MHULL2,SHULL2)
+m3Xup  = ta.crossover(MHULL3,SHULL3)
+m1Xdn = ta.crossunder(MHULL1,SHULL1)
+m2Xdn = ta.crossunder(MHULL2,SHULL2)
+m3Xdn = ta.crossunder(MHULL3,SHULL3)
+
+
+///MHULL1
+ss = ta.crossover(MHULL1,SHULL1)
+alertcondition(ss,'ma1 cross ovr1','ma1 long')
+// Get colors based on individual slopes
+hullColor1 = slope >= 0 ? color.from_gradient(normalizedSlope, minSlope, 1.0, colorUpBottom, colorUpTop) : color.from_gradient(normalizedSlope, -1.0, minSlope, colorDownTop,c1 )
+hullColor11 = slope >= 0 ? color.from_gradient(normalizedSlope, minSlope, 1.0, colorDownTop, c4) : color.from_gradient(normalizedSlope, -1.0, minSlope, c1, colorDownTop)
+
+
+// ====== PLOTS ======
+// MA1 Plots (always declared)
+Fi1_a = plot(ma1_plot ? MHULL1 : na , title='MHULL1', color=#000000, linewidth=4)
+Fi1_b = plot(MHULL1, title='MHULL1', color=#000000, linewidth=4)
+
+Fi1 = plot(MHULL1, title='MHULL1', color=  MHULL1[1] >SHULL1  ? #0080ff : #ff6a00, linewidth=1)
+Fi2 = plot(SHULL1, title='SHULL1', color= MHULL1[1] >SHULL1  ? #0080ff : #ff6a00 ,linewidth=1)
+fill(plot1 = Fi1,plot2 = Fi2, top_value = MHULL1, bottom_value = SHULL1, top_color = MHULL1[1]> SHULL1 ? hullColor1 : na ,bottom_color =hullColor11, title='MA1 Band')
+
+
+n2 = input.int(5, 'ma2')
+// Calculate dynamic slope range
+slope2 = MHULL2 - MHULL2[n2] // Slope calculation
+rangeLen2 = 50 // Period to check historical slope range
+maxSlope2 = ta.highest(math.abs(slope), rangeLen)
+minSlope2 = 0.0 // Slope can be normalized around 0 for up/down logic
+normalizedSlope2 = math.sign(slope) * (math.abs(slope) / maxSlope) // Range will be approximately -1 to 1 dynamically
+hullColor2 = slope >= 0 ? color.from_gradient(normalizedSlope2, minSlope2, 1.0, color.rgb(18, 150, 97), #0f0fff) : color.from_gradient(normalizedSlope2, -1.0, minSlope2, #8800ff,#28ba9d)
+hullColor22 = slope >= 0 ? color.from_gradient(normalizedSlope2, minSlope2, 1.0, #530c47, #000000) : color.from_gradient(normalizedSlope2, -1.0, minSlope2, color.rgb(70, 124, 149),color.rgb(129, 17, 86))
+
+//hullColor22 = f_slopeColor(MHULL2, SHULL2)
+// hullColor3 = f_slopeColor(MHULL3, SHULL3)
+
+
+Fi3b = plot(ma2_enabled ? MHULL2 : na, title='MHULL2', color= MHULL2 > MHULL2 [1] ? #000000 : #000000, linewidth=4)
+Fi4b = plot(ma2_enabled ? SHULL2 : na, title='SHULL2', color= MHULL2 > MHULL2 [1] ? #000000 : #000000, linewidth=4)
+Fi3 = plot(ma2_enabled ? MHULL2 : na, title='MHULL2', color= MHULL2 > MHULL2 [1] ? #ffffff53 : #000000, linewidth=1)
+Fi4 = plot(ma2_enabled ? SHULL2 : na, title='SHULL2', color= MHULL2 > MHULL2 [1] ? #ffffff30 : #000000, linewidth=1)
+fill(Fi3, Fi4, title='MA2 Band', color=color.new(hullColor22, fill_transparency))
+fill(plot1 = Fi3,plot2 = Fi4, top_value = MHULL2, bottom_value = SHULL2, top_color = MHULL2[1]> SHULL2 ? hullColor22 : na ,bottom_color =hullColor2, title='MA1 Band')
+
+if m1Xup
+    alert('m1xup',"habugers1")
+alertcondition(m1Xup,'longit','longerr')

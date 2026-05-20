@@ -1,0 +1,1004 @@
+//@version=5
+indicator("Open Interest [OI] & Liquidation Flow", shorttitle="📊OI&LF", overlay=false, max_labels_count=500, max_lines_count=500, max_boxes_count=500, precision=4)
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+//                        "Institutional Flow Detection Through Derivatives Analytics"
+//                              Advanced Multi-Timeframe Analysis Engine
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 📐 INPUTS
+// ───────────────────────────────────────────────────────────────────────────────────────────────────────
+grpAnalysis = "📐 Analysis Parameters"
+analysisLength = input.int(14, "Analysis Length", minval=5, maxval=50, group=grpAnalysis,
+     tooltip="Lookback period for CVD, MFI, and Volatility calculations.\n\n" +
+             "WHAT IT CONTROLS:\n" +
+             "This sets the 'memory' of the flow engine. It determines how far back the script " +
+             "looks to calculate cumulative volume delta and money flow.\n\n" +
+             "TIMEFRAME RECOMMENDATIONS:\n" +
+             "• 1m: 10-14 (Fast response for scalping)\n" +
+             "• 5m: 14 (Default, balanced)\n" +
+             "• 1h: 21 (Smoother, filters noise)\n" +
+             "• 4h: 21-34 (Trend following)\n\n" +
+             "IMPACT:\n" +
+             "Lower (8-10): Faster signals, more noise.\n" +
+             "Higher (20-30): More reliable signals, slightly more lag.")
+zScoreLength = input.int(50, "Normalization Period", minval=20, maxval=200, group=grpAnalysis,
+     tooltip="Lookback period for Z-Score statistical normalization.\n\n" +
+             "THE SECRET SAUCE:\n" +
+             "This converts raw data (like volume spikes) into standard deviations (σ). " +
+             "This allows the script to adapt to any asset automatically.\n\n" +
+             "SETTINGS GUIDE:\n" +
+             "• 30-40: Highly adaptive, adjusts quickly to volatility bursts (Crypto).\n" +
+             "• 50: Standard setting (Forex/Indices/Gold).\n" +
+             "• 100+: Very stable, requires massive outlier events to trigger signals.\n\n" +
+             "DEFAULT (50): Provides the best balance between responsiveness and false signal filtration.")
+signalCooldown = input.int(8, "Signal Cooldown (bars)", minval=3, maxval=50, group=grpAnalysis,
+     tooltip="Minimum number of bars required between primary BUY/SELL signals.\n\n" +
+             "SPAM FILTER:\n" +
+             "Prevents the indicator from printing clustered signals during choppy consolidation.\n\n" +
+             "TIMEFRAME TUNING:\n" +
+             "• 1m Scalping: 5-8 bars (capture rapid reversals).\n" +
+             "• 5m Day Trading: 8-12 bars (let the trade breathe).\n" +
+             "• 1h Swing: 5-8 bars (signals are naturally rarer).\n\n" +
+             "NOTE: Does not apply to 'Minor' triangle signals, only major BUY/SELL labels.")
+grpThresholds = "⚠️ Sensitivity"
+sensitivity = input.string("Normal", "Signal Sensitivity", options=["Conservative", "Normal", "Aggressive"], group=grpThresholds,
+     tooltip="Master control for signal generation strictness.\n\n" +
+             "MODES:\n" +
+             "🛡️ CONSERVATIVE:\n" +
+             "• Thresholds increased by 40%\n" +
+             "• Fewer signals, higher win-rate probability\n" +
+             "• Best for: Trend following, higher timeframes (4h+)\n\n" +
+             "⚖️ NORMAL (Default):\n" +
+             "• Balanced thresholds\n" +
+             "• Good mix of opportunity and reliability\n" +
+             "• Best for: 5m/15m Day Trading\n\n" +
+             "⚔️ AGGRESSIVE:\n" +
+             "• Thresholds lowered by 35%\n" +
+             "• Frequent signals, catches early reversals\n" +
+             "• More false positives (requires strict risk management)\n" +
+             "• Best for: 1m Scalping or high-volatility assets")
+grpDisplay = "📈 Display Options"
+showOI = input.bool(true, "Show Position Flow (OI)", group=grpDisplay,
+     tooltip="Displays the 'Position Flow' column/line in the lower pane.\n\n" +
+             "WHAT IT IS:\n" +
+             "A composite metric estimating Net Positioning based on Volume Delta, " +
+             "Absorption, and Institutional Bias.\n\n" +
+             "INTERPRETATION:\n" +
+             "• Tall Green: Aggressive Long positioning\n" +
+             "• Tall Red: Aggressive Short positioning\n" +
+             "• Divergence: Price making highs + Position Flow dropping = REVERSAL.")
+showFunding = input.bool(true, "Show Crowd Sentiment", group=grpDisplay,
+     tooltip="Displays the 'Crowd' column/line in the lower pane.\n\n" +
+             "CONTRARIAN INDICATOR:\n" +
+             "Estimates where the 'herd' is positioned based on RSI extremes, " +
+             "Fair Value deviation, and Chase behavior.\n\n" +
+             "HOW TO USE:\n" +
+             "When Crowd is extremely HIGH (Red), expect a crash (Long Squeeze).\n" +
+             "When Crowd is extremely LOW (Green), expect a pump (Short Squeeze).")
+showSkew = input.bool(true, "Show Fear/Greed Skew", group=grpDisplay,
+     tooltip="Displays the 'Skew' line in the lower pane.\n\n" +
+             "VOLATILITY SKEW:\n" +
+             "Measures the difference between upside volatility and downside volatility.\n\n" +
+             "• Positive Skew (Purple): Fear is dominant. Puts/Shorts are expensive.\n" +
+             "• Negative Skew (Blue): Greed is dominant. Calls/Longs are expensive.")
+showComposite = input.bool(true, "Show Composite Signal", group=grpDisplay,
+     tooltip="Displays the master 'Composite' line in the lower pane.\n\n" +
+             "THE VERDICT:\n" +
+             "A weighted average of all 20+ factors (Flow + Crowd + Skew + Momentum).\n\n" +
+             "• Above 0: Net Bullish environment\n" +
+             "• Below 0: Net Bearish environment\n" +
+             "• Crossing Zero: Often marks the exact trend reversal point.")
+showLiquidationZones = input.bool(true, "Show Risk Indicator", group=grpDisplay,
+     tooltip="Displays 'High Risk' diamond markers at the top of the lower pane.\n\n" +
+             "LIQUIDATION RISK:\n" +
+             "Appears when multiple risk factors align (Crowding + Exhaustion + Divergence).\n\n" +
+             "WARNING:\n" +
+             "Do not enter new positions in the direction of the trend when this appears. " +
+             "A flush/liquidation event is statistically probable.")
+grpOpt = "🧪 Optimizer Engine"
+optMode = input.bool(true, "Enable Optimizer", group=grpOpt,
+     tooltip="Toggle the built-in backtesting optimizer engine.\n\n" +
+             "⚠️ IMPORTANT: This is a SIMULATION tool, not a live trading engine.\n\n" +
+             "WHAT IT DOES:\n" +
+             "When enabled, runs a simplified backtest across ALL visible chart data:\n" +
+             "• Enters on confirmed DFI BUY/SELL signals\n" +
+             "• Exits on: SL hit, TP hit, or opposite signal\n" +
+             "• Tracks: Win rate, profit factor, total trades, expectancy\n" +
+             "• Calculates stability score (ROBUST/STABLE/FRAGILE/OVERFIT)\n\n" +
+             "WHEN ENABLED:\n" +
+             "+ Dashboard shows Optimizer section with backtest metrics\n" +
+             "+ Can test different TP/SL multipliers quickly\n" +
+             "+ Visual feedback on signal quality\n" +
+             "+ Stability rating guides live trading decisions\n\n" +
+             "HOW TO USE:\n" +
+             "1. Load historical data (500+ bars minimum)\n" +
+             "2. Enable Optimizer\n" +
+             "3. Adjust TP/SL multipliers below\n" +
+             "4. Check dashboard for Win Rate, Profit Factor, Stability\n" +
+             "5. Iterate until reaching ROBUST or STABLE rating\n\n" +
+             "WHAT TO LOOK FOR:\n" +
+             "• Win Rate: Target 50-60%\n" +
+             "• Profit Factor: Target 1.5+ (ROBUST requires 1.5+)\n" +
+             "• Total Trades: Minimum 20 for statistical relevance")
+optTP = input.float(1.0, "TP (xATR)", minval=0.5, maxval=10.0, step=0.1, group=grpOpt,
+     tooltip="Take Profit multiplier for Optimizer backtesting (ATR-based).\n\n" +
+             "MULTIPLIER TESTING:\n" +
+             "Use this to find optimal TP for your instrument/timeframe:\n\n" +
+             "• Start at 2.0 (default)\n" +
+             "• Check Win Rate and Profit Factor\n" +
+             "• If Win Rate < 50%: Lower TP (try 1.5)\n" +
+             "• If Win Rate > 65%: Raise TP (try 2.5 or 3.0)\n" +
+             "• Goal: 50-60% Win Rate with Profit Factor > 1.5")
+optSL = input.float(2.0, "SL (xATR)", minval=0.5, maxval=10.0, step=0.1, group=grpOpt,
+     tooltip="Stop Loss multiplier for Optimizer backtesting (ATR-based).\n\n" +
+             "MULTIPLIER TESTING:\n" +
+             "Use this to find optimal SL for your instrument/timeframe:\n\n" +
+             "• Start at 1.5 (default)\n" +
+             "• Check Win Rate\n" +
+             "• If Win Rate < 40%: SL too tight, widen to 2.0\n" +
+             "• If Win Rate > 70%: SL too wide, tighten to 1.0-1.2\n" +
+             "• Goal: Balanced win rate with acceptable max loss")
+grpOverlay = "〰️ Main Chart Overlays"
+showSignals = input.bool(true, "Show Buy/Sell Signals", group=grpOverlay,
+     tooltip="Toggle the main chart BUY/SELL labels and triangle markers.\n\n" +
+             "SIGNAL TYPES:\n" +
+             "• LABELS (Buy/Sell): Primary reversals. Confirmed by multi-factor alignment.\n" +
+             "• TRIANGLES: Minor signals. Good for scaling in or scalping.\n\n" +
+             "STRATEGY:\n" +
+             "Take Primary signals for swing entries. Use Minor signals for adding to winners.")
+showZones = input.bool(true, "Show Supply/Demand Zones", group=grpOverlay,
+     tooltip="Plots dynamic Support (Demand) and Resistance (Supply) boxes based on signal origination.\n\n" +
+             "LOGIC:\n" +
+             "When a strong institutionally-backed signal fires, that price level " +
+             "becomes a defended zone.\n\n" +
+             "USAGE:\n" +
+             "• Price retesting a Green Zone: Bounce likely (Long entry).\n" +
+             "• Price retesting a Red Zone: Rejection likely (Short entry).")
+showKeyLevels = input.bool(true, "Show Key Levels", group=grpOverlay,
+     tooltip="Extends lines from significant high/lows where flow reversed.\n\n" +
+             "• Green Lines: Previous Bullish Reversal Points (Support)\n" +
+             "• Red Lines: Previous Bearish Reversal Points (Resistance)\n\n" +
+             "Differs from Zones as these are exact price levels rather than areas.")
+showGlowEffects = input.bool(true, "Enable Glow Effects", group=grpOverlay,
+     tooltip="Adds aesthetic glow to Key Levels.\n\n" +
+             "Disable this if you find the chart too cluttered or if you are " +
+             "experiencing performance issues on older devices.")
+maxZones = input.int(3, "Max Active Zones", minval=1, maxval=6, group=grpOverlay,
+     tooltip="Limits the number of Supply/Demand boxes kept on the chart.\n\n" +
+             "• Lower (1-3): Cleaner chart, focuses only on most recent structure.\n" +
+             "• Higher (4-6): Shows deeper historical structure.")
+maxKeyLevels = input.int(5, "Max Key Levels", minval=1, maxval=10, group=grpOverlay,
+     tooltip="Limits the number of extended Support/Resistance lines.\n\n" +
+             "Keeps the chart clean by automatically deleting old levels as new signals form.")
+grpTheme = "🎨 Visual Theme"
+colorTheme = input.string("Quantum Dark", "Select Theme", options=["Quantum Dark", "Neon Tokyo", "Ocean Depths", "Terminal Green", "Sunset Blaze", "Arctic Aurora"], group=grpTheme,
+     tooltip="Controls the overall color palette for the dashboard and visualizer.\n\n" +
+             "THEME PROFILES:\n" +
+             "• Quantum Dark: High contrast neon on dark (Standard)\n" +
+             "• Neon Tokyo: Cyberpunk pinks and cyans\n" +
+             "• Ocean Depths: Professional blues and teals\n" +
+             "• Terminal Green: Old school institutional look\n\n" +
+             "RECOMMENDATION:\n" +
+             "Use 'Quantum Dark' for dark mode charts to maximize signal visibility. " +
+             "Use 'Ocean Depths' for a more subtle, less distracting professional workspace.")
+vizMode = input.string("Classic Flow", "Visualization Mode", 
+     options=["Classic Flow", "Heatmap Matrix", "Oscillator Pro", "Delta Waterfall"], 
+     group=grpTheme,
+     tooltip="Determines how the derivatives data is calculated and displayed in the lower pane.\n\n" +
+             "MODES EXPLAINED:\n" +
+             "• CLASSIC FLOW (Default):\n" +
+             "  Standard multi-column view. Height = Intensity.\n" +
+             "  Best for general purpose trading and spotting divergences.\n\n" +
+             "• HEATMAP MATRIX:\n" +
+             "  Intensity-based color grid. Ignores height, focuses on density.\n" +
+             "  Best for identifying clusters of institutional activity.\n\n" +
+             "• OSCILLATOR PRO:\n" +
+             "  Zero-centered momentum lines.\n" +
+             "  Best for spotting crossovers and zero-line rejections.\n\n" +
+             "• DELTA WATERFALL:\n" +
+             "  Cascading momentum bars that stack net pressure.\n" +
+             "  Best for visualizing the 'weight' of the market.")
+grpPanel = "📋 Dashboard"
+showInfoPanel = input.bool(true, "Show Dashboard", group=grpPanel,
+     tooltip="Toggles the data table on the main chart.\n\n" +
+             "DISPLAYS:\n" +
+             "• Real-time Z-Scores for Velocity & Acceleration\n" +
+             "• Crowd Sentiment Status\n" +
+             "• Fear/Greed Skew\n" +
+             "• Liquidation Risk %\n" +
+             "• Current Signal Status")
+panelPosition = input.string("Bottom Right", "Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=grpPanel,
+     tooltip="Location of the dashboard table on your screen.")
+panelSize = input.string("Normal", "Size", options=["Compact", "Normal", "Extended"], group=grpPanel,
+     tooltip="Scaling of the dashboard text.\n\n" +
+             "• Compact: For mobile or small laptops.\n" +
+             "• Normal: Standard 1080p monitors.\n" +
+             "• Extended: 4k monitors or presentation mode.")
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 🔍 THEME COLORS
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+bullColor = switch colorTheme
+    "Quantum Dark" => #00FF88
+    "Neon Tokyo" => #00FFAA
+    "Ocean Depths" => #00CED1
+    "Terminal Green" => #00FF00
+    "Sunset Blaze" => #FFD700
+    "Arctic Aurora" => #00FF7F
+    => #00FF88
+bearColor = switch colorTheme
+    "Quantum Dark" => #FF0066
+    "Neon Tokyo" => #FF0055
+    "Ocean Depths" => #FF6B6B
+    "Terminal Green" => #FF0000
+    "Sunset Blaze" => #FF4136
+    "Arctic Aurora" => #FF4500
+    => #FF0066
+neutralColor = switch colorTheme
+    "Quantum Dark" => #8899AA
+    "Neon Tokyo" => #8899AA
+    "Ocean Depths" => #708090
+    "Terminal Green" => #888888
+    "Sunset Blaze" => #AAAAAA
+    "Arctic Aurora" => #B0C4DE
+    => #8899AA
+accentColor1 = switch colorTheme
+    "Quantum Dark" => #00CCFF
+    "Neon Tokyo" => #00DDFF
+    "Ocean Depths" => #40E0D0
+    "Terminal Green" => #00FFFF
+    "Sunset Blaze" => #FFA07A
+    "Arctic Aurora" => #7FFFD4
+    => #00CCFF
+accentColor2 = switch colorTheme
+    "Quantum Dark" => #AA00FF
+    "Neon Tokyo" => #FF00FF
+    "Ocean Depths" => #9370DB
+    "Terminal Green" => #FFFF00
+    "Sunset Blaze" => #FF6347
+    "Arctic Aurora" => #9932CC
+    => #AA00FF
+accentColor3 = switch colorTheme
+    "Quantum Dark" => #FFCC00
+    "Neon Tokyo" => #FFFF00
+    "Ocean Depths" => #FF8C00
+    "Terminal Green" => #FF00FF
+    "Sunset Blaze" => #FFD700
+    "Arctic Aurora" => #00BFFF
+    => #FFCC00
+warningColor = #FF6600
+criticalColor = #FF0000
+safeColor = #00FF88
+bgColor = switch colorTheme
+    "Quantum Dark" => #0A0A14
+    "Neon Tokyo" => #0A0A14
+    "Ocean Depths" => #0C1929
+    "Terminal Green" => #000000
+    "Sunset Blaze" => #1A1209
+    "Arctic Aurora" => #0D1B2A
+    => #0A0A14
+frameColor = switch colorTheme
+    "Quantum Dark" => #00CCFF
+    "Neon Tokyo" => #00DDFF
+    "Ocean Depths" => #1E90FF
+    "Terminal Green" => #00FF00
+    "Sunset Blaze" => #FF8C00
+    "Arctic Aurora" => #7B68EE
+    => #00CCFF
+// ─────────────────────────────────────────────────────────────────────────────
+// ⚖️ THRESHOLD MULTIPLIERS
+// ─────────────────────────────────────────────────────────────────────────────
+thresholdMult = sensitivity == "Conservative" ? 1.4 : sensitivity == "Aggressive" ? 0.65 : 1.0
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 🔍 SMART SYMBOL DETECTION
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+isCME = str.contains(str.lower(syminfo.prefix), "cme") or str.contains(str.lower(syminfo.prefix), "comex") or str.contains(str.lower(syminfo.prefix), "nymex") or str.contains(str.lower(syminfo.prefix), "cbot")
+isCrypto = str.contains(str.lower(syminfo.prefix), "binance") or str.contains(str.lower(syminfo.prefix), "bybit") or str.contains(str.lower(syminfo.prefix), "okx") or str.contains(str.lower(syminfo.prefix), "coinbase")
+isIndian = str.contains(str.lower(syminfo.prefix), "nse") or str.contains(str.lower(syminfo.prefix), "bse") or str.contains(str.lower(syminfo.prefix), "mcx")
+isCryptoPerp = isCrypto and (str.contains(str.lower(syminfo.ticker), "perp") or str.contains(str.lower(syminfo.ticker), "swap") or str.contains(syminfo.ticker, ".P"))
+isFutures = isCME or isIndian or str.contains(syminfo.ticker, "1!") or str.contains(syminfo.ticker, "2!")
+marketTypeStr = isCME ? "CME" : isCryptoPerp ? "PERP" : isCrypto ? "CRYPTO" : isIndian ? "F&O" : isFutures ? "FUT" : "EQ"
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 📡 LIVE OI DATA ATTEMPT
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+f_getOISymbol() =>
+    string baseSymbol = syminfo.basecurrency != "" ? syminfo.basecurrency : syminfo.root
+    string exchange = syminfo.prefix
+    string ticker = syminfo.ticker
+    string oiSym = "" 
+    if str.contains(str.lower(exchange), "binance")
+        oiSym := exchange + ":" + baseSymbol + "USDT_OI"
+    else if str.contains(str.lower(exchange), "bybit")
+        oiSym := exchange + ":" + baseSymbol + "USDT.P_OI"
+    else if str.contains(str.lower(exchange), "okx")
+        oiSym := exchange + ":" + baseSymbol + "-USDT-SWAP_OI"
+    else if isCME
+        oiSym := exchange + ":" + ticker + "_OI"
+    else if isIndian
+        oiSym := exchange + ":" + ticker + "_OI"
+    oiSym
+autoOISymbol = f_getOISymbol()
+[liveOI, oiFetchValid] = request.security(autoOISymbol != "" ? autoOISymbol : syminfo.tickerid, timeframe.period, [close, true], ignore_invalid_symbol=true, lookahead=barmerge.lookahead_off)
+liveOIValid = not na(liveOI) and oiFetchValid and liveOI > 0 and autoOISymbol != "" and math.abs(liveOI - close) > close * 0.5
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 🧠 ADVANCED POSITION FLOW ENGINE - 12 Factor Analysis
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+bodyMid = (open + close) / 2
+rangeTotal = high - low
+buyVol = rangeTotal > 0 ? volume * (close - low) / rangeTotal : volume / 2
+sellVol = rangeTotal > 0 ? volume * (high - close) / rangeTotal : volume / 2
+volumeDelta = buyVol - sellVol
+cvd = ta.ema(volumeDelta, 3)
+cvdMa = ta.sma(cvd, analysisLength)
+cvdSignal = cvd - cvdMa
+bodySize = math.abs(close - open)
+bodyRatio = bodySize / (rangeTotal + 0.0001)
+avgVolume = ta.sma(volume, 20)
+volumeSpike = volume / avgVolume
+absorption = volumeSpike > 1.5 and bodyRatio < 0.3 ? volumeSpike : 0
+absorptionBullish = absorption > 0 and close > open
+absorptionBearish = absorption > 0 and close < open
+exhaustionUp = volumeSpike > 2 and bodyRatio > 0.6 and close > open and high >= ta.highest(high, 10)
+exhaustionDown = volumeSpike > 2 and bodyRatio > 0.6 and close < open and low <= ta.lowest(low, 10)
+avgRange = ta.sma(rangeTotal, 20)
+rangeRatio = rangeTotal / (avgRange + 0.0001)
+effortResult = volumeSpike / (rangeRatio + 0.0001)
+positionBuilding = effortResult > 2 
+typicalPrice = hlc3
+rawMoneyFlow = typicalPrice * volume
+positiveFlow = typicalPrice > typicalPrice[1] ? rawMoneyFlow : 0
+negativeFlow = typicalPrice < typicalPrice[1] ? rawMoneyFlow : 0
+positiveFlowSum = math.sum(positiveFlow, analysisLength)
+negativeFlowSum = math.sum(negativeFlow, analysisLength)
+mfi = 100 - (100 / (1 + positiveFlowSum / (negativeFlowSum + 0.0001)))
+vwap20 = ta.vwma(close, 20)
+vwapDev = ta.stdev(close, 20)
+vwapZScore = (close - vwap20) / (vwapDev + 0.0001)
+rsiValue = ta.rsi(close, 14)
+priceHigh = ta.highest(close, 14)
+priceLow = ta.lowest(close, 14)
+bullishDiv = close <= priceLow * 1.01 and rsiValue > ta.lowest(rsiValue, 14) * 1.1
+bearishDiv = close >= priceHigh * 0.99 and rsiValue < ta.highest(rsiValue, 14) * 0.9
+volWeightedClose = ta.vwma(close, analysisLength)
+volWeightedTrend = (close - volWeightedClose) / volWeightedClose * 100
+institutionalBar = volumeSpike > 1.5 and bodyRatio > 0.5
+retailBar = volumeSpike < 0.7 and bodyRatio < 0.4
+institutionalBias = math.sum(institutionalBar and close > open ? 1 : institutionalBar and close < open ? -1 : 0, 20)
+pivotHigh = ta.pivothigh(high, 5, 5)
+pivotLow = ta.pivotlow(low, 5, 5)
+nearSupport = not na(pivotLow) and low <= pivotLow * 1.005
+nearResistance = not na(pivotHigh) and high >= pivotHigh * 0.995
+roc5 = ta.roc(close, 5)
+roc10 = ta.roc(close, 10)
+momAccel = roc5 - (roc10 / 2)
+momAccelZ = momAccel / (ta.stdev(momAccel, zScoreLength) + 0.0001)
+upVolume20 = math.sum(close > close[1] ? volume : 0, 20)
+downVolume20 = math.sum(close < close[1] ? volume : 0, 20)
+volImbalance = (upVolume20 - downVolume20) / (upVolume20 + downVolume20 + 0.0001)
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 📊 COMPOSITE POSITION FLOW CALCULATION
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+positionFlowRaw = 0.0
+positionFlowRaw += cvdSignal > 0 ? math.min(cvdSignal / avgVolume * 100, 3) : math.max(cvdSignal / avgVolume * 100, -3)
+mfiNorm = (mfi - 50) / 50
+positionFlowRaw += mfiNorm * 1.5
+positionFlowRaw += volImbalance * 1.5
+positionFlowRaw += institutionalBias / 10
+positionFlowRaw += math.max(math.min(vwapZScore, 2), -2) * 0.5
+positionFlowRaw += absorptionBullish ? 0.5 : absorptionBearish ? -0.5 : 0
+if positionBuilding
+    positionFlowRaw += close > close[1] ? 0.3 : -0.3
+positionFlow = ta.ema(positionFlowRaw, 5)
+openInterest = liveOIValid ? liveOI : positionFlow * avgVolume / 10
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 💰 ADVANCED CROWD SENTIMENT ENGINE - 8 Factor Analysis  
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+fairValueDev = (close - vwap20) / vwap20 * 100
+crowdedLong = fairValueDev > 1.5
+crowdedShort = fairValueDev < -1.5
+rsiExtreme = rsiValue > 70 ? (rsiValue - 70) / 30 : rsiValue < 30 ? (rsiValue - 30) / 30 : 0
+var int consUp = 0
+var int consDown = 0
+consUp := close > close[1] ? consUp + 1 : 0
+consDown := close < close[1] ? consDown + 1 : 0
+consecutiveBias = (consUp - consDown) / 7.0
+sma20 = ta.sma(close, 20)
+sma50 = ta.sma(close, 50)
+maDistance = (close - sma20) / sma20 * 100 + (close - sma50) / sma50 * 50
+bbBasis = ta.sma(close, 20)
+bbDev = ta.stdev(close, 20)
+bbUpper = bbBasis + bbDev * 2
+bbLower = bbBasis - bbDev * 2
+bbPosition = (close - bbLower) / (bbUpper - bbLower + 0.0001)
+bbExtreme = bbPosition > 0.9 ? (bbPosition - 0.9) * 10 : bbPosition < 0.1 ? (bbPosition - 0.1) * 10 : 0
+roc3 = ta.roc(close, 3)
+rocPersistence = math.sum(roc3 > 0 ? 1 : roc3 < 0 ? -1 : 0, 10) / 10
+volTrend = ta.sma(volume, 5) / ta.sma(volume, 20)
+volumeExpanding = volTrend > 1.2
+volumeContracting = volTrend < 0.8
+intrabarMom = (close - open) / (high - low + 0.0001)
+crowdSentimentRaw = 0.0
+crowdSentimentRaw += fairValueDev * 0.25
+crowdSentimentRaw += rsiExtreme * 30 * 0.2
+crowdSentimentRaw += consecutiveBias * 15 * 0.15
+crowdSentimentRaw += maDistance * 0.15
+crowdSentimentRaw += bbExtreme * 20 * 0.15
+crowdSentimentRaw += rocPersistence * 10 * 0.1
+crowdSentiment = ta.ema(crowdSentimentRaw, 5)
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 📐 FEAR/GREED (SKEW) ANALYSIS
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+upReturns = close > close[1] ? math.log(close / close[1]) : 0.0
+downReturns = close < close[1] ? math.log(close / close[1]) : 0.0
+upVol = ta.stdev(upReturns, analysisLength) * math.sqrt(252)
+downVol = ta.stdev(downReturns, analysisLength) * math.sqrt(252)
+volSkew = upVol > 0 and downVol > 0 ? (downVol - upVol) / ((upVol + downVol) / 2) * 100 : 0.0
+upVolSum = math.sum(close > close[1] ? volume : 0, analysisLength)
+downVolSum = math.sum(close < close[1] ? volume : 0, analysisLength)
+volumeSkew = (downVolSum - upVolSum) / (upVolSum + downVolSum + 0.0001) * 100
+compositeSkew = (volSkew * 0.5 + volumeSkew * 0.5)
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 📈 NORMALIZE ALL METRICS TO Z-SCORES
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+pfVelocity = positionFlow - positionFlow[1]
+pfVelocitySmooth = ta.ema(pfVelocity, 5)
+pfAccel = pfVelocity - pfVelocity[1]
+pfAccelSmooth = ta.ema(pfAccel, 5)
+pfVelMean = ta.sma(pfVelocitySmooth, zScoreLength)
+pfVelStdev = ta.stdev(pfVelocitySmooth, zScoreLength)
+pfVelocityZ = pfVelStdev != 0 ? (pfVelocitySmooth - pfVelMean) / pfVelStdev : 0.0
+pfAccelMean = ta.sma(pfAccelSmooth, zScoreLength)
+pfAccelStdev = ta.stdev(pfAccelSmooth, zScoreLength)
+pfAccelerationZ = pfAccelStdev != 0 ? (pfAccelSmooth - pfAccelMean) / pfAccelStdev : 0.0
+csMomentum = crowdSentiment - crowdSentiment[1]
+csMomentumSmooth = ta.ema(csMomentum, 5)
+csMean = ta.sma(crowdSentiment, zScoreLength)
+csStdev = ta.stdev(crowdSentiment, zScoreLength)
+crowdZ = csStdev != 0 ? (crowdSentiment - csMean) / csStdev : 0.0
+csMomMean = ta.sma(csMomentumSmooth, zScoreLength)
+csMomStdev = ta.stdev(csMomentumSmooth, zScoreLength)
+crowdMomentumZ = csMomStdev != 0 ? (csMomentumSmooth - csMomMean) / csMomStdev : 0.0
+skewMean = ta.sma(compositeSkew, zScoreLength)
+skewStdev = ta.stdev(compositeSkew, zScoreLength)
+skewZ = skewStdev != 0 ? (compositeSkew - skewMean) / skewStdev : 0.0
+priceVelocity = close - close[5]
+priceVelNorm = ta.stdev(priceVelocity, zScoreLength)
+priceVelocityZ = priceVelNorm != 0 ? priceVelocity / priceVelNorm : 0.0
+swingLookback = 15
+recentHigh = ta.highest(high, swingLookback)
+recentLow = ta.lowest(low, swingLookback)
+isNearHigh = high >= recentHigh * 0.997
+isNearLow = low <= recentLow * 1.003
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// ⚠️ RISK ANALYSIS
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+crowdingRisk = math.abs(crowdZ) > 1.5 ? math.abs(crowdZ) / 2 : 0.0
+accelerationRisk = math.abs(pfAccelerationZ) > 1.5 ? math.abs(pfAccelerationZ) / 2 : 0.0
+momDivergence = math.abs(priceVelocityZ) > 1.5 and math.abs(pfVelocityZ) < 0.5 ? 1.0 : 0.0
+skewExtremeRisk = math.abs(skewZ) > 1.5 ? math.abs(skewZ) / 2 : 0.0
+rsiExtremeRisk = rsiValue > 80 or rsiValue < 20 ? 1.0 : 0.0
+exhaustionRisk = exhaustionUp or exhaustionDown ? 1.5 : 0.0
+liquidationRisk = math.min((crowdingRisk * 15 + accelerationRisk * 20 + momDivergence * 15 + skewExtremeRisk * 15 + rsiExtremeRisk * 15 + exhaustionRisk * 20), 100)
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 🎯 COMPOSITE SENTIMENT SCORE
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+sentimentScore = 0.0
+sentimentScore += pfVelocityZ > 0.5 ? 20 : pfVelocityZ < -0.5 ? -20 : 0
+sentimentScore += pfAccelerationZ > 1 ? 5 : pfAccelerationZ < -1 ? -5 : 0
+sentimentScore += crowdZ < -0.5 ? 15 : crowdZ > 0.5 ? -15 : 0
+sentimentScore += crowdMomentumZ < -0.3 ? 5 : crowdMomentumZ > 0.3 ? -5 : 0
+sentimentScore += skewZ < -0.5 ? 12 : skewZ > 0.5 ? -12 : 0
+sentimentScore += priceVelocityZ > 0.5 ? 12 : priceVelocityZ < -0.5 ? -12 : 0
+sentimentScore += rsiValue < 40 ? 8 : rsiValue > 60 ? -8 : 0
+sentimentScore += cvdSignal > 0 ? 8 : cvdSignal < 0 ? -8 : 0
+sentimentScore += institutionalBias > 3 ? 4 : institutionalBias < -3 ? -4 : 0
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 🎯 SIGNAL DETECTION
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+var int lastBuyBar = 0
+var int lastSellBar = 0
+var int lastMinorBullBar = 0
+var int lastMinorBearBar = 0
+barsSinceLastBuy = bar_index - lastBuyBar
+barsSinceLastSell = bar_index - lastSellBar
+barsSinceLastMinorBull = bar_index - lastMinorBullBar
+barsSinceLastMinorBear = bar_index - lastMinorBearBar
+adjPFThreshold = 1.5 * thresholdMult
+adjCrowdThreshold = 1.0 * thresholdMult
+adjSkewThreshold = 1.2 * thresholdMult
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 🟢 BUY SIGNAL
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+buyPrimary1 = pfAccelerationZ < -adjPFThreshold     
+buyPrimary2 = crowdZ < -adjCrowdThreshold          
+buyPrimary3 = skewZ > adjSkewThreshold * 0.8    
+buyPrimary4 = rsiValue < 35               
+buyPrimaryCount = (buyPrimary1 ? 1 : 0) + (buyPrimary2 ? 1 : 0) + (buyPrimary3 ? 1 : 0) + (buyPrimary4 ? 1 : 0)
+buySecondary1 = isNearLow                            
+buySecondary2 = cvdSignal > 0                      
+buySecondary3 = mfi < 40                           
+buySecondary4 = bullishDiv                         
+buySecondary5 = absorptionBearish                
+buySecondary6 = exhaustionDown               
+buySecondary7 = volImbalance > 0.1              
+buySecondaryCount = (buySecondary1 ? 1 : 0) + (buySecondary2 ? 1 : 0) + (buySecondary3 ? 1 : 0) + (buySecondary4 ? 1 : 0) + (buySecondary5 ? 1 : 0) + (buySecondary6 ? 1 : 0) + (buySecondary7 ? 1 : 0)
+buyMomentum = rsiValue > rsiValue[1] or priceVelocityZ > priceVelocityZ[1]
+rawBuySignal = buyPrimaryCount >= 2 and buySecondaryCount >= 2 and buyMomentum and barsSinceLastBuy >= signalCooldown
+buySignal = rawBuySignal
+if buySignal
+    lastBuyBar := bar_index
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 🔴 SELL SIGNAL
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+sellPrimary1 = pfAccelerationZ > adjPFThreshold    
+sellPrimary2 = crowdZ > adjCrowdThreshold        
+sellPrimary3 = skewZ < -adjSkewThreshold * 0.8  
+sellPrimary4 = rsiValue > 65               
+sellPrimaryCount = (sellPrimary1 ? 1 : 0) + (sellPrimary2 ? 1 : 0) + (sellPrimary3 ? 1 : 0) + (sellPrimary4 ? 1 : 0)
+sellSecondary1 = isNearHigh                  
+sellSecondary2 = cvdSignal < 0                
+sellSecondary3 = mfi > 60                        
+sellSecondary4 = bearishDiv                       
+sellSecondary5 = absorptionBullish                  
+sellSecondary6 = exhaustionUp                       
+sellSecondary7 = volImbalance < -0.1                
+sellSecondaryCount = (sellSecondary1 ? 1 : 0) + (sellSecondary2 ? 1 : 0) + (sellSecondary3 ? 1 : 0) + (sellSecondary4 ? 1 : 0) + (sellSecondary5 ? 1 : 0) + (sellSecondary6 ? 1 : 0) + (sellSecondary7 ? 1 : 0)
+sellMomentum = rsiValue < rsiValue[1] or priceVelocityZ < priceVelocityZ[1]
+rawSellSignal = sellPrimaryCount >= 2 and sellSecondaryCount >= 2 and sellMomentum and barsSinceLastSell >= signalCooldown
+sellSignal = rawSellSignal
+if sellSignal
+    lastSellBar := bar_index
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// Minor Signals 
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+minorBullCondition = isNearLow and 
+     pfVelocityZ > 0.3 and 
+     crowdZ < 0.3 and 
+     rsiValue < 45 and rsiValue > rsiValue[1] and
+     cvdSignal > 0 and
+     not buySignal and
+     barsSinceLastMinorBull >= signalCooldown * 2 and 
+     barsSinceLastBuy >= signalCooldown
+rawMinorBull = minorBullCondition
+if rawMinorBull
+    lastMinorBullBar := bar_index
+minorBearCondition = isNearHigh and 
+     pfVelocityZ < -0.3 and 
+     crowdZ > 0.3 and 
+     rsiValue > 55 and rsiValue < rsiValue[1] and
+     cvdSignal < 0 and
+     not sellSignal and
+     barsSinceLastMinorBear >= signalCooldown * 2 and 
+     barsSinceLastSell >= signalCooldown
+rawMinorBear = minorBearCondition
+if rawMinorBear
+    lastMinorBearBar := bar_index
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 🧪 OPTIMIZER ENGINE
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+var float optEntryPrice = na
+var bool optInTrade = false
+var bool optIsLong = false
+var int btTotalTrades = 0
+var int btWins = 0
+var float btGrossProfit = 0.0
+var float btGrossLoss = 0.0
+atr14 = ta.atr(14)
+optBuySignal = buySignal
+optSellSignal = sellSignal
+optRiskExit = liquidationRisk > 75
+if optMode
+    if optInTrade
+        slPrice = optIsLong ? optEntryPrice - (atr14 * optSL) : optEntryPrice + (atr14 * optSL)
+        tpPrice = optIsLong ? optEntryPrice + (atr14 * optTP) : optEntryPrice - (atr14 * optTP)
+        hitSL = optIsLong ? low <= slPrice : high >= slPrice
+        hitTP = optIsLong ? high >= tpPrice : low <= tpPrice
+        shouldExit = optIsLong ? (sellSignal or optRiskExit) : (buySignal or optRiskExit)
+        if hitSL or hitTP or shouldExit
+            exitP = hitTP ? tpPrice : hitSL ? slPrice : close
+            pnl = optIsLong ? (exitP - optEntryPrice) : (optEntryPrice - exitP)
+            btTotalTrades += 1
+            if pnl > 0
+                btWins += 1
+                btGrossProfit += pnl
+            else
+                btGrossLoss += math.abs(pnl)
+            optInTrade := false
+            optEntryPrice := na      
+    if not optInTrade
+        if optBuySignal
+            optInTrade := true
+            optIsLong := true
+            optEntryPrice := close
+        else if optSellSignal
+            optInTrade := true
+            optIsLong := false
+            optEntryPrice := close
+btWinRate = btTotalTrades > 0 ? (btWins / btTotalTrades) * 100 : 0.0
+btProfitFactor = btGrossLoss > 0 ? btGrossProfit / btGrossLoss : btGrossProfit > 0 ? 99.9 : 0.0
+btExpectancy = btTotalTrades > 0 ? (btGrossProfit - btGrossLoss) / btTotalTrades : 0.0
+stabilityPoints = 0
+stabilityPoints += btWinRate >= 55 ? 25 : btWinRate >= 50 ? 15 : btWinRate >= 45 ? 5 : 0
+stabilityPoints += btExpectancy > 0.5 ? 25 : btExpectancy > 0.1 ? 15 : btExpectancy > 0 ? 5 : 0
+stabilityPoints += btTotalTrades >= 30 ? 25 : btTotalTrades >= 20 ? 15 : btTotalTrades >= 10 ? 5 : 0
+stabilityPoints += btProfitFactor >= 1.5 ? 25 : btProfitFactor >= 1.2 ? 15 : btProfitFactor >= 1.0 ? 5 : 0
+robustText = stabilityPoints >= 80 ? "ROBUST" : stabilityPoints >= 60 ? "STABLE" : stabilityPoints >= 40 ? "FRAGILE" : "OVERFIT"
+robustCol = stabilityPoints >= 80 ? bullColor : stabilityPoints >= 60 ? accentColor1 : stabilityPoints >= 40 ? accentColor3 : bearColor
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 📊 VISUALIZATION
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+float p1Value = na, float p2Value = na, float p3Value = na, float p4Value = na
+color p1Color = na, color p2Color = na, color p3Color = na, color p4Color = na
+if vizMode == "Classic Flow"
+    p1Value := showOI ? pfAccelerationZ * 10 : na
+    p2Value := showFunding ? crowdZ * 5 : na
+    p3Value := showSkew ? skewZ * 5 : na
+    p4Value := showComposite ? sentimentScore / 2 : na
+    pInt = math.min(math.abs(pfAccelerationZ) / 3, 1)
+    p1Color := pfAccelerationZ > 0 ? color.from_gradient(pInt, 0, 1, color.new(bullColor, 80), bullColor) : color.from_gradient(pInt, 0, 1, color.new(bearColor, 80), bearColor)
+    cInt = math.min(math.abs(crowdZ) / 3, 1)
+    p2Color := crowdZ > 0 ? color.from_gradient(cInt, 0, 1, color.new(bearColor, 70), bearColor) : color.from_gradient(cInt, 0, 1, color.new(bullColor, 70), bullColor)
+    p3Color := color.from_gradient(skewZ, -2, 2, bullColor, bearColor)
+    p4Color := color.from_gradient(sentimentScore, -100, 100, bearColor, bullColor)
+else if vizMode == "Heatmap Matrix"
+    p1Value := showOI ? 30 : na
+    p2Value := showFunding ? 10 : na
+    p3Value := showSkew ? -10 : na
+    p4Value := showComposite ? -30 : na
+    p1Color := pfAccelerationZ > 0 ? color.from_gradient(math.abs(pfAccelerationZ) / 3 * 100, 0, 100, color.new(bullColor, 90), bullColor) : color.from_gradient(math.abs(pfAccelerationZ) / 3 * 100, 0, 100, color.new(bearColor, 90), bearColor)
+    p2Color := crowdZ > 0 ? color.from_gradient(math.abs(crowdZ) / 3 * 100, 0, 100, color.new(bearColor, 90), bearColor) : color.from_gradient(math.abs(crowdZ) / 3 * 100, 0, 100, color.new(bullColor, 90), bullColor)
+    p3Color := skewZ > 0 ? color.from_gradient(math.abs(skewZ) / 3 * 100, 0, 100, color.new(bearColor, 90), bearColor) : color.from_gradient(math.abs(skewZ) / 3 * 100, 0, 100, color.new(bullColor, 90), bullColor)
+    p4Color := priceVelocityZ > 0 ? color.from_gradient(math.abs(priceVelocityZ) / 3 * 100, 0, 100, color.new(bullColor, 90), bullColor) : color.from_gradient(math.abs(priceVelocityZ) / 3 * 100, 0, 100, color.new(bearColor, 90), bearColor)
+else if vizMode == "Oscillator Pro"
+    p1Value := showOI ? pfAccelerationZ * 15 : na
+    p2Value := showFunding ? crowdZ * 10 : na
+    p3Value := showSkew ? skewZ * 8 : na
+    compOsc = (pfAccelerationZ * 0.4 + crowdMomentumZ * -0.3 + skewZ * -0.3) * 12
+    p4Value := showComposite ? compOsc : na
+    p1Color := color.new(pfAccelerationZ > 0 ? bullColor : bearColor, 40)
+    p2Color := crowdZ > 0 ? bearColor : bullColor
+    p3Color := color.from_gradient(skewZ, -2, 2, accentColor1, accentColor2)
+    p4Color := color.new(compOsc > 0 ? bullColor : bearColor, 20)
+else if vizMode == "Delta Waterfall"
+    pfLayer = pfAccelerationZ * 8
+    crowdLayer = crowdZ * 5
+    skewLayer = skewZ * 3
+    p1Value := showOI ? pfLayer : na
+    p2Value := showFunding ? pfLayer + crowdLayer : na
+    p3Value := showSkew ? pfLayer + crowdLayer + skewLayer : na
+    p4Value := pfLayer + crowdLayer + skewLayer
+    p1Color := color.new(pfLayer > 0 ? bullColor : bearColor, 60)
+    p2Color := color.new(crowdLayer > 0 ? bearColor : bullColor, 70)
+    p3Color := color.new(skewLayer > 0 ? accentColor2 : accentColor1, 75)
+    p4Color := color.new(frameColor, 40)
+plot(p1Value, "Position Flow", color=p1Color, style=vizMode == "Oscillator Pro" ? plot.style_histogram : plot.style_columns, linewidth=4)
+plot(p2Value, "Crowd", color=p2Color, style=vizMode == "Classic Flow" ? plot.style_area : vizMode == "Delta Waterfall" ? plot.style_line : plot.style_columns, linewidth=vizMode == "Heatmap Matrix" ? 8 : 2)
+plot(p3Value, "Skew", color=p3Color, style=vizMode == "Classic Flow" ? plot.style_line : vizMode == "Delta Waterfall" ? plot.style_line : plot.style_columns, linewidth=2)
+plot(p4Value, "Composite", color=p4Color, style=vizMode == "Classic Flow" ? plot.style_stepline_diamond : vizMode == "Delta Waterfall" ? plot.style_line : plot.style_columns, linewidth=vizMode == "Delta Waterfall" ? 3 : 2)
+hline(0, "Zero", color=color.new(neutralColor, 60), linestyle=hline.style_solid, linewidth=1)
+hline(20, "Upper", color=color.new(neutralColor, 85), linestyle=hline.style_dotted)
+hline(-20, "Lower", color=color.new(neutralColor, 85), linestyle=hline.style_dotted)
+bgcolor(sentimentScore > 50 ? color.new(bullColor, 96) : sentimentScore < -50 ? color.new(bearColor, 96) : na)
+plotshape(showLiquidationZones and liquidationRisk > 75, "High Risk", shape.diamond, location.top, criticalColor, size=size.tiny)
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 〰️ MAIN CHART SIGNALS
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+plotshape(showSignals and buySignal, "BUY", shape.labelup, location.belowbar, color=#00FF00, textcolor=color.white, size=size.normal, text="BUY", force_overlay=true)
+plotshape(showSignals and sellSignal, "SELL", shape.labeldown, location.abovebar, color=#FF0000, textcolor=color.white, size=size.normal, text="SELL", force_overlay=true)
+plotshape(showSignals and rawMinorBull, "Bull", shape.triangleup, location.belowbar, color=color.new(bullColor, 30), size=size.tiny, force_overlay=true)
+plotshape(showSignals and rawMinorBear, "Bear", shape.triangledown, location.abovebar, color=color.new(bearColor, 30), size=size.tiny, force_overlay=true)
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 📦 DYNAMIC ZONES
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+var float[] zoneTop = array.new_float(0)
+var float[] zoneBottom = array.new_float(0)
+var int[] zoneStartBar = array.new_int(0)
+var bool[] zoneIsBull = array.new_bool(0)
+var box[] zoneBoxes = array.new_box(0)
+zoneHeight = atr14 * 0.4
+if buySignal and showZones
+    if array.size(zoneTop) >= maxZones
+        if array.size(zoneBoxes) > 0
+            box.delete(array.shift(zoneBoxes))
+        array.shift(zoneTop)
+        array.shift(zoneBottom)
+        array.shift(zoneStartBar)
+        array.shift(zoneIsBull)   
+    array.push(zoneTop, recentLow + zoneHeight)
+    array.push(zoneBottom, recentLow - zoneHeight)
+    array.push(zoneStartBar, bar_index)
+    array.push(zoneIsBull, true)
+    array.push(zoneBoxes, box.new(na, na, na, na, force_overlay=true))
+if sellSignal and showZones
+    if array.size(zoneTop) >= maxZones
+        if array.size(zoneBoxes) > 0
+            box.delete(array.shift(zoneBoxes))
+        array.shift(zoneTop)
+        array.shift(zoneBottom)
+        array.shift(zoneStartBar)
+        array.shift(zoneIsBull)   
+    array.push(zoneTop, recentHigh + zoneHeight)
+    array.push(zoneBottom, recentHigh - zoneHeight)
+    array.push(zoneStartBar, bar_index)
+    array.push(zoneIsBull, false)
+    array.push(zoneBoxes, box.new(na, na, na, na, force_overlay=true))
+if showZones and array.size(zoneBoxes) > 0
+    for i = 0 to array.size(zoneBoxes) - 1
+        if i < array.size(zoneBoxes)
+            b = array.get(zoneBoxes, i)
+            top = array.get(zoneTop, i)
+            bottom = array.get(zoneBottom, i)
+            startBar = array.get(zoneStartBar, i)
+            isBull = array.get(zoneIsBull, i)            
+            box.set_lefttop(b, startBar, top)
+            box.set_rightbottom(b, bar_index + 10, bottom)
+            box.set_bgcolor(b, isBull ? color.new(bullColor, 88) : color.new(bearColor, 88))
+            box.set_border_color(b, isBull ? color.new(bullColor, 50) : color.new(bearColor, 50))
+            box.set_border_width(b, 2)
+            box.set_text(b, isBull ? "DEMAND" : "SUPPLY")
+            box.set_text_color(b, color.white)
+            box.set_text_size(b, size.tiny)
+            box.set_text_halign(b, text.align_right)
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 📍 KEY LEVELS
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+var line[] lvlLines = array.new_line(0)
+var line[] lvlGlows = array.new_line(0)
+var label[] lvlLabels = array.new_label(0)
+var float[] lvlPrices = array.new_float(0)
+var bool[] lvlIsBull = array.new_bool(0)
+var int[] lvlBars = array.new_int(0)
+if showKeyLevels and buySignal
+    if array.size(lvlPrices) >= maxKeyLevels
+        if array.size(lvlLines) > 0
+            line.delete(array.shift(lvlLines))
+        if array.size(lvlGlows) > 0 and showGlowEffects
+            line.delete(array.shift(lvlGlows))
+        if array.size(lvlLabels) > 0
+            label.delete(array.shift(lvlLabels))
+        array.shift(lvlPrices)
+        array.shift(lvlIsBull)
+        array.shift(lvlBars)   
+    array.push(lvlPrices, recentLow)
+    array.push(lvlIsBull, true)
+    array.push(lvlBars, bar_index)
+    array.push(lvlLines, line.new(na, na, na, na, force_overlay=true))
+    if showGlowEffects
+        array.push(lvlGlows, line.new(na, na, na, na, force_overlay=true))
+    array.push(lvlLabels, label.new(na, na, "", force_overlay=true))
+if showKeyLevels and sellSignal
+    if array.size(lvlPrices) >= maxKeyLevels
+        if array.size(lvlLines) > 0
+            line.delete(array.shift(lvlLines))
+        if array.size(lvlGlows) > 0 and showGlowEffects
+            line.delete(array.shift(lvlGlows))
+        if array.size(lvlLabels) > 0
+            label.delete(array.shift(lvlLabels))
+        array.shift(lvlPrices)
+        array.shift(lvlIsBull)
+        array.shift(lvlBars)    
+    array.push(lvlPrices, recentHigh)
+    array.push(lvlIsBull, false)
+    array.push(lvlBars, bar_index)
+    array.push(lvlLines, line.new(na, na, na, na, force_overlay=true))
+    if showGlowEffects
+        array.push(lvlGlows, line.new(na, na, na, na, force_overlay=true))
+    array.push(lvlLabels, label.new(na, na, "", force_overlay=true))
+if showKeyLevels and array.size(lvlLines) > 0
+    for i = 0 to array.size(lvlLines) - 1
+        if i < array.size(lvlLines)
+            lvlLine = array.get(lvlLines, i)
+            price = array.get(lvlPrices, i)
+            isBull = array.get(lvlIsBull, i)
+            startBar = array.get(lvlBars, i)
+            lvlColor = isBull ? bullColor : bearColor            
+            line.set_xy1(lvlLine, startBar - 5, price)
+            line.set_xy2(lvlLine, bar_index + 20, price)
+            line.set_color(lvlLine, color.new(lvlColor, 20))
+            line.set_width(lvlLine, 2)
+            line.set_style(lvlLine, line.style_solid)           
+            if showGlowEffects and i < array.size(lvlGlows)
+                glowLine = array.get(lvlGlows, i)
+                line.set_xy1(glowLine, startBar - 5, price)
+                line.set_xy2(glowLine, bar_index + 20, price)
+                line.set_color(glowLine, color.new(lvlColor, 70))
+                line.set_width(glowLine, 8)           
+            if i < array.size(lvlLabels)
+                lvlLabel = array.get(lvlLabels, i)
+                label.set_xy(lvlLabel, bar_index + 22, price)
+                label.set_text(lvlLabel, isBull ? "🟢" : "🔴")
+                label.set_style(lvlLabel, label.style_label_left)
+                label.set_color(lvlLabel, color.new(lvlColor, 60))
+                label.set_textcolor(lvlLabel, color.white)
+                label.set_size(lvlLabel, size.small)
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 📋 DASHBOARD 
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+tablePos = switch panelPosition
+    "Top Right" => position.top_right
+    "Top Left" => position.top_left
+    "Bottom Right" => position.bottom_right
+    "Bottom Left" => position.bottom_left
+    => position.top_right
+var table hud = table.new(tablePos, 4, 25, bgcolor=color.new(bgColor, 5), border_width=0, frame_width=2, frame_color=color.new(frameColor, 40))
+if showInfoPanel and barstate.islast
+    sz = panelSize == "Compact" ? size.tiny : panelSize == "Extended" ? size.normal : size.small
+    szS = panelSize == "Compact" ? size.tiny : panelSize == "Extended" ? size.small : size.small
+    dataQuality = liveOIValid ? "◈ LIVE" : "◈ PRO"
+    dataColor = liveOIValid ? safeColor : accentColor1
+    table.cell(hud, 0, 0, "📊OI&LF", bgcolor=color.new(frameColor, 70), text_color=color.white, text_size=sz)
+    table.cell(hud, 1, 0, syminfo.ticker, bgcolor=color.new(frameColor, 70), text_color=accentColor3, text_size=sz)
+    table.cell(hud, 2, 0, marketTypeStr, bgcolor=color.new(frameColor, 70), text_color=accentColor1, text_size=sz)
+    table.cell(hud, 3, 0, dataQuality, bgcolor=color.new(frameColor, 70), text_color=dataColor, text_size=sz)
+    pfVelCol = pfVelocityZ > 0.5 ? bullColor : pfVelocityZ < -0.5 ? bearColor : neutralColor
+    table.cell(hud, 0, 2, "VEL", text_color=neutralColor, text_size=sz)
+    table.cell(hud, 1, 2, str.tostring(pfVelocityZ, "#.##") + "σ", text_color=pfVelCol, text_size=sz)
+    table.cell(hud, 2, 2, pfVelocityZ > 0 ? "⇑" : "⇓", text_color=pfVelCol, text_size=sz)
+    table.cell(hud, 3, 2, pfVelocityZ > 1 ? "STRONG" : pfVelocityZ < -1 ? "WEAK" : "NORMAL", text_color=pfVelCol, text_size=szS)
+    pfAccelCol = math.abs(pfAccelerationZ) > adjPFThreshold ? (pfAccelerationZ > 0 ? bullColor : bearColor) : neutralColor
+    table.cell(hud, 0, 3, "ACC", text_color=neutralColor, text_size=sz)
+    table.cell(hud, 1, 3, str.tostring(pfAccelerationZ, "#.##") + "σ", text_color=pfAccelCol, text_size=sz)
+    table.cell(hud, 2, 3, pfAccelerationZ > 0 ? "⚡" : "💨", text_color=pfAccelCol, text_size=sz)
+    table.cell(hud, 3, 3, math.abs(pfAccelerationZ) > adjPFThreshold ? "EXTREME" : "NORMAL", text_color=pfAccelCol, text_size=szS)
+    crowdCol = crowdZ > 0.5 ? bearColor : crowdZ < -0.5 ? bullColor : neutralColor
+    table.cell(hud, 0, 5, "SENT", text_color=neutralColor, text_size=sz)
+    table.cell(hud, 1, 5, str.tostring(crowdZ, "#.##") + "σ", text_color=crowdCol, text_size=sz)
+    table.cell(hud, 2, 5, crowdZ > 0 ? "LONG" : "SHORT", text_color=crowdCol, text_size=sz)
+    table.cell(hud, 3, 5, math.abs(crowdZ) > 1.5 ? "CROWDED" : "MIXED", text_color=crowdCol, text_size=szS)
+    liqColor = liquidationRisk > 75 ? criticalColor : liquidationRisk > 50 ? warningColor : liquidationRisk > 25 ? accentColor3 : safeColor
+    riskBar = liquidationRisk >= 75 ? "████" : liquidationRisk >= 50 ? "███░" : liquidationRisk >= 25 ? "██░░" : "█░░░"
+    table.cell(hud, 0, 7, "RISK", text_color=neutralColor, text_size=sz)
+    table.cell(hud, 1, 7, str.tostring(liquidationRisk, "#") + "%", text_color=liqColor, text_size=sz)
+    table.cell(hud, 2, 7, riskBar, text_color=liqColor, text_size=sz)
+    table.cell(hud, 3, 7, liquidationRisk >= 75 ? "EXTREME" : liquidationRisk >= 50 ? "HIGH" : liquidationRisk >= 25 ? "MOD" : "LOW", text_color=liqColor, text_size=szS)
+    activeSignal = buySignal ? "🟢 BUY SIGNAL" : sellSignal ? "🔴 SELL SIGNAL" : rawMinorBull ? "↑ Bullish" : rawMinorBear ? "↓ Bearish" : "━ NEUTRAL"
+    activeSignalCol = buySignal ? #00FF00 : sellSignal ? #FF0000 : rawMinorBull ? bullColor : rawMinorBear ? bearColor : neutralColor
+    table.cell(hud, 0, 9, "SIG", text_color=neutralColor, text_size=sz)
+    table.cell(hud, 1, 9, activeSignal, text_color=activeSignalCol, text_size=sz, text_halign=text.align_left)
+    table.merge_cells(hud, 1, 9, 3, 9)
+    if optMode
+        table.cell(hud, 0, 10, "═══", text_color=color.new(accentColor3, 60), text_size=sz)
+        table.cell(hud, 1, 10, "OPTIMIZER", text_color=accentColor3, text_size=sz)
+        table.cell(hud, 2, 10, "ENGINE", text_color=accentColor3, text_size=sz)
+        table.cell(hud, 3, 10, "═══", text_color=color.new(accentColor3, 60), text_size=sz)
+        wrCol = btWinRate >= 55 ? bullColor : btWinRate >= 45 ? accentColor3 : bearColor
+        table.cell(hud, 0, 11, "WIN%", text_color=neutralColor, text_size=sz)
+        table.cell(hud, 1, 11, str.tostring(btWinRate, "#.#") + "%", text_color=wrCol, text_size=sz)
+        table.cell(hud, 2, 11, str.tostring(btTotalTrades) + " trds", text_color=frameColor, text_size=szS)
+        table.cell(hud, 3, 11, "", text_size=sz)
+        pfCol = btProfitFactor >= 1.5 ? bullColor : btProfitFactor >= 1.0 ? accentColor3 : bearColor
+        table.cell(hud, 0, 12, "PF", text_color=neutralColor, text_size=sz)
+        table.cell(hud, 1, 12, str.tostring(btProfitFactor, "#.##"), text_color=pfCol, text_size=sz)
+        table.cell(hud, 2, 12, robustText, text_color=robustCol, text_size=szS)
+        table.cell(hud, 3, 12, "", text_size=sz)
+    table.cell(hud, 0, 13, "", text_size=sz)
+    table.cell(hud, 1, 13, "DskyzInvest", text_color=color.new(frameColor, 50), text_size=szS)
+    table.cell(hud, 2, 13, "v4.0", text_color=color.new(neutralColor, 60), text_size=szS)
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// 🔔 ALERTS
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+alertcondition(buySignal, "🟢 BUY Signal", "DFI: BUY SIGNAL - Multiple confirmations aligned!")
+alertcondition(sellSignal, "🔴 SELL Signal", "DFI: SELL SIGNAL - Multiple confirmations aligned!")
+alertcondition(rawMinorBull, "↑ Bullish", "DFI: Bullish setup forming")
+alertcondition(rawMinorBear, "↓ Bearish", "DFI: Bearish setup forming")
+alertcondition(liquidationRisk > 75, "🚨 High Risk", "DFI: HIGH RISK detected!")
+// ╔═══════════════════════════════════════════════════════════════════════════╗
+// ║              DERIVATIVES FLOW INTELLIGENCE - THEORY GUIDE                 ║
+// ╚═══════════════════════════════════════════════════════════════════════════╝
+//
+// Traditional technical analysis (Price + Volume) often fails in modern markets
+// dominated by algorithmic trading and derivatives. DFI detects the "Hidden
+// Hand" of the market by analyzing the underlying mechanics that drive price:
+// Positioning, Sentiment, and Volatility Skew.
+//
+// CORE PHILOSOPHY:
+// Price is the advertisement. Order flow is the reality.
+// We do not chase price candles; we anticipate moves based on the build-up
+// of pressure in the derivatives market.
+//
+// ┌─────────────────────────────────────────────────────────────────────────┐
+// │ 1. THE 12-FACTOR POSITION FLOW ENGINE                                   │
+// └─────────────────────────────────────────────────────────────────────────┘
+//
+// "Position Flow" is a proprietary metric that estimates net institutional
+// positioning by synthesizing 12 distinct data points:
+//
+//   • CVD (Cumulative Volume Delta): Buying vs. Selling aggression.
+//   • MFI (Money Flow Index): Volume-weighted RSI.
+//   • Absorption: High volume + Low price movement (Hidden Orders).
+//   • Institutional Bias: Identifying "Smart Money" candles.
+//   • VWAP Deviation: Mean reversion pressure.
+//   • Momentum Acceleration: Rate of change physics.
+//
+// INTERPRETATION:
+//   • Green Columns: Net Aggressive LONG positioning.
+//   • Red Columns: Net Aggressive SHORT positioning.
+//   • DIVERGENCE: If Price is making Lower Lows, but Position Flow is
+//     making Higher Lows, a reversal is imminent.
+//
+// ┌─────────────────────────────────────────────────────────────────────────┐
+// │ 2. CROWD SENTIMENT (CONTRARIAN LOGIC)                                   │
+// └─────────────────────────────────────────────────────────────────────────┘
+//
+// The "Crowd" metric (often the middle layer in visualization) tracks the
+// behavior of retail traders to identify Squeeze opportunities.
+//
+//   • FAIR VALUE GAP: Is price too far from VWAP?
+//   • CHASE BEHAVIOR: Are traders buying tops (FOMO)?
+//   • RSI EXTREMES: Is the asset statistically overbought?
+//
+// HOW TO TRADE IT:
+//   We trade AGAINST the Crowd.
+//   • High Red Crowd + Price Resistance = Long Squeeze likely (Short It).
+//   • High Green Crowd + Price Support = Short Squeeze likely (Long It).
+//
+// ┌─────────────────────────────────────────────────────────────────────────┐
+// │ 3. Z-SCORE NORMALIZATION (The "Secret Sauce")                           │
+// └─────────────────────────────────────────────────────────────────────────┘
+//
+// Raw values (like volume of 10k vs 10M) mean nothing in isolation.
+// DFI converts ALL metrics into Z-Scores (Standard Deviations from Mean).
+//
+//   • 0.0σ: Normal behavior.
+//   • 1.0σ: Significant movement.
+//   • 2.0σ: Extreme outlier (Institutional Intervention).
+//
+// BENEFIT:
+//   This script works IDENTICALLY on Bitcoin, Gold, EURUSD, or Apple.
+//   You do not need to adjust thresholds for different assets.
+//
+// ┌─────────────────────────────────────────────────────────────────────────┐
+// │ 4. SIGNAL HIERARCHY                                                     │
+// └─────────────────────────────────────────────────────────────────────────┘
+//
+// 🟢 BUY / 🔴 SELL LABELS (Primary)
+//   These are "Trend Reversal" signals. They require a confluence of:
+//   1. Position Flow Reversal (Z-Score > 1.5σ)
+//   2. Crowd Sentiment Extreme (Contrarian)
+//   3. Fear/Greed Skew Alignment
+//   4. Momentum Confirmation
+//
+//   • Best for: Swing Trading, 1H/4H entries.
+//   • Stop Loss: Recent Swing Low/High.
+//
+// ▲ / ▼ TRIANGLES (Minor)
+//   These are "Momentum Continuation" or early warning signals.
+//   They have stricter entry requirements but require fewer confirming factors.
+//
+//   • Best for: Scalping, Adding to positions.
+//
+// 💎 DIAMONDS (Liquidation Risk)
+//   These appear when the market is "Ready to Snap."
+//   Conditions: Extreme Crowding + Divergence + Exhaustion.
+//   Action: Tighten stops, take profits, DO NOT enter new positions.
+//
+// ┌─────────────────────────────────────────────────────────────────────────┐
+// │ 5. VISUALIZATION MODES                                                  │
+// └─────────────────────────────────────────────────────────────────────────┘
+//
+// • CLASSIC FLOW: Good for seeing the divergence between Price and Flow.
+// • HEATMAP MATRIX: Best for identifying "Cluster" events where OI,
+//   Funding, and Skew all light up simultaneously.
+// • DELTA WATERFALL: Best for visualizing the "Weight" of the market.
+//   If the waterfall is heavy Red, do not try to catch the falling knife.
+//
+// ┌─────────────────────────────────────────────────────────────────────────┐
+// │ 6. TIMEFRAME STRATEGY                                                   │
+// └─────────────────────────────────────────────────────────────────────────┘
+//
+// SCALPING (1m - 5m)
+//   • Settings: "Aggressive" Sensitivity, Analysis Length 10.
+//   • Strategy: Take Triangle signals in the direction of the 1H trend.
+//   • Exit: On first sign of exhaustion or color flip in lower pane.
+//
+// DAY TRADING (5m - 15m)
+//   • Settings: "Normal" Sensitivity, Analysis Length 14.
+//   • Strategy: Wait for BUY/SELL Labels. Confirm with Support/Demand Zones.
+//
+// SWING TRADING (1H - 4H)
+//   • Settings: "Conservative" Sensitivity, Analysis Length 21.
+//   • Strategy: Trade only Primary Labels. Hold until Position Flow
+//     crosses zero line or opposite signal appears.
+//
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+//                         DskyzInvestments - DAFE Trading Systems
+//                              "Trade Smarter, Not Harder"
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════

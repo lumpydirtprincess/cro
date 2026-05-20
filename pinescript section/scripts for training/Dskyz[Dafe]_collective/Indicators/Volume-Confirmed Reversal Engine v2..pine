@@ -1,0 +1,170 @@
+//@version=6
+// -----------------------------------------------------------------------------
+// | © AlgoPoint                                                               |
+// | Indicator: Volume-Confirmed Reversal Engine [AlgoPoint]                   |
+// | Developer: Harmony Algo & AlgoPoint Collaboration                         |
+// -----------------------------------------------------------------------------
+indicator("Volume-Confirmed Reversal Engine v2.0 [AlgoPoint]", "VCRE [AlgoPoint]", overlay = true, max_labels_count = 500, max_boxes_count=100)
+
+// =============================================================================
+//                                  SETTINGS
+// =============================================================================
+price_group = "Price Action Settings"
+look_back = input.int(defval = 20, title = "Candle Lookback", group=price_group)
+confirm_in = input.int(defval = 3, title = "Confirm Within (Bars)", group=price_group)
+
+volume_group = "Volume Confirmation Settings"
+use_volume_filter = input.bool(true, "Use Volume Filter", group=volume_group)
+vol_ma_length = input.int(20, "Volume MA Length", group=volume_group)
+anchor_vol_multiplier = input.float(2, "Anchor Candle Volume Multiplier", group=volume_group)
+use_confirmation_volume = input.bool(true, "Use Confirmation Candle Volume", group=volume_group) // Puanlama için varsayılanı true yapıldı.
+confirm_vol_multiplier = input.float(1.2, "Confirmation Candle Volume Multiplier", group=volume_group)
+
+score_group = "Signal Score Settings"
+macro_trend_len = input.int(200, "Macro Trend Filter (EMA)", group=score_group, tooltip="Used for the 4th point of the signal score.")
+
+// =============================================================================
+//                                  CALCULATIONS
+// =============================================================================
+avg_volume = ta.sma(volume, vol_ma_length)
+macro_trend_ema = ta.ema(close, macro_trend_len)
+
+bull_candle_count_setup = 0
+bear_candle_count_setup = 0
+for i = 1 to look_back
+    if close < low[i]
+        bull_candle_count_setup += 1
+    if close > high[i]
+        bear_candle_count_setup += 1
+
+// --- State Management Variables ---
+var bool bull_setup_active = false
+var float bull_anchor_low = 0.0
+var float bull_anchor_high = 0.0
+var int bull_bars_since_setup = 0
+var bool bull_anchor_has_vol = false
+var box bull_setup_box = na
+
+var bool bear_setup_active = false
+var float bear_anchor_low = 0.0
+var float bear_anchor_high = 0.0
+var int bear_bars_since_setup = 0
+var bool bear_anchor_has_vol = false
+var box bear_setup_box = na
+
+// =============================================================================
+//                                  SIGNAL LOGIC
+// =============================================================================
+
+// --- Step 1: Detect High-Volume "Anchor Candle" ---
+is_bull_anchor_price = bull_candle_count_setup == look_back
+is_bear_anchor_price = bear_candle_count_setup == look_back
+is_anchor_vol_ok = volume > avg_volume * anchor_vol_multiplier
+
+if is_bull_anchor_price and (is_anchor_vol_ok or not use_volume_filter)
+    bull_setup_active := true
+    bull_anchor_low := low
+    bull_anchor_high := high
+    bull_bars_since_setup := 0
+    bull_anchor_has_vol := is_anchor_vol_ok
+    bear_setup_active := false // Deactivate opposite
+    box.delete(bear_setup_box) // Delete opposite box
+    // Draw the setup box
+    bull_setup_box := box.new(bar_index, high, bar_index + confirm_in, low, 
+     bgcolor=color.new(color.green, 85), border_color=color.new(color.green, 50))
+
+if is_bear_anchor_price and (is_anchor_vol_ok or not use_volume_filter)
+    bear_setup_active := true
+    bear_anchor_low := low
+    bear_anchor_high := high
+    bear_bars_since_setup := 0
+    bear_anchor_has_vol := is_anchor_vol_ok
+    bull_setup_active := false // Deactivate opposite
+    box.delete(bull_setup_box) // Delete opposite box
+    // Draw the setup box
+    bear_setup_box := box.new(bar_index, high, bar_index + confirm_in, low, 
+     bgcolor=color.new(color.red, 85), border_color=color.new(color.red, 50))
+
+// --- Manage Active Setups & Invalidation ---
+if bull_setup_active
+    bull_bars_since_setup += 1
+    // Invalidate if price makes a new lower low or timeout
+    if close < bull_anchor_low or bull_bars_since_setup > confirm_in
+        bull_setup_active := false
+        box.delete(bull_setup_box)
+
+if bear_setup_active
+    bear_bars_since_setup += 1
+    // Invalidate if price makes a new higher high or timeout
+    if close > bear_anchor_high or bear_bars_since_setup > confirm_in
+        bear_setup_active := false
+        box.delete(bear_setup_box)
+
+
+// --- Step 3: Confirmation and Final Signal ---
+bool v_up = false
+bool v_dn = false
+int strength = 0
+
+y1 = low - (ta.atr(30) * 2.1)
+y2 = high + (ta.atr(30) * 2.1)
+
+
+// Check for a BUY signal
+if bull_setup_active and ta.crossover(close, bull_anchor_high)
+    bool is_confirm_vol_ok = volume > avg_volume * confirm_vol_multiplier
+    v_up := true
+    // Calculate Score
+    strength := 1
+    strength += bull_anchor_has_vol ? 1 : 0
+    strength += use_confirmation_volume and is_confirm_vol_ok ? 1 : 0
+    strength += close > macro_trend_ema ? 1 : 0
+    // Plot Signal & Cleanup
+    // label.new(bar_index, low, "BUY\n(Score: " + str.tostring(strength) + "/4)", yloc=yloc.belowbar, color=color.new(color.green,0), style=label.style_label_up, textcolor=color.white)
+    label.new(bar_index , y1, 'Buy\n★' + str.tostring(strength), color=#018208, style=label.style_label_up, textcolor=color.white, size=size.normal)
+    bull_setup_active := false
+    box.delete(bull_setup_box)
+
+// Check for a SELL signal
+if bear_setup_active and ta.crossunder(close, bear_anchor_low)
+    bool is_confirm_vol_ok = volume > avg_volume * confirm_vol_multiplier
+    v_dn := true
+    // Calculate Score
+    strength := 1
+    strength += bear_anchor_has_vol ? 1 : 0
+    strength += use_confirmation_volume and is_confirm_vol_ok ? 1 : 0
+    strength += close < macro_trend_ema ? 1 : 0
+    // Plot Signal & Cleanup
+    // label.new(bar_index, high, "SELL\n(Score: " + str.tostring(strength) + "/4)", yloc=yloc.abovebar, color=color.new(color.red,0), style=label.style_label_down, textcolor=color.white)
+    label.new(bar_index , y2, '★' + str.tostring(strength) + '\nSell', color=#d12208, style=label.style_label_down, textcolor=color.white, size=size.normal)
+    bear_setup_active := false
+    box.delete(bear_setup_box)
+
+// =============================================================================
+//                                  DASHBOARD
+// =============================================================================
+var tbl = table.new(position.bottom_right, 2, 2, border_width=1)
+if barstate.islast
+    string status_text = "Scanning for Setups..."
+    string countdown_text = "---"
+    color status_color = color.new(color.gray, 80)
+
+    if bull_setup_active
+        status_text := "Watching Bullish Setup"
+        countdown_text := str.tostring(confirm_in - bull_bars_since_setup + 1) + " Bar(s) Left"
+        status_color := color.new(color.green, 70)
+    else if bear_setup_active
+        status_text := "Watching Bearish Setup"
+        countdown_text := str.tostring(confirm_in - bear_bars_since_setup + 1) + " Bar(s) Left"
+        status_color := color.new(color.red, 70)
+        
+    table.cell(tbl, 0, 0, "Indicator Status", bgcolor=color.gray)
+    table.cell(tbl, 1, 0, status_text, bgcolor=status_color)
+    table.cell(tbl, 0, 1, "Confirmation Window", bgcolor=color.gray)
+    table.cell(tbl, 1, 1, countdown_text, bgcolor=status_color)
+
+// =============================================================================
+//                                  ALERTS
+// =============================================================================
+alertcondition(v_up, "Volume-Confirmed Bullish Reversal")
+alertcondition(v_dn, "Volume-Confirmed Bearish Reversal")

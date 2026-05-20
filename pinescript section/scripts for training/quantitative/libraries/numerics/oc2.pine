@@ -1,0 +1,28 @@
+// The MIT License (MIT)
+// © mihakralj
+//@version=6
+
+// 
+// Category: numerics
+// Auto-converted to TradingView v6 Library
+//
+library("", "v1.0.0", overlay=false)
+
+
+//@function Calculates the midpoint between open and close prices
+//@param o Open price series
+//@param c Close price series
+//@returns float The midpoint value (open + close) * 0.5
+//@optimized Uses multiplication instead of division for performance
+export oc2(series float o, series float c) =>
+    (o + c) * 0.5
+
+
+// ---------- Main loop ----------
+
+// Calculation
+result = oc2(open, close)
+
+// Plot
+// plot(result, "OC2", color=color.yellow, linewidth=2)  // Disabled in library
+

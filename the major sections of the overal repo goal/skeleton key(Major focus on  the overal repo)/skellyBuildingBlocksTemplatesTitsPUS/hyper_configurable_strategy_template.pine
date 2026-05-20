@@ -1,0 +1,310 @@
+//@version=6
+strategy("Hyper-Configurable Strategy Template", shorttitle="HC Strategy", overlay=true,
+         default_qty_type=strategy.percent_of_equity, default_qty_value=100)
+
+// ============================================================================
+// UNIVERSAL FUNCTIONS
+// ============================================================================
+
+f_ma(float source, int length, string maType) =>
+    switch maType
+        "SMA"   => ta.sma(source, length)
+        "EMA"   => ta.ema(source, length)
+        "RMA"   => ta.rma(source, length)
+        "WMA"   => ta.wma(source, length)
+        "HMA"   => ta.wma(2 * ta.wma(source, length / 2) - ta.wma(source, length), math.round(math.sqrt(length)))
+        => ta.sma(source, length)
+
+// ============================================================================
+// STRATEGY INPUTS
+// ============================================================================
+
+// ─────────────────────────────────────────────────────────────────────────
+// ENTRY LOGIC
+// ─────────────────────────────────────────────────────────────────────────
+entryType       = input.string("MA Cross", "Entry Type",
+                  options=["MA Cross", "Breakout", "Mean Reversion"], group="📈 Entry Logic")
+
+// MA Cross Settings
+maFastLen       = input.int(10, "Fast MA Length", minval=1, group="📈 Entry Logic")
+maSlowLen       = input.int(30, "Slow MA Length", minval=1, group="📈 Entry Logic")
+maType          = input.string("EMA", "MA Type", options=["SMA", "EMA", "RMA", "WMA", "HMA"], group="📈 Entry Logic")
+
+// Breakout Settings
+breakoutLength  = input.int(20, "Breakout Length", minval=1, group="📈 Entry Logic")
+
+// Mean Reversion Settings
+mrLength        = input.int(20, "MR Period", minval=1, group="📈 Entry Logic")
+mrDeviation     = input.float(2.0, "MR Std Dev", minval=0.1, step=0.1, group="📈 Entry Logic")
+
+// ─────────────────────────────────────────────────────────────────────────
+// EXIT LOGIC - TAKE PROFIT
+// ─────────────────────────────────────────────────────────────────────────
+min_bars_in_trades = input.int(1, "Min Bars in Trades", minval=0, group="⚙️ General Settings")
+useTP           = input.bool(true, "Use Take Profit", group="🎯 Take Profit")
+tpType          = input.string("Fixed %", "TP Type",
+                  options=["Fixed %", "ATR Multiple", "Risk:Reward"], group="🎯 Take Profit")
+tpPercent       = input.float(2.0, "TP % (Percent Type)", minval=0.1, step=0.1, group="🎯 Take Profit")
+tpATRLength     = input.int(14, "TP ATR Length", minval=1, group="🎯 Take Profit")
+tpATRMult       = input.float(2.0, "TP ATR Multiple", minval=0.1, step=0.1, group="🎯 Take Profit")
+tpRRRatio       = input.float(2.0, "Risk:Reward Ratio", minval=0.5, step=0.1, group="🎯 Take Profit")
+
+// ─────────────────────────────────────────────────────────────────────────
+// EXIT LOGIC - STOP LOSS
+// ─────────────────────────────────────────────────────────────────────────
+useSL           = input.bool(true, "Use Stop Loss", group="🛡️ Stop Loss")
+slType          = input.string("ATR", "SL Type",
+                  options=["Fixed %", "ATR", "Swing Low/High"], group="🛡️ Stop Loss")
+slPercent       = input.float(1.0, "SL % (Percent Type)", minval=0.1, step=0.1, group="🛡️ Stop Loss")
+slATRLength     = input.int(14, "SL ATR Length", minval=1, group="🛡️ Stop Loss")
+slATRMult       = input.float(1.5, "SL ATR Multiple", minval=0.1, step=0.1, group="🛡️ Stop Loss")
+slSwingLength   = input.int(10, "Swing Length (Swing Type)", minval=1, group="🛡️ Stop Loss")
+
+// Trailing Stop
+useTrailing     = input.bool(false, "Use Trailing Stop", group="🛡️ Stop Loss")
+trailType       = input.string("ATR", "Trail Type", options=["Fixed %", "ATR"], group="🛡️ Stop Loss")
+trailPercent    = input.float(1.0, "Trail % (Percent Type)", minval=0.1, step=0.1, group="🛡️ Stop Loss")
+trailATRMult    = input.float(1.0, "Trail ATR Multiple", minval=0.1, step=0.1, group="🛡️ Stop Loss")
+
+// ─────────────────────────────────────────────────────────────────────────
+// FILTERS
+// ─────────────────────────────────────────────────────────────────────────
+useTrendFilter  = input.bool(true, "Trend Filter", group="🔍 Filters")
+trendLength     = input.int(200, "Trend MA Length", minval=10, group="🔍 Filters")
+trendType       = input.string("SMA", "Trend MA Type", options=["SMA", "EMA", "WMA"], group="🔍 Filters")
+
+useVolFilter    = input.bool(false, "Volatility Filter", group="🔍 Filters")
+volATRLength    = input.int(14, "Volatility ATR Length", minval=5, group="🔍 Filters")
+volMinATR       = input.float(0.0001, "Min ATR", minval=0, step=0.0001, group="🔍 Filters")
+inthegreen      = input.bool(false, "Only Trade in Green/ trade is in green", group="🔍 Filters")
+inthered        = input.bool(false, "Only Trade in Red/ trade is in red", group="🔍 Filters") 
+red_or_green    = input.string("Both", "Trade Color Condition", options=["Both", "Green ", "Red "], group="🔍 Filters")
+useTimeFilter   = input.bool(false, "Time Filter", group="🔍 Filters")
+timeSession     = input.session("0930-1600", "Trading Session", group="🔍 Filters")
+
+// ─────────────────────────────────────────────────────────────────────────
+// POSITION SIZING
+// ─────────────────────────────────────────────────────────────────────────
+sizeType        = input.string("% Equity", "Position Size Method",
+                  options=["Fixed", "% Equity", "Risk %"], group="💰 Position Sizing")
+sizeFixed       = input.float(1, "Contracts/Shares (Fixed Type)", minval=0.01, step=0.01, group="💰 Position Sizing")
+sizePercent     = input.float(100, "% of Equity", minval=1, maxval=100, step=1, group="💰 Position Sizing")
+riskPercent     = input.float(1, "Risk % of Equity", minval=0.1, maxval=10, step=0.1, group="💰 Position Sizing")
+
+// ─────────────────────────────────────────────────────────────────────────
+// VISUAL
+// ─────────────────────────────────────────────────────────────────────────
+showMAs         = input.bool(true, "Show MAs", group="🎨 Visual")
+showEntries     = input.bool(true, "Show Entry Signals", group="🎨 Visual")
+showExits       = input.bool(true, "Show Exit Levels", group="🎨 Visual")
+colorLong       = input.color(color.new(#00ff00, 0), "Long Color", group="🎨 Visual")
+colorShort      = input.color(color.new(#ff0000, 0), "Short Color", group="🎨 Visual")
+
+// ============================================================================
+// CALCULATIONS
+// ============================================================================
+
+// ─── Indicators for Entry ────────────────────────────────────────────────
+maFast = f_ma(close, maFastLen, maType)
+maSlow = f_ma(close, maSlowLen, maType)
+
+basis = ta.sma(close, mrLength)
+dev = mrDeviation * ta.stdev(close, mrLength)
+upperBand = basis + dev
+lowerBand = basis - dev
+
+highestHigh = ta.highest(high, breakoutLength)
+lowestLow = ta.lowest(low, breakoutLength)
+
+// ─── Filters ─────────────────────────────────────────────────────────────
+trendMA = useTrendFilter ? f_ma(close, trendLength, trendType) : na
+inUptrend = not useTrendFilter or close > trendMA
+inDowntrend = not useTrendFilter or close < trendMA
+inthegreen = 
+inthered   = 
+atr = ta.atr(math.max(slATRLength, tpATRLength, volATRLength))
+volatilityOK = not useVolFilter or atr > volMinATR
+
+inSession = not useTimeFilter or not na(time(timeframe.period, timeSession))
+
+filtersPass = volatilityOK and inSession
+
+// ─── Entry Signals ───────────────────────────────────────────────────────
+longSignal = false
+shortSignal = false
+
+if entryType == "MA Cross"
+    longSignal := ta.crossover(maFast, maSlow)
+    shortSignal := ta.crossunder(maFast, maSlow)
+else if entryType == "Breakout"
+    longSignal := ta.crossover(close, highestHigh[1])
+    shortSignal := ta.crossunder(close, lowestLow[1])
+else if entryType == "Mean Reversion"
+    longSignal := ta.crossunder(close, lowerBand)
+    shortSignal := ta.crossover(close, upperBand)
+
+// Apply filters
+longSignal := longSignal and filtersPass and inUptrend
+shortSignal := shortSignal and filtersPass and inDowntrend
+
+// ─── Calculate Position Size ─────────────────────────────────────────────
+qty = sizeFixed  // default
+
+if sizeType == "% Equity"
+    qty := (strategy.equity * sizePercent / 100) / close
+else if sizeType == "Risk %"
+    riskAmount = strategy.equity * riskPercent / 100
+    stopDistance = 0.0
+    if slType == "Fixed %"
+        stopDistance := close * slPercent / 100
+    else if slType == "ATR"
+        stopDistance := atr * slATRMult
+    else  // Swing
+        stopDistance := close - ta.lowest(low, slSwingLength)
+    qty := stopDistance > 0 ? riskAmount / stopDistance : sizeFixed
+
+// ─── Calculate TP/SL Levels ──────────────────────────────────────────────
+var float longTP = na
+var float longSL = na
+var float shortTP = na
+var float shortSL = na
+
+// Stop Loss
+if slType == "Fixed %"
+    longSL := close * (1 - slPercent / 100)
+    shortSL := close * (1 + slPercent / 100)
+else if slType == "ATR"
+    longSL := close - atr * slATRMult
+    shortSL := close + atr * slATRMult
+else if slType == "Swing Low/High"
+    longSL := ta.lowest(low, slSwingLength)
+    shortSL := ta.highest(high, slSwingLength)
+
+// Take Profit
+if tpType == "Fixed %"
+    longTP := close * (1 + tpPercent / 100)
+    shortTP := close * (1 - tpPercent / 100)
+else if tpType == "ATR Multiple"
+    longTP := close + atr * tpATRMult
+    shortTP := close - atr * tpATRMult
+else if tpType == "Risk:Reward"
+    if useSL
+        riskLong = close - longSL
+        riskShort = shortSL - close
+        longTP := close + riskLong * tpRRRatio
+        shortTP := close - riskShort * tpRRRatio
+    else
+        longTP := close * (1 + tpPercent / 100)  // fallback
+        shortTP := close * (1 - tpPercent / 100)
+
+// Trailing Stop
+trail_offset = 0.0
+if useTrailing
+    if trailType == "Fixed %"
+        trail_offset := close * trailPercent / 100
+    else if trailType == "ATR"
+        trail_offset := atr * trailATRMult
+
+// ============================================================================
+// STRATEGY EXECUTION
+// ============================================================================
+
+// ─── Long Entries ────────────────────────────────────────────────────────
+if longSignal and strategy.position_size == 0 
+    strategy.entry("Long", strategy.long, qty=qty)
+
+    if useTP and useSL
+        strategy.exit("Exit Long", "Long", limit=longTP, stop=longSL,
+                     trail_offset=useTrailing ? trail_offset : na)
+    else if useTP
+        strategy.exit("TP Long", "Long", limit=longTP,
+                     trail_offset=useTrailing ? trail_offset : na)
+    else if useSL
+        strategy.exit("SL Long", "Long", stop=longSL,
+                     trail_offset=useTrailing ? trail_offset : na)
+
+// ─── Short Entries ───────────────────────────────────────────────────────
+if shortSignal and strategy.position_size == 0
+    strategy.entry("Short", strategy.short, qty=qty)
+
+    if useTP and useSL
+        strategy.exit("Exit Short", "Short", limit=shortTP, stop=shortSL,
+                     trail_offset=useTrailing ? trail_offset : na)
+    else if useTP
+        strategy.exit("TP Short", "Short", limit=shortTP,
+                     trail_offset=useTrailing ? trail_offset : na)
+    else if useSL
+        strategy.exit("SL Short", "Short", stop=shortSL,
+                     trail_offset=useTrailing ? trail_offset : na)
+
+// ============================================================================
+// PLOTTING
+// ============================================================================
+
+// ─── Moving Averages ─────────────────────────────────────────────────────
+plot(showMAs and entryType == "MA Cross" ? maFast : na, "Fast MA", color.new(color.blue, 0), 2)
+plot(showMAs and entryType == "MA Cross" ? maSlow : na, "Slow MA", color.new(color.red, 0), 2)
+
+// ─── Trend Filter MA ─────────────────────────────────────────────────────
+plot(showMAs and useTrendFilter ? trendMA : na, "Trend MA", color.new(color.orange, 50), 3)
+
+// ─── Bands (Mean Reversion) ──────────────────────────────────────────────
+plot(showMAs and entryType == "Mean Reversion" ? upperBand : na, "Upper Band", color.red)
+plot(showMAs and entryType == "Mean Reversion" ? basis : na, "Basis", color.gray)
+plot(showMAs and entryType == "Mean Reversion" ? lowerBand : na, "Lower Band", color.green)
+
+// ─── Entry Signals ───────────────────────────────────────────────────────
+plotshape(showEntries and longSignal, "Long Signal", shape.triangleup,
+          location.belowbar, colorLong, size=size.small)
+plotshape(showEntries and shortSignal, "Short Signal", shape.triangledown,
+          location.abovebar, colorShort, size=size.small)
+
+// ─── TP/SL Levels (for current position) ────────────────────────────────
+var line tpLine = na
+var line slLine = na
+
+if showExits
+    if strategy.position_size > 0  // In long position
+        if not na(longTP)
+            line.delete(tpLine)
+            tpLine := line.new(bar_index - 1, longTP, bar_index, longTP,
+                              color=color.new(color.green, 50), style=line.style_dashed)
+        if not na(longSL)
+            line.delete(slLine)
+            slLine := line.new(bar_index - 1, longSL, bar_index, longSL,
+                              color=color.new(color.red, 50), style=line.style_dashed)
+    else if strategy.position_size < 0  // In short position
+        if not na(shortTP)
+            line.delete(tpLine)
+            tpLine := line.new(bar_index - 1, shortTP, bar_index, shortTP,
+                              color=color.new(color.green, 50), style=line.style_dashed)
+        if not na(shortSL)
+            line.delete(slLine)
+            slLine := line.new(bar_index - 1, shortSL, bar_index, shortSL,
+                              color=color.new(color.red, 50), style=line.style_dashed)
+
+// ─── Background Color ────────────────────────────────────────────────────
+bgcolor(strategy.position_size > 0 ? color.new(colorLong, 95) :
+        strategy.position_size < 0 ? color.new(colorShort, 95) : na)
+
+// ============================================================================
+// ALERTS
+// ============================================================================
+
+alertcondition(longSignal, "Long Entry", "Long entry signal on {{ticker}}")
+alertcondition(shortSignal, "Short Entry", "Short entry signal on {{ticker}}")
+
+// ============================================================================
+// CUSTOMIZATION NOTES
+// ============================================================================
+
+// This template provides a framework for systematic strategy development.
+// To customize:
+//
+// 1. Add your entry logic in the "Entry Signals" section
+// 2. Modify or add filters as needed
+// 3. Adjust TP/SL calculations for your approach
+// 4. Configure position sizing to match your risk management
+// 5. Test different parameter combinations in Strategy Tester
+//
+// All major parameters are inputs - optimize without editing code!

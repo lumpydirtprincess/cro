@@ -1,0 +1,126 @@
+//@version=6
+
+
+barsInTrade = bar_index - strategy.opentrades.entry_bar_index(0)
+
+var int maxBarsInTrade = 30
+
+var int minBarsInTrade = input.int( 2, 'Minimum Bars in Trade', minval = 1, group = 'Trade Management')
+
+cooldownBars = input.int(2, 'Base Signal Cooldown (Bars)', minval = 1, group = 'Signal')
+
+
+var int lastSignalBar = na
+var int lastDirection = 0 // 1=long, -1=short, 0=neutral
+var int dynamicCooldown = cooldownBars
+if strategy.closedtrades > 0
+    lastTrade = strategy.closedtrades.profit(strategy.closedtrades - 1)
+    if lastTrade < 0
+        dynamicCooldown := math.min(dynamicCooldown * 2, 10)
+        dynamicCooldown
+    else
+        dynamicCooldown := cooldownBars
+        dynamicCooldown
+canSignal = na(lastSignalBar) or bar_index - lastSignalBar >= dynamicCooldown
+// ...existing code...
+stoplossPerc = input.float(1.0, 'Stop Loss Percentage', minval = 0.1, step = 0.1, group = 'Trade Management') / 100
+
+// update exits for current position (uses entry price to compute pts)
+if strategy.position_size > 0
+    entryPrice = strategy.position_avg_price
+    profitPts = entryPrice * takeprofitPerc
+    lossPts = entryPrice * stoplossPerc
+    strategy.exit('Exit Long', comment='TP/SL', profit = profitPts, loss = lossPts)
+else if strategy.position_size < 0
+    entryPrice = strategy.position_avg_price
+    profitPts = entryPrice * takeprofitPerc
+    lossPts = entryPrice * stoplossPerc
+    strategy.exit('Exit Short', comment='TP/SL', profit = profitPts, loss = lossPts)
+// ...existing code...
+
+
+jma(_src, _length, _phase = 0) =>
+    beta = 0.45 * (_length - 1) / (0.45 * (_length - 1) + 2)
+    alpha = math.pow(beta, 2)
+    jma1 = 0.0
+    jma2 = 0.0
+    jma3 = 0.0
+    jma1 := (1 - alpha) * _src + alpha * nz(jma1[1])
+    jma2 := (jma1 - nz(jma1[1])) * (1 - beta) + beta * nz(jma2[1])
+    jma3 := (jma1 + _phase * jma2) 
+    jma3
+jma = jma(_src, _length, _phase)
+Alma(_src, _length, _offset = 0.85, _sigma = 6) =>
+    m = (_offset * (_length - 1))
+    s = _length / _sigma
+    norm = 0.0
+    sum = 0.0
+    for i = 0 to _length - 1
+        w = math.exp(-1 * math.pow(i - m, 2) / (2 * math.pow(s, 2)))
+        norm += w
+        sum += _src[i] * w
+    sum / norm
+alma = Alma(_src, _length, _offset, _sigma) 
+//T3 Moving Average based on the article 'Smoothing Techniques For More Accurate Signals' by Tim Tillson
+f_t3(src, len) =>
+    x1 = ta.ema(src, len) //(hlcc, 8)
+    x2 = ta.ema(x1, len)
+    x3 = ta.ema(x2, len)
+    x4 = ta.ema(x3, len)
+    x5 = ta.ema(x4, len)
+    x6 = ta.ema(x5, len)
+    b = 0.7 //Volume Factor
+    c1 = -math.pow(b, 3)
+    c2 = 3 * math.pow(b, 2) + 3 * math.pow(b, 3)
+    c3 = -6 * math.pow(b, 2) - 3 * b - 3 * math.pow(b, 3)
+    c4 = 1 + 3 * b + math.pow(b, 3) + 3 * math.pow(b, 2)
+    c1 * x6 + c2 * x5 + c3 * x4 + c4 * x3
+t3 = f_t3(_src, _length)
+// Kaufman's Adaptive Moving Average - Fast and Slow Ends
+kama(x, t) =>
+    fastK = 0.666 // KAMA Fast End
+    slowK = 0.0645 // KAMA Slow End
+    dist = math.abs(x[0] - x[1])
+    signal_x = math.abs(x - x[t])
+    noise = math.sum(dist, t)
+    effr = noise != 0 ? signal_x / noise : 1
+    sc = math.pow(effr * (fastK - slowK) + slowK, 2)
+    KAma = x
+    KAma := nz(KAma[1]) + sc * (x - nz(KAma[1]))
+    KAma
+kama = kama(_src, _length)
+HMA(_src, _length) =>
+    ta.wma(2 * ta.wma(_src, _length / 2) - ta.wma(_src, _length), math.round(math.sqrt(_length)))
+hma = HMA(_src, _length)
+EHMA(_src, _length) =>
+    ta.ema(2 * ta.ema(_src, _length / 2) - ta.ema(_src, _length), math.round(math.sqrt(_length)))
+
+RHMA(_src, _length) =>
+    ta.rma(2 * ta.rma(_src, _length / 2) - ta.rma(_src, _length), math.round(math.sqrt(_length)))
+SHMA(_src, _length) =>
+    ta.sma(2 * ta.sma(_src, _length / 2) - ta.sma(_src, _length), math.round(math.sqrt(_length)))
+VWHMA(_src, _length) =>
+    ta.vwma(2 * ta.vwma(_src, _length / 2) - ta.vwma(_src, _length), math.round(math.sqrt(_length)))
+VWAPHMA(_src, _length) =>
+    ta.vwap(2 * ta.vwap(_src, _length / 2) - ta.vwap(_src, _length), math.round(math.sqrt(_length)))
+
+ALMAHMA(_src, _length) =>
+    alma(2 * alma(_src, _length / 2) - alma(_src, _length), math.round(math.sqrt(_ length)))
+ta.highest(0)
+
+jmahma(_src, _length) =>
+    jma(2 * jma(_src, _length / 2) - jma(_src, _length), math.round(math.sqrt(_length)))
+
+t3hma(_src, _length) =>
+    t3(2 * t3(_src, _length / 2) - t3(_src, _length), math.round(math.sqrt(_length)))
+kamahma(_src, _length) =>
+    kama(2 * kama(_src, _length / 2) - kama(_src, _length), math.round(math.sqrt(_length)))
+
+THMA(_src, _length) =>
+    ta.wma(ta.wma(_src, _length / 3) * 3 - ta.wma(_src, _length / 2) - ta.wma(_src, _length), _length)
+thmahma(_src, _length) =>
+    THMA(2 * THMA(_src, _length / 2) - THMA(_src, _length), math.round(math.sqrt(_length)))
+hmathma(_src, _length) =>
+    ta.hma(ta.hma(_src, _length / 3) * 3 - ta.hma(_src, _length / 2) - ta.hma(_src, _length), _length)
+
+        

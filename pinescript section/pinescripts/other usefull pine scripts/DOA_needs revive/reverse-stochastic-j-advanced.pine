@@ -1,0 +1,160 @@
+//@version=6
+indicator("Advanced Reverse Stochastic %J", shorttitle="AdvRev%J", overlay=false)
+
+// Input parameters
+k_length = input.int(14, title="%K Length", minval=1)
+d_length = input.int(3, title="%D Length", minval=1)
+target_j = input.float(80.0, title="Target %J Value", minval=-100, maxval=200)
+show_price_table = input.bool(true, title="Show Price Requirements Table")
+show_scenarios = input.bool(true, title="Show Multiple Scenarios")
+
+// Scenario targets for analysis
+target_j_oversold = input.float(20.0, title="Oversold Target %J", minval=-100, maxval=200)
+target_j_overbought = input.float(80.0, title="Overbought Target %J", minval=-100, maxval=200)
+
+// Current Stochastic calculations
+current_k = ta.stoch(close, high, low, k_length)
+current_d = ta.sma(current_k, d_length)
+current_j = 3 * current_k - 2 * current_d
+
+// Get the range for current period
+hh = ta.highest(high, k_length)
+ll = ta.lowest(low, k_length)
+range_size = hh - ll
+
+// More precise %D calculation for reverse engineering
+// We need to calculate what %D would be if we change current %K
+calc_new_d_with_k(new_k) =>
+    // Sum of previous %K values (excluding current bar)
+    k_sum_prev = 0.0
+    for i = 1 to d_length - 1
+        k_sum_prev := k_sum_prev + ta.stoch(close[i], high[i], low[i], k_length)
+    
+    // New %D would be (sum of previous + new current %K) / d_length
+    new_d = (k_sum_prev + new_k) / d_length
+    new_d
+
+// Function to calculate required %K for target %J
+calc_required_k_iterative(target_j_val) =>
+    // Initial guess
+    k_guess = (target_j_val + 2 * current_d) / 3
+    
+    // Iterative refinement (since %D depends on %K)
+    for i = 0 to 4  // 5 iterations should be enough
+        estimated_d = calc_new_d_with_k(k_guess)
+        k_guess := (target_j_val + 2 * estimated_d) / 3
+    
+    k_guess
+
+// Calculate required %K and corresponding close price
+required_k = calc_required_k_iterative(target_j)
+required_close = range_size > 0 ? ll + (required_k / 100) * range_size : close
+
+// Calculate for multiple scenarios
+required_k_oversold = calc_required_k_iterative(target_j_oversold)
+required_close_oversold = range_size > 0 ? ll + (required_k_oversold / 100) * range_size : close
+
+required_k_overbought = calc_required_k_iterative(target_j_overbought)
+required_close_overbought = range_size > 0 ? ll + (required_k_overbought / 100) * range_size : close
+
+// Validation - check if targets are achievable
+is_feasible = required_close >= ll and required_close <= hh
+is_oversold_feasible = required_close_oversold >= ll and required_close_oversold <= hh
+is_overbought_feasible = required_close_overbought >= ll and required_close_overbought <= hh
+
+// Plot the current and target %J values
+plot(current_j, title="Current %J", color=color.blue, linewidth=2)
+hline(target_j, title="Target %J", color=color.yellow, linestyle=hline.style_dashed, linewidth=2)
+hline(target_j_oversold, title="Oversold Target", color=color.green, linestyle=hline.style_dotted)
+hline(target_j_overbought, title="Overbought Target", color=color.red, linestyle=hline.style_dotted)
+hline(0, title="Zero Line", color=color.gray, linestyle=hline.style_solid)
+
+// Background coloring based on current %J position
+bgcolor(current_j > target_j_overbought ? color.new(color.red, 90) : 
+        current_j < target_j_oversold ? color.new(color.green, 90) : 
+        color.new(color.blue, 95))
+
+// Price levels on a separate pane (scaled to show relative positions)
+price_pane_high = 100
+price_pane_low = 0
+
+// Normalize prices to 0-100 scale for visualization
+normalize_price(price) => 
+    range_size > 0 ? (price - ll) / range_size * 100 : 50
+
+current_close_norm = normalize_price(close)
+required_close_norm = normalize_price(required_close)
+required_oversold_norm = normalize_price(required_close_oversold)
+required_overbought_norm = normalize_price(required_close_overbought)
+
+// Plot normalized price levels
+plot(current_close_norm, title="Current Close (Normalized)", color=color.white, linewidth=2, display=display.none)
+
+// Information table
+if barstate.islast and show_price_table
+    var table price_table = table.new(position.bottom_right, 3, 10, bgcolor=color.white, border_width=1)
+    
+    // Headers
+    table.cell(price_table, 0, 0, "Scenario", text_color=color.black, bgcolor=color.gray)
+    table.cell(price_table, 1, 0, "Required Price", text_color=color.black, bgcolor=color.gray)
+    table.cell(price_table, 2, 0, "Feasible?", text_color=color.black, bgcolor=color.gray)
+    
+    // Current situation
+    table.cell(price_table, 0, 1, "Current", text_color=color.black)
+    table.cell(price_table, 1, 1, str.tostring(close, "#.####"), text_color=color.black)
+    table.cell(price_table, 2, 1, "N/A", text_color=color.black)
+    
+    // Target %J
+    table.cell(price_table, 0, 2, "Target " + str.tostring(target_j, "#.#"), text_color=color.black)
+    table.cell(price_table, 1, 2, str.tostring(required_close, "#.####"), text_color=color.black)
+    table.cell(price_table, 2, 2, is_feasible ? "✓" : "✗", 
+               text_color=is_feasible ? color.green : color.red)
+    
+    // Oversold target
+    table.cell(price_table, 0, 3, "Oversold " + str.tostring(target_j_oversold, "#.#"), text_color=color.black)
+    table.cell(price_table, 1, 3, str.tostring(required_close_oversold, "#.####"), text_color=color.black)
+    table.cell(price_table, 2, 3, is_oversold_feasible ? "✓" : "✗", 
+               text_color=is_oversold_feasible ? color.green : color.red)
+    
+    // Overbought target
+    table.cell(price_table, 0, 4, "Overbought " + str.tostring(target_j_overbought, "#.#"), text_color=color.black)
+    table.cell(price_table, 1, 4, str.tostring(required_close_overbought, "#.####"), text_color=color.black)
+    table.cell(price_table, 2, 4, is_overbought_feasible ? "✓" : "✗", 
+               text_color=is_overbought_feasible ? color.green : color.red)
+    
+    // Range info
+    table.cell(price_table, 0, 5, "Period High", text_color=color.black)
+    table.cell(price_table, 1, 5, str.tostring(hh, "#.####"), text_color=color.black)
+    table.cell(price_table, 2, 5, "", text_color=color.black)
+    
+    table.cell(price_table, 0, 6, "Period Low", text_color=color.black)
+    table.cell(price_table, 1, 6, str.tostring(ll, "#.####"), text_color=color.black)
+    table.cell(price_table, 2, 6, "", text_color=color.black)
+    
+    table.cell(price_table, 0, 7, "Range Size", text_color=color.black)
+    table.cell(price_table, 1, 7, str.tostring(range_size, "#.####"), text_color=color.black)
+    table.cell(price_table, 2, 7, "", text_color=color.black)
+    
+    // Current %J info
+    table.cell(price_table, 0, 8, "Current %J", text_color=color.black)
+    table.cell(price_table, 1, 8, str.tostring(current_j, "#.##"), text_color=color.black)
+    table.cell(price_table, 2, 8, "", text_color=color.black)
+    
+    // Distance to target
+    price_distance = math.abs(close - required_close)
+    table.cell(price_table, 0, 9, "Distance to Target", text_color=color.black)
+    table.cell(price_table, 1, 9, str.tostring(price_distance, "#.####"), text_color=color.black)
+    table.cell(price_table, 2, 9, "", text_color=color.black)
+
+// Alert conditions
+close_to_target = math.abs(close - required_close) < range_size * 0.02  // Within 2% of range
+alertcondition(close_to_target, title="Approaching Target", 
+               message="Price approaching level needed for target %J of " + str.tostring(target_j))
+
+reached_oversold_target = current_j <= target_j_oversold
+alertcondition(reached_oversold_target, title="Reached Oversold Target", 
+               message="%J reached oversold target of " + str.tostring(target_j_oversold))
+
+reached_overbought_target = current_j >= target_j_overbought  
+alertcondition(reached_overbought_target, title="Reached Overbought Target", 
+               message="%J reached overbought target of " + str.tostring(target_j_overbought))
