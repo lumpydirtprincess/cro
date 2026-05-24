@@ -1,0 +1,235 @@
+//@version=6
+indicator("Hyper-Configurable Indicator Template", shorttitle="HC Template", overlay=false)
+
+// ============================================================================
+// UNIVERSAL FUNCTIONS
+// Copy these functions or import from universal_functions library
+// ============================================================================
+
+f_ma(float source, int length, string maType) =>
+    switch maType
+        "SMA"   => ta.sma(source, length)
+        "EMA"   => ta.ema(source, length)
+        "RMA"   => ta.rma(source, length)
+        "WMA"   => ta.wma(source, length)
+        "VWMA"  => ta.vwma(source, length)
+        "HMA"   => ta.wma(2 * ta.wma(source, length / 2) - ta.wma(source, length), math.round(math.sqrt(length)))
+        => ta.sma(source, length)
+
+f_source(string sourceType) =>
+    switch sourceType
+        "Close"  => close
+        "Open"   => open
+        "High"   => high
+        "Low"    => low
+        "HL2"    => hl2
+        "HLC3"   => hlc3
+        "OHLC4"  => ohlc4
+        => close
+
+// ============================================================================
+// INPUTS - Organized into Groups
+// ============================================================================
+
+// ─────────────────────────────────────────────────────────────────────────
+// CALCULATION SETTINGS
+// ─────────────────────────────────────────────────────────────────────────
+calcSource      = input.string("Close", "Source",
+                  options=["Close", "Open", "High", "Low", "HL2", "HLC3", "OHLC4"],
+                  group="📊 Calculation",
+                  tooltip="Price source for calculations")
+
+calcLength      = input.int(14, "Period Length", minval=1, maxval=500,
+                  group="📊 Calculation",
+                  tooltip="Main lookback period for calculations")
+
+calcMAType      = input.string("EMA", "Smoothing Type",
+                  options=["SMA", "EMA", "RMA", "WMA", "VWMA", "HMA"],
+                  group="📊 Calculation",
+                  tooltip="Type of moving average for smoothing")
+
+calcSmooth      = input.bool(false, "Extra Smoothing", group="📊 Calculation")
+calcSmoothLen   = input.int(3, "Smooth Length", minval=1, maxval=50, group="📊 Calculation")
+calcSmoothType  = input.string("EMA", "Smooth Type", options=["SMA", "EMA", "RMA"], group="📊 Calculation")
+
+// ─────────────────────────────────────────────────────────────────────────
+// SIGNAL SETTINGS
+// ─────────────────────────────────────────────────────────────────────────
+sigUseLevel     = input.bool(true, "Use Level Crossover", group="📶 Signals")
+sigLevel        = input.float(50, "Signal Level", group="📶 Signals")
+
+sigUseCross     = input.bool(false, "Use MA Crossover", group="📶 Signals")
+sigCrossLength  = input.int(9, "Cross MA Length", minval=1, group="📶 Signals")
+sigCrossType    = input.string("SMA", "Cross MA Type", options=["SMA", "EMA", "WMA"], group="📶 Signals")
+
+sigUseSlope     = input.bool(false, "Use Slope Change", group="📶 Signals")
+sigSlopeLength  = input.int(3, "Slope Lookback", minval=1, group="📶 Signals")
+
+// ─────────────────────────────────────────────────────────────────────────
+// MULTI-TIMEFRAME SETTINGS
+// ─────────────────────────────────────────────────────────────────────────
+mtfEnabled      = input.bool(false, "Enable MTF Analysis", group="⏰ Multi-Timeframe")
+mtfTimeframe    = input.timeframe("60", "Higher Timeframe", group="⏰ Multi-Timeframe")
+mtfRequireConf  = input.bool(true, "Require Confluence",
+                  group="⏰ Multi-Timeframe",
+                  tooltip="Both timeframes must agree for signal")
+
+// ─────────────────────────────────────────────────────────────────────────
+// FILTER SETTINGS
+// ─────────────────────────────────────────────────────────────────────────
+fltUseTrend     = input.bool(false, "Trend Filter", group="🔍 Filters")
+fltTrendLength  = input.int(200, "Trend MA Length", minval=10, group="🔍 Filters")
+fltTrendType    = input.string("SMA", "Trend MA Type", options=["SMA", "EMA", "WMA"], group="🔍 Filters")
+
+fltUseVolatil   = input.bool(false, "Volatility Filter", group="🔍 Filters")
+fltVolATRLength = input.int(14, "ATR Length", minval=5, group="🔍 Filters")
+fltVolMinATR    = input.float(0.0001, "Min ATR", minval=0, step=0.0001, group="🔍 Filters")
+
+// ─────────────────────────────────────────────────────────────────────────
+// VISUAL SETTINGS
+// ─────────────────────────────────────────────────────────────────────────
+colorBull       = input.color(color.new(#00ff00, 0), "Bullish", group="🎨 Visual")
+colorBear       = input.color(color.new(#ff0000, 0), "Bearish", group="🎨 Visual")
+colorNeutral    = input.color(color.new(#808080, 50), "Neutral", group="🎨 Visual")
+
+plotWidth       = input.int(2, "Line Width", minval=1, maxval=4, group="🎨 Visual")
+plotType        = input.string("Line", "Plot Style",
+                  options=["Line", "Histogram", "Columns", "Area"], group="🎨 Visual")
+
+showLevels      = input.bool(true, "Show Threshold Levels", group="🎨 Visual")
+levelUpper      = input.float(70, "Upper Level", minval=50, maxval=100, group="🎨 Visual")
+levelLower      = input.float(30, "Lower Level", minval=0, maxval=50, group="🎨 Visual")
+
+showSignals     = input.bool(true, "Show Signal Shapes", group="🎨 Visual")
+showBackground  = input.bool(false, "Color Background", group="🎨 Visual")
+
+// ============================================================================
+// CALCULATIONS
+// ============================================================================
+
+// Get configured source
+src = f_source(calcSource)
+
+// ─── Main Indicator Calculation ─────────────────────────────────────────
+// TODO: Replace this with your actual indicator calculation
+// This is just an example using RSI-like calculation
+up = math.max(src - src[1], 0)
+dn = math.max(src[1] - src, 0)
+upSmooth = f_ma(up, calcLength, calcMAType)
+dnSmooth = f_ma(dn, calcLength, calcMAType)
+mainValue = dnSmooth == 0 ? 100 : upSmooth == 0 ? 0 : 100 - (100 / (1 + upSmooth / dnSmooth))
+
+// Extra smoothing if enabled
+mainValue := calcSmooth ? f_ma(mainValue, calcSmoothLen, calcSmoothType) : mainValue
+
+// ─── Signal MA (for crossover) ───────────────────────────────────────────
+signalMA = sigUseCross ? f_ma(mainValue, sigCrossLength, sigCrossType) : na
+
+// ─── Multi-Timeframe Value ───────────────────────────────────────────────
+mtfValue = mtfEnabled ? request.security(syminfo.tickerid, mtfTimeframe, mainValue) : na
+
+// ─── Filters ─────────────────────────────────────────────────────────────
+// Trend filter
+trendMA = fltUseTrend ? f_ma(close, fltTrendLength, fltTrendType) : na
+inUptrend = not fltUseTrend or close > trendMA
+inDowntrend = not fltUseTrend or close < trendMA
+
+// Volatility filter
+atr = fltUseVolatil ? ta.atr(fltVolATRLength) : 0
+volatilityOK = not fltUseVolatil or atr > fltVolMinATR
+
+// Combined filter
+filterPassed = volatilityOK
+
+// ============================================================================
+// SIGNAL LOGIC
+// ============================================================================
+
+// ─── Level Crossover Signals ─────────────────────────────────────────────
+bullLevel = sigUseLevel and ta.crossover(mainValue, sigLevel)
+bearLevel = sigUseLevel and ta.crossunder(mainValue, sigLevel)
+
+// ─── MA Crossover Signals ────────────────────────────────────────────────
+bullCross = sigUseCross and ta.crossover(mainValue, signalMA)
+bearCross = sigUseCross and ta.crossunder(mainValue, signalMA)
+
+// ─── Slope Change Signals ────────────────────────────────────────────────
+slope = sigUseSlope ? (mainValue - mainValue[sigSlopeLength]) : 0
+bullSlope = sigUseSlope and slope > 0 and slope[1] <= 0
+bearSlope = sigUseSlope and slope < 0 and slope[1] >= 0
+
+// ─── Overbought/Oversold Signals ─────────────────────────────────────────
+bullOversold = showLevels and ta.crossover(mainValue, levelLower)
+bearOverbought = showLevels and ta.crossunder(mainValue, levelUpper)
+
+// ─── Combined Signals ────────────────────────────────────────────────────
+bullSignal = (bullLevel or bullCross or bullSlope or bullOversold) and filterPassed and inUptrend
+bearSignal = (bearLevel or bearCross or bearSlope or bearOverbought) and filterPassed and inDowntrend
+
+// ─── MTF Confluence (if enabled) ─────────────────────────────────────────
+if mtfEnabled and mtfRequireConf
+    bullSignal := bullSignal and mtfValue > sigLevel
+    bearSignal := bearSignal and mtfValue < sigLevel
+
+// ============================================================================
+// PLOTTING
+// ============================================================================
+
+// ─── Determine Color ─────────────────────────────────────────────────────
+plotColor = bullSignal ? colorBull : bearSignal ? colorBear : colorNeutral
+
+// ─── Main Plot (based on style) ──────────────────────────────────────────
+if plotType == "Line"
+    plot(mainValue, "Main Value", plotColor, plotWidth)
+else if plotType == "Histogram"
+    plot(mainValue, "Main Value", plotColor, plotWidth, plot.style_histogram)
+else if plotType == "Columns"
+    plot(mainValue, "Main Value", plotColor, plotWidth, plot.style_columns)
+else if plotType == "Area"
+    plot(mainValue, "Main Value", plotColor, 1)
+    fill_bottom = hline(0, editable=false, display=display.none)
+    fill(plot(mainValue, display=display.none), fill_bottom, plotColor, 80)
+
+// ─── Signal MA Plot ──────────────────────────────────────────────────────
+plot(sigUseCross ? signalMA : na, "Signal MA", color.new(color.orange, 0), 1)
+
+// ─── MTF Value Plot ──────────────────────────────────────────────────────
+plot(mtfEnabled ? mtfValue : na, "MTF Value", color.new(color.blue, 50), 2, plot.style_circles)
+
+// ─── Threshold Levels ────────────────────────────────────────────────────
+hline(showLevels ? levelUpper : na, "Upper Level", color.new(color.red, 50), hline.style_dashed)
+hline(showLevels ? sigLevel : na, "Middle", color.new(color.gray, 70), hline.style_dotted)
+hline(showLevels ? levelLower : na, "Lower Level", color.new(color.green, 50), hline.style_dashed)
+
+// ─── Signal Shapes ───────────────────────────────────────────────────────
+plotshape(showSignals and bullSignal, "Bull Signal", shape.triangleup,
+          location.bottom, colorBull, size=size.small)
+plotshape(showSignals and bearSignal, "Bear Signal", shape.triangledown,
+          location.top, colorBear, size=size.small)
+
+// ─── Background Color ────────────────────────────────────────────────────
+bgcolor(showBackground ? (bullSignal ? color.new(colorBull, 95) :
+        bearSignal ? color.new(colorBear, 95) : na) : na)
+
+// ============================================================================
+// ALERTS
+// ============================================================================
+
+alertcondition(bullSignal, "Bullish Signal", "Bullish signal detected on {{ticker}}")
+alertcondition(bearSignal, "Bearish Signal", "Bearish signal detected on {{ticker}}")
+alertcondition(bullSignal or bearSignal, "Any Signal", "Signal detected on {{ticker}}")
+
+// ============================================================================
+// NOTES FOR CUSTOMIZATION
+// ============================================================================
+
+// To customize this template for your specific indicator:
+//
+// 1. Replace the mainValue calculation (lines around 123-128) with your indicator logic
+// 2. Adjust input parameters as needed for your specific indicator
+// 3. Modify signal logic to match your indicator's characteristics
+// 4. Add any additional filters or conditions specific to your needs
+// 5. Customize visual elements (colors, levels, etc.)
+//
+// The structure is designed to be flexible - you can enable/disable features
+// through inputs without changing code.

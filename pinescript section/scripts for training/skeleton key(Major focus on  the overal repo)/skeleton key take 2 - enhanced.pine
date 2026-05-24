@@ -1,0 +1,1046 @@
+//@version=6
+
+strategy("Skeleton Key v2 Enhanced - Threshold B/C/D/E Logic", "SKE-v2+", overlay = true, pyramiding = 5)
+//
+// SKELETON KEY v2 ENHANCED - Hyper-Configurable Strategy Builder
+//
+// ENHANCEMENTS OVER TAKE 2:
+// - Threshold E added (5 total threshold signals)
+// - Source offset % added to all thresholds (like External Sources)
+// - Enhanced operators: rising, falling, crosses_above, crosses_below
+// - Cleaner function-based signal generation
+//
+// Signal Types: Threshold A/B/C/D/E, External Sources A/B/C/D
+// Logic Groups: AND-A, AND-B, OR (3 independent tracks)
+// Tuners: Historical Bar Index, Bars Valid, Profit Filter, Offsets
+//
+// ============================================================================
+
+// ============================================================================
+// STRATEGY SETTINGS
+// ============================================================================
+
+stratDirection = input.string("Long", "Strategy Direction",
+    options = ["Long", "Short"],
+    group = "Strategy Settings",
+    tooltip = "Trade direction: Long only or Short only")
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+// Enhanced threshold comparison function with dynamic operators
+f_threshold_compare_enhanced(float src, float src_prev, string op, float val) =>
+    switch op
+        "<"  => src < val
+        ">"  => src > val
+        "<=" => src <= val
+        ">=" => src >= val
+        "==" => src == val
+        "rising" => src > src_prev
+        "falling" => src < src_prev
+        "crosses_above" => src_prev <= val and src > val
+        "crosses_below" => src_prev >= val and src < val
+        => false
+
+// External sources comparison function (includes crossover/crossunder)
+f_external_compare(float src1, string op, float src2, float src1_prev, float src2_prev) =>
+    switch op
+        "<"  => src1 < src2
+        ">"  => src1 > src2
+        "<=" => src1 <= src2
+        ">=" => src1 >= src2
+        "==" => src1 == src2
+        "crossover"  => src1_prev < src2_prev and src1 > src2
+        "crossunder" => src1_prev > src2_prev and src1 < src2
+        => false
+
+// Profit filter function
+f_profit_filter(string filter) =>
+    if filter == "ANY"
+        true
+    else if filter == "PROFIT"
+        strategy.position_size != 0 ? strategy.openprofit > 0 : true
+    else if filter == "LOSS"
+        strategy.position_size != 0 ? strategy.openprofit < 0 : true
+    else
+        true
+
+// ============================================================================
+// THRESHOLD SIGNAL A
+// ============================================================================
+// Structure: {source} {operator} {value}
+// Example: RSI >= 70
+// Operators: <, >, <=, >=, ==, rising, falling, crosses_above, crosses_below
+
+thresh_enabled_A = input.bool(true, "Enable Threshold Signal?",
+    group = "═══ THRESHOLD A ═══",
+    tooltip = "Enable/disable this signal")
+
+thresh_source_A = input.source(close, "",
+    inline = 'threshA',
+    group = "═══ THRESHOLD A ═══",
+    tooltip = "Data source to evaluate")
+
+thresh_operator_A = input.string(">=", "",
+    inline = 'threshA',
+    options = ["<", ">", "<=", ">=", "==", "rising", "falling", "crosses_above", "crosses_below"],
+    group = "═══ THRESHOLD A ═══",
+    tooltip = "Comparison operator")
+
+thresh_value_A = input.float(0.0, "",
+    inline = 'threshA',
+    group = "═══ THRESHOLD A ═══",
+    tooltip = "Value to compare against")
+
+thresh_offset_A = input.float(0.0, "Source Offset %",
+    minval = -100, maxval = 100, step = 0.1,
+    group = "═══ THRESHOLD A ═══",
+    tooltip = "Percentage offset applied to source before comparison")
+
+thresh_hist_bar_A = input.int(0, "Historical Bar Index",
+    minval = 0,
+    group = "═══ THRESHOLD A ═══",
+    tooltip = "Use value from N bars ago (0 = current bar)")
+
+thresh_bars_valid_A = input.int(0, "Bars Signal is Valid",
+    minval = 0,
+    group = "═══ THRESHOLD A ═══",
+    tooltip = "Signal stays active for N bars after becoming true")
+
+thresh_profit_filter_A = input.string("ANY", "Profit Filter",
+    options = ["ANY", "PROFIT", "LOSS"],
+    group = "═══ THRESHOLD A ═══",
+    tooltip = "Signal only active if profit filter matches")
+
+thresh_entry_A = input.bool(true, "Entry",
+    inline = 'threshA_action',
+    group = "═══ THRESHOLD A ═══",
+    tooltip = "Use this signal for entries")
+
+thresh_exit_A = input.bool(false, "Exit",
+    inline = 'threshA_action',
+    group = "═══ THRESHOLD A ═══",
+    tooltip = "Use this signal for exits")
+
+thresh_entry_logic_A = input.string("AND-A", "Entry Logical Group",
+    options = ["AND-A", "AND-B", "OR"],
+    group = "═══ THRESHOLD A ═══",
+    tooltip = "Which entry logic group this signal belongs to")
+
+thresh_exit_logic_A = input.string("OR", "Exit Logical Group",
+    options = ["AND-A", "AND-B", "OR"],
+    group = "═══ THRESHOLD A ═══",
+    tooltip = "Which exit logic group this signal belongs to")
+
+// ============================================================================
+// THRESHOLD SIGNAL B
+// ============================================================================
+
+thresh_enabled_B = input.bool(true, "Enable Threshold Signal?",
+    group = "═══ THRESHOLD B ═══",
+    tooltip = "Enable/disable this signal")
+
+thresh_source_B = input.source(close, "",
+    inline = 'threshB',
+    group = "═══ THRESHOLD B ═══",
+    tooltip = "Data source to evaluate")
+
+thresh_operator_B = input.string(">=", "",
+    inline = 'threshB',
+    options = ["<", ">", "<=", ">=", "==", "rising", "falling", "crosses_above", "crosses_below"],
+    group = "═══ THRESHOLD B ═══",
+    tooltip = "Comparison operator")
+
+thresh_value_B = input.float(0.0, "",
+    inline = 'threshB',
+    group = "═══ THRESHOLD B ═══",
+    tooltip = "Value to compare against")
+
+thresh_offset_B = input.float(0.0, "Source Offset %",
+    minval = -100, maxval = 100, step = 0.1,
+    group = "═══ THRESHOLD B ═══",
+    tooltip = "Percentage offset applied to source before comparison")
+
+thresh_hist_bar_B = input.int(0, "Historical Bar Index",
+    minval = 0,
+    group = "═══ THRESHOLD B ═══",
+    tooltip = "Use value from N bars ago (0 = current bar)")
+
+thresh_bars_valid_B = input.int(0, "Bars Signal is Valid",
+    minval = 0,
+    group = "═══ THRESHOLD B ═══",
+    tooltip = "Signal stays active for N bars after becoming true")
+
+thresh_profit_filter_B = input.string("ANY", "Profit Filter",
+    options = ["ANY", "PROFIT", "LOSS"],
+    group = "═══ THRESHOLD B ═══",
+    tooltip = "Signal only active if profit filter matches")
+
+thresh_entry_B = input.bool(true, "Entry",
+    inline = 'threshB_action',
+    group = "═══ THRESHOLD B ═══",
+    tooltip = "Use this signal for entries")
+
+thresh_exit_B = input.bool(false, "Exit",
+    inline = 'threshB_action',
+    group = "═══ THRESHOLD B ═══",
+    tooltip = "Use this signal for exits")
+
+thresh_entry_logic_B = input.string("AND-A", "Entry Logical Group",
+    options = ["AND-A", "AND-B", "OR"],
+    group = "═══ THRESHOLD B ═══",
+    tooltip = "Which entry logic group this signal belongs to")
+
+thresh_exit_logic_B = input.string("OR", "Exit Logical Group",
+    options = ["AND-A", "AND-B", "OR"],
+    group = "═══ THRESHOLD B ═══",
+    tooltip = "Which exit logic group this signal belongs to")
+
+// ============================================================================
+// THRESHOLD SIGNAL C
+// ============================================================================
+
+thresh_enabled_C = input.bool(false, "Enable Threshold Signal?",
+    group = "═══ THRESHOLD C ═══",
+    tooltip = "Enable/disable this signal")
+
+thresh_source_C = input.source(close, "",
+    inline = 'threshC',
+    group = "═══ THRESHOLD C ═══",
+    tooltip = "Data source to evaluate")
+
+thresh_operator_C = input.string(">=", "",
+    inline = 'threshC',
+    options = ["<", ">", "<=", ">=", "==", "rising", "falling", "crosses_above", "crosses_below"],
+    group = "═══ THRESHOLD C ═══",
+    tooltip = "Comparison operator")
+
+thresh_value_C = input.float(0.0, "",
+    inline = 'threshC',
+    group = "═══ THRESHOLD C ═══",
+    tooltip = "Value to compare against")
+
+thresh_offset_C = input.float(0.0, "Source Offset %",
+    minval = -100, maxval = 100, step = 0.1,
+    group = "═══ THRESHOLD C ═══",
+    tooltip = "Percentage offset applied to source before comparison")
+
+thresh_hist_bar_C = input.int(0, "Historical Bar Index",
+    minval = 0,
+    group = "═══ THRESHOLD C ═══",
+    tooltip = "Use value from N bars ago (0 = current bar)")
+
+thresh_bars_valid_C = input.int(0, "Bars Signal is Valid",
+    minval = 0,
+    group = "═══ THRESHOLD C ═══",
+    tooltip = "Signal stays active for N bars after becoming true")
+
+thresh_profit_filter_C = input.string("ANY", "Profit Filter",
+    options = ["ANY", "PROFIT", "LOSS"],
+    group = "═══ THRESHOLD C ═══",
+    tooltip = "Signal only active if profit filter matches")
+
+thresh_entry_C = input.bool(true, "Entry",
+    inline = 'threshC_action',
+    group = "═══ THRESHOLD C ═══",
+    tooltip = "Use this signal for entries")
+
+thresh_exit_C = input.bool(false, "Exit",
+    inline = 'threshC_action',
+    group = "═══ THRESHOLD C ═══",
+    tooltip = "Use this signal for exits")
+
+thresh_entry_logic_C = input.string("AND-A", "Entry Logical Group",
+    options = ["AND-A", "AND-B", "OR"],
+    group = "═══ THRESHOLD C ═══",
+    tooltip = "Which entry logic group this signal belongs to")
+
+thresh_exit_logic_C = input.string("OR", "Exit Logical Group",
+    options = ["AND-A", "AND-B", "OR"],
+    group = "═══ THRESHOLD C ═══",
+    tooltip = "Which exit logic group this signal belongs to")
+
+// ============================================================================
+// THRESHOLD SIGNAL D
+// ============================================================================
+
+thresh_enabled_D = input.bool(false, "Enable Threshold Signal?",
+    group = "═══ THRESHOLD D ═══",
+    tooltip = "Enable/disable this signal")
+
+thresh_source_D = input.source(close, "",
+    inline = 'threshD',
+    group = "═══ THRESHOLD D ═══",
+    tooltip = "Data source to evaluate")
+
+thresh_operator_D = input.string(">=", "",
+    inline = 'threshD',
+    options = ["<", ">", "<=", ">=", "==", "rising", "falling", "crosses_above", "crosses_below"],
+    group = "═══ THRESHOLD D ═══",
+    tooltip = "Comparison operator")
+
+thresh_value_D = input.float(0.0, "",
+    inline = 'threshD',
+    group = "═══ THRESHOLD D ═══",
+    tooltip = "Value to compare against")
+
+thresh_offset_D = input.float(0.0, "Source Offset %",
+    minval = -100, maxval = 100, step = 0.1,
+    group = "═══ THRESHOLD D ═══",
+    tooltip = "Percentage offset applied to source before comparison")
+
+thresh_hist_bar_D = input.int(0, "Historical Bar Index",
+    minval = 0,
+    group = "═══ THRESHOLD D ═══",
+    tooltip = "Use value from N bars ago (0 = current bar)")
+
+thresh_bars_valid_D = input.int(0, "Bars Signal is Valid",
+    minval = 0,
+    group = "═══ THRESHOLD D ═══",
+    tooltip = "Signal stays active for N bars after becoming true")
+
+thresh_profit_filter_D = input.string("ANY", "Profit Filter",
+    options = ["ANY", "PROFIT", "LOSS"],
+    group = "═══ THRESHOLD D ═══",
+    tooltip = "Signal only active if profit filter matches")
+
+thresh_entry_D = input.bool(true, "Entry",
+    inline = 'threshD_action',
+    group = "═══ THRESHOLD D ═══",
+    tooltip = "Use this signal for entries")
+
+thresh_exit_D = input.bool(false, "Exit",
+    inline = 'threshD_action',
+    group = "═══ THRESHOLD D ═══",
+    tooltip = "Use this signal for exits")
+
+thresh_entry_logic_D = input.string("AND-A", "Entry Logical Group",
+    options = ["AND-A", "AND-B", "OR"],
+    group = "═══ THRESHOLD D ═══",
+    tooltip = "Which entry logic group this signal belongs to")
+
+thresh_exit_logic_D = input.string("OR", "Exit Logical Group",
+    options = ["AND-A", "AND-B", "OR"],
+    group = "═══ THRESHOLD D ═══",
+    tooltip = "Which exit logic group this signal belongs to")
+
+// ============================================================================
+// THRESHOLD SIGNAL E
+// ============================================================================
+
+thresh_enabled_E = input.bool(false, "Enable Threshold Signal?",
+    group = "═══ THRESHOLD E ═══",
+    tooltip = "Enable/disable this signal")
+
+thresh_source_E = input.source(close, "",
+    inline = 'threshE',
+    group = "═══ THRESHOLD E ═══",
+    tooltip = "Data source to evaluate")
+
+thresh_operator_E = input.string(">=", "",
+    inline = 'threshE',
+    options = ["<", ">", "<=", ">=", "==", "rising", "falling", "crosses_above", "crosses_below"],
+    group = "═══ THRESHOLD E ═══",
+    tooltip = "Comparison operator")
+
+thresh_value_E = input.float(0.0, "",
+    inline = 'threshE',
+    group = "═══ THRESHOLD E ═══",
+    tooltip = "Value to compare against")
+
+thresh_offset_E = input.float(0.0, "Source Offset %",
+    minval = -100, maxval = 100, step = 0.1,
+    group = "═══ THRESHOLD E ═══",
+    tooltip = "Percentage offset applied to source before comparison")
+
+thresh_hist_bar_E = input.int(0, "Historical Bar Index",
+    minval = 0,
+    group = "═══ THRESHOLD E ═══",
+    tooltip = "Use value from N bars ago (0 = current bar)")
+
+thresh_bars_valid_E = input.int(0, "Bars Signal is Valid",
+    minval = 0,
+    group = "═══ THRESHOLD E ═══",
+    tooltip = "Signal stays active for N bars after becoming true")
+
+thresh_profit_filter_E = input.string("ANY", "Profit Filter",
+    options = ["ANY", "PROFIT", "LOSS"],
+    group = "═══ THRESHOLD E ═══",
+    tooltip = "Signal only active if profit filter matches")
+
+thresh_entry_E = input.bool(true, "Entry",
+    inline = 'threshE_action',
+    group = "═══ THRESHOLD E ═══",
+    tooltip = "Use this signal for entries")
+
+thresh_exit_E = input.bool(false, "Exit",
+    inline = 'threshE_action',
+    group = "═══ THRESHOLD E ═══",
+    tooltip = "Use this signal for exits")
+
+thresh_entry_logic_E = input.string("AND-A", "Entry Logical Group",
+    options = ["AND-A", "AND-B", "OR"],
+    group = "═══ THRESHOLD E ═══",
+    tooltip = "Which entry logic group this signal belongs to")
+
+thresh_exit_logic_E = input.string("OR", "Exit Logical Group",
+    options = ["AND-A", "AND-B", "OR"],
+    group = "═══ THRESHOLD E ═══",
+    tooltip = "Which exit logic group this signal belongs to")
+
+// ============================================================================
+// EXTERNAL SOURCES SIGNAL A
+// ============================================================================
+// Structure: {source1} {operator} {source2}
+// Example: Close CROSSOVER SMA
+// Operators: <, >, <=, >=, ==, crossover, crossunder
+
+ext_enabled_A = input.bool(true, "Enable External Sources Signal?",
+    group = "═══ EXTERNAL A ═══",
+    tooltip = "Enable/disable this signal")
+
+ext_source1_A = input.source(close, "",
+    inline = 'extA',
+    group = "═══ EXTERNAL A ═══",
+    tooltip = "First data source")
+
+ext_operator_A = input.string("crossover", "",
+    inline = 'extA',
+    options = ["<", ">", "<=", ">=", "==", "crossover", "crossunder"],
+    group = "═══ EXTERNAL A ═══",
+    tooltip = "Comparison operator")
+
+ext_source2_A = input.source(open, "",
+    inline = 'extA',
+    group = "═══ EXTERNAL A ═══",
+    tooltip = "Second data source")
+
+ext_offset1_A = input.float(0.0, "Source 1 Offset %",
+    minval = -100, maxval = 100, step = 0.1,
+    group = "═══ EXTERNAL A ═══",
+    tooltip = "Percentage offset applied to Source 1")
+
+ext_offset2_A = input.float(0.0, "Source 2 Offset %",
+    minval = -100, maxval = 100, step = 0.1,
+    group = "═══ EXTERNAL A ═══",
+    tooltip = "Percentage offset applied to Source 2")
+
+ext_hist_bar1_A = input.int(0, "Historical Bar Index 1",
+    minval = 0,
+    group = "═══ EXTERNAL A ═══",
+    tooltip = "Use Source 1 value from N bars ago")
+
+ext_hist_bar2_A = input.int(1, "Historical Bar Index 2",
+    minval = 0,
+    group = "═══ EXTERNAL A ═══",
+    tooltip = "Use Source 2 value from N bars ago")
+
+ext_bars_valid_A = input.int(0, "Bars Signal is Valid",
+    minval = 0,
+    group = "═══ EXTERNAL A ═══",
+    tooltip = "Signal stays active for N bars after becoming true")
+
+ext_profit_filter_A = input.string("ANY", "Profit Filter",
+    options = ["ANY", "PROFIT", "LOSS"],
+    group = "═══ EXTERNAL A ═══",
+    tooltip = "Signal only active if profit filter matches")
+
+ext_entry_A = input.bool(true, "Entry",
+    inline = 'extA_action',
+    group = "═══ EXTERNAL A ═══",
+    tooltip = "Use this signal for entries")
+
+ext_exit_A = input.bool(false, "Exit",
+    inline = 'extA_action',
+    group = "═══ EXTERNAL A ═══",
+    tooltip = "Use this signal for exits")
+
+ext_entry_logic_A = input.string("AND-A", "Entry Logical Group",
+    options = ["AND-A", "AND-B", "OR"],
+    group = "═══ EXTERNAL A ═══",
+    tooltip = "Which entry logic group this signal belongs to")
+
+ext_exit_logic_A = input.string("OR", "Exit Logical Group",
+    options = ["AND-A", "AND-B", "OR"],
+    group = "═══ EXTERNAL A ═══",
+    tooltip = "Which exit logic group this signal belongs to")
+
+// ============================================================================
+// EXTERNAL SOURCES SIGNAL B
+// ============================================================================
+
+ext_enabled_B = input.bool(false, "Enable External Sources Signal?",
+    group = "═══ EXTERNAL B ═══",
+    tooltip = "Enable/disable this signal")
+
+ext_source1_B = input.source(close, "",
+    inline = 'extB',
+    group = "═══ EXTERNAL B ═══",
+    tooltip = "First data source")
+
+ext_operator_B = input.string("crossover", "",
+    inline = 'extB',
+    options = ["<", ">", "<=", ">=", "==", "crossover", "crossunder"],
+    group = "═══ EXTERNAL B ═══",
+    tooltip = "Comparison operator")
+
+ext_source2_B = input.source(open, "",
+    inline = 'extB',
+    group = "═══ EXTERNAL B ═══",
+    tooltip = "Second data source")
+
+ext_offset1_B = input.float(0.0, "Source 1 Offset %",
+    minval = -100, maxval = 100, step = 0.1,
+    group = "═══ EXTERNAL B ═══",
+    tooltip = "Percentage offset applied to Source 1")
+
+ext_offset2_B = input.float(0.0, "Source 2 Offset %",
+    minval = -100, maxval = 100, step = 0.1,
+    group = "═══ EXTERNAL B ═══",
+    tooltip = "Percentage offset applied to Source 2")
+
+ext_hist_bar1_B = input.int(0, "Historical Bar Index 1",
+    minval = 0,
+    group = "═══ EXTERNAL B ═══",
+    tooltip = "Use Source 1 value from N bars ago")
+
+ext_hist_bar2_B = input.int(1, "Historical Bar Index 2",
+    minval = 0,
+    group = "═══ EXTERNAL B ═══",
+    tooltip = "Use Source 2 value from N bars ago")
+
+ext_bars_valid_B = input.int(0, "Bars Signal is Valid",
+    minval = 0,
+    group = "═══ EXTERNAL B ═══",
+    tooltip = "Signal stays active for N bars after becoming true")
+
+ext_profit_filter_B = input.string("ANY", "Profit Filter",
+    options = ["ANY", "PROFIT", "LOSS"],
+    group = "═══ EXTERNAL B ═══",
+    tooltip = "Signal only active if profit filter matches")
+
+ext_entry_B = input.bool(true, "Entry",
+    inline = 'extB_action',
+    group = "═══ EXTERNAL B ═══",
+    tooltip = "Use this signal for entries")
+
+ext_exit_B = input.bool(false, "Exit",
+    inline = 'extB_action',
+    group = "═══ EXTERNAL B ═══",
+    tooltip = "Use this signal for exits")
+
+ext_entry_logic_B = input.string("AND-A", "Entry Logical Group",
+    options = ["AND-A", "AND-B", "OR"],
+    group = "═══ EXTERNAL B ═══",
+    tooltip = "Which entry logic group this signal belongs to")
+
+ext_exit_logic_B = input.string("OR", "Exit Logical Group",
+    options = ["AND-A", "AND-B", "OR"],
+    group = "═══ EXTERNAL B ═══",
+    tooltip = "Which exit logic group this signal belongs to")
+
+// ============================================================================
+// EXTERNAL SOURCES SIGNAL C
+// ============================================================================
+
+ext_enabled_C = input.bool(false, "Enable External Sources Signal?",
+    group = "═══ EXTERNAL C ═══",
+    tooltip = "Enable/disable this signal")
+
+ext_source1_C = input.source(close, "",
+    inline = 'extC',
+    group = "═══ EXTERNAL C ═══",
+    tooltip = "First data source")
+
+ext_operator_C = input.string("crossover", "",
+    inline = 'extC',
+    options = ["<", ">", "<=", ">=", "==", "crossover", "crossunder"],
+    group = "═══ EXTERNAL C ═══",
+    tooltip = "Comparison operator")
+
+ext_source2_C = input.source(open, "",
+    inline = 'extC',
+    group = "═══ EXTERNAL C ═══",
+    tooltip = "Second data source")
+
+ext_offset1_C = input.float(0.0, "Source 1 Offset %",
+    minval = -100, maxval = 100, step = 0.1,
+    group = "═══ EXTERNAL C ═══",
+    tooltip = "Percentage offset applied to Source 1")
+
+ext_offset2_C = input.float(0.0, "Source 2 Offset %",
+    minval = -100, maxval = 100, step = 0.1,
+    group = "═══ EXTERNAL C ═══",
+    tooltip = "Percentage offset applied to Source 2")
+
+ext_hist_bar1_C = input.int(0, "Historical Bar Index 1",
+    minval = 0,
+    group = "═══ EXTERNAL C ═══",
+    tooltip = "Use Source 1 value from N bars ago")
+
+ext_hist_bar2_C = input.int(1, "Historical Bar Index 2",
+    minval = 0,
+    group = "═══ EXTERNAL C ═══",
+    tooltip = "Use Source 2 value from N bars ago")
+
+ext_bars_valid_C = input.int(0, "Bars Signal is Valid",
+    minval = 0,
+    group = "═══ EXTERNAL C ═══",
+    tooltip = "Signal stays active for N bars after becoming true")
+
+ext_profit_filter_C = input.string("ANY", "Profit Filter",
+    options = ["ANY", "PROFIT", "LOSS"],
+    group = "═══ EXTERNAL C ═══",
+    tooltip = "Signal only active if profit filter matches")
+
+ext_entry_C = input.bool(true, "Entry",
+    inline = 'extC_action',
+    group = "═══ EXTERNAL C ═══",
+    tooltip = "Use this signal for entries")
+
+ext_exit_C = input.bool(false, "Exit",
+    inline = 'extC_action',
+    group = "═══ EXTERNAL C ═══",
+    tooltip = "Use this signal for exits")
+
+ext_entry_logic_C = input.string("AND-A", "Entry Logical Group",
+    options = ["AND-A", "AND-B", "OR"],
+    group = "═══ EXTERNAL C ═══",
+    tooltip = "Which entry logic group this signal belongs to")
+
+ext_exit_logic_C = input.string("OR", "Exit Logical Group",
+    options = ["AND-A", "AND-B", "OR"],
+    group = "═══ EXTERNAL C ═══",
+    tooltip = "Which exit logic group this signal belongs to")
+
+// ============================================================================
+// EXTERNAL SOURCES SIGNAL D
+// ============================================================================
+
+ext_enabled_D = input.bool(false, "Enable External Sources Signal?",
+    group = "═══ EXTERNAL D ═══",
+    tooltip = "Enable/disable this signal")
+
+ext_source1_D = input.source(close, "",
+    inline = 'extD',
+    group = "═══ EXTERNAL D ═══",
+    tooltip = "First data source")
+
+ext_operator_D = input.string("crossover", "",
+    inline = 'extD',
+    options = ["<", ">", "<=", ">=", "==", "crossover", "crossunder"],
+    group = "═══ EXTERNAL D ═══",
+    tooltip = "Comparison operator")
+
+ext_source2_D = input.source(open, "",
+    inline = 'extD',
+    group = "═══ EXTERNAL D ═══",
+    tooltip = "Second data source")
+
+ext_offset1_D = input.float(0.0, "Source 1 Offset %",
+    minval = -100, maxval = 100, step = 0.1,
+    group = "═══ EXTERNAL D ═══",
+    tooltip = "Percentage offset applied to Source 1")
+
+ext_offset2_D = input.float(0.0, "Source 2 Offset %",
+    minval = -100, maxval = 100, step = 0.1,
+    group = "═══ EXTERNAL D ═══",
+    tooltip = "Percentage offset applied to Source 2")
+
+ext_hist_bar1_D = input.int(0, "Historical Bar Index 1",
+    minval = 0,
+    group = "═══ EXTERNAL D ═══",
+    tooltip = "Use Source 1 value from N bars ago")
+
+ext_hist_bar2_D = input.int(1, "Historical Bar Index 2",
+    minval = 0,
+    group = "═══ EXTERNAL D ═══",
+    tooltip = "Use Source 2 value from N bars ago")
+
+ext_bars_valid_D = input.int(0, "Bars Signal is Valid",
+    minval = 0,
+    group = "═══ EXTERNAL D ═══",
+    tooltip = "Signal stays active for N bars after becoming true")
+
+ext_profit_filter_D = input.string("ANY", "Profit Filter",
+    options = ["ANY", "PROFIT", "LOSS"],
+    group = "═══ EXTERNAL D ═══",
+    tooltip = "Signal only active if profit filter matches")
+
+ext_entry_D = input.bool(true, "Entry",
+    inline = 'extD_action',
+    group = "═══ EXTERNAL D ═══",
+    tooltip = "Use this signal for entries")
+
+ext_exit_D = input.bool(false, "Exit",
+    inline = 'extD_action',
+    group = "═══ EXTERNAL D ═══",
+    tooltip = "Use this signal for exits")
+
+ext_entry_logic_D = input.string("AND-A", "Entry Logical Group",
+    options = ["AND-A", "AND-B", "OR"],
+    group = "═══ EXTERNAL D ═══",
+    tooltip = "Which entry logic group this signal belongs to")
+
+ext_exit_logic_D = input.string("OR", "Exit Logical Group",
+    options = ["AND-A", "AND-B", "OR"],
+    group = "═══ EXTERNAL D ═══",
+    tooltip = "Which exit logic group this signal belongs to")
+
+// ============================================================================
+// THRESHOLD SIGNAL CALCULATIONS (A through E)
+// ============================================================================
+
+// --- THRESHOLD A ---
+thresh_src_val_A = thresh_source_A[thresh_hist_bar_A] * (1 + thresh_offset_A / 100)
+thresh_src_prev_A = thresh_source_A[thresh_hist_bar_A + 1] * (1 + thresh_offset_A / 100)
+thresh_raw_A = thresh_enabled_A and f_threshold_compare_enhanced(thresh_src_val_A, thresh_src_prev_A, thresh_operator_A, thresh_value_A)
+
+var int thresh_bars_since_true_A = 999999
+if thresh_raw_A
+    thresh_bars_since_true_A := 0
+else
+    thresh_bars_since_true_A := thresh_bars_since_true_A + 1
+thresh_signal_valid_A = thresh_enabled_A and thresh_bars_since_true_A <= thresh_bars_valid_A
+
+thresh_signal_entry_A = thresh_signal_valid_A and thresh_entry_A and f_profit_filter(thresh_profit_filter_A)
+thresh_signal_exit_A = thresh_signal_valid_A and thresh_exit_A and f_profit_filter(thresh_profit_filter_A)
+
+// --- THRESHOLD B ---
+thresh_src_val_B = thresh_source_B[thresh_hist_bar_B] * (1 + thresh_offset_B / 100)
+thresh_src_prev_B = thresh_source_B[thresh_hist_bar_B + 1] * (1 + thresh_offset_B / 100)
+thresh_raw_B = thresh_enabled_B and f_threshold_compare_enhanced(thresh_src_val_B, thresh_src_prev_B, thresh_operator_B, thresh_value_B)
+
+var int thresh_bars_since_true_B = 999999
+if thresh_raw_B
+    thresh_bars_since_true_B := 0
+else
+    thresh_bars_since_true_B := thresh_bars_since_true_B + 1
+thresh_signal_valid_B = thresh_enabled_B and thresh_bars_since_true_B <= thresh_bars_valid_B
+
+thresh_signal_entry_B = thresh_signal_valid_B and thresh_entry_B and f_profit_filter(thresh_profit_filter_B)
+thresh_signal_exit_B = thresh_signal_valid_B and thresh_exit_B and f_profit_filter(thresh_profit_filter_B)
+
+// --- THRESHOLD C ---
+thresh_src_val_C = thresh_source_C[thresh_hist_bar_C] * (1 + thresh_offset_C / 100)
+thresh_src_prev_C = thresh_source_C[thresh_hist_bar_C + 1] * (1 + thresh_offset_C / 100)
+thresh_raw_C = thresh_enabled_C and f_threshold_compare_enhanced(thresh_src_val_C, thresh_src_prev_C, thresh_operator_C, thresh_value_C)
+
+var int thresh_bars_since_true_C = 999999
+if thresh_raw_C
+    thresh_bars_since_true_C := 0
+else
+    thresh_bars_since_true_C := thresh_bars_since_true_C + 1
+thresh_signal_valid_C = thresh_enabled_C and thresh_bars_since_true_C <= thresh_bars_valid_C
+
+thresh_signal_entry_C = thresh_signal_valid_C and thresh_entry_C and f_profit_filter(thresh_profit_filter_C)
+thresh_signal_exit_C = thresh_signal_valid_C and thresh_exit_C and f_profit_filter(thresh_profit_filter_C)
+
+// --- THRESHOLD D ---
+thresh_src_val_D = thresh_source_D[thresh_hist_bar_D] * (1 + thresh_offset_D / 100)
+thresh_src_prev_D = thresh_source_D[thresh_hist_bar_D + 1] * (1 + thresh_offset_D / 100)
+thresh_raw_D = thresh_enabled_D and f_threshold_compare_enhanced(thresh_src_val_D, thresh_src_prev_D, thresh_operator_D, thresh_value_D)
+
+var int thresh_bars_since_true_D = 999999
+if thresh_raw_D
+    thresh_bars_since_true_D := 0
+else
+    thresh_bars_since_true_D := thresh_bars_since_true_D + 1
+thresh_signal_valid_D = thresh_enabled_D and thresh_bars_since_true_D <= thresh_bars_valid_D
+
+thresh_signal_entry_D = thresh_signal_valid_D and thresh_entry_D and f_profit_filter(thresh_profit_filter_D)
+thresh_signal_exit_D = thresh_signal_valid_D and thresh_exit_D and f_profit_filter(thresh_profit_filter_D)
+
+// --- THRESHOLD E ---
+thresh_src_val_E = thresh_source_E[thresh_hist_bar_E] * (1 + thresh_offset_E / 100)
+thresh_src_prev_E = thresh_source_E[thresh_hist_bar_E + 1] * (1 + thresh_offset_E / 100)
+thresh_raw_E = thresh_enabled_E and f_threshold_compare_enhanced(thresh_src_val_E, thresh_src_prev_E, thresh_operator_E, thresh_value_E)
+
+var int thresh_bars_since_true_E = 999999
+if thresh_raw_E
+    thresh_bars_since_true_E := 0
+else
+    thresh_bars_since_true_E := thresh_bars_since_true_E + 1
+thresh_signal_valid_E = thresh_enabled_E and thresh_bars_since_true_E <= thresh_bars_valid_E
+
+thresh_signal_entry_E = thresh_signal_valid_E and thresh_entry_E and f_profit_filter(thresh_profit_filter_E)
+thresh_signal_exit_E = thresh_signal_valid_E and thresh_exit_E and f_profit_filter(thresh_profit_filter_E)
+
+// ============================================================================
+// EXTERNAL SOURCES SIGNAL CALCULATIONS (A through D)
+// ============================================================================
+
+// --- EXTERNAL A ---
+ext_src1_val_A = ext_source1_A[ext_hist_bar1_A] * (1 + ext_offset1_A / 100)
+ext_src2_val_A = ext_source2_A[ext_hist_bar2_A] * (1 + ext_offset2_A / 100)
+ext_src1_prev_A = ext_source1_A[ext_hist_bar1_A + 1] * (1 + ext_offset1_A / 100)
+ext_src2_prev_A = ext_source2_A[ext_hist_bar2_A + 1] * (1 + ext_offset2_A / 100)
+
+ext_raw_A = ext_enabled_A and f_external_compare(ext_src1_val_A, ext_operator_A, ext_src2_val_A, ext_src1_prev_A, ext_src2_prev_A)
+
+var int ext_bars_since_true_A = 999999
+if ext_raw_A
+    ext_bars_since_true_A := 0
+else
+    ext_bars_since_true_A := ext_bars_since_true_A + 1
+ext_signal_valid_A = ext_enabled_A and ext_bars_since_true_A <= ext_bars_valid_A
+
+ext_signal_entry_A = ext_signal_valid_A and ext_entry_A and f_profit_filter(ext_profit_filter_A)
+ext_signal_exit_A = ext_signal_valid_A and ext_exit_A and f_profit_filter(ext_profit_filter_A)
+
+// --- EXTERNAL B ---
+ext_src1_val_B = ext_source1_B[ext_hist_bar1_B] * (1 + ext_offset1_B / 100)
+ext_src2_val_B = ext_source2_B[ext_hist_bar2_B] * (1 + ext_offset2_B / 100)
+ext_src1_prev_B = ext_source1_B[ext_hist_bar1_B + 1] * (1 + ext_offset1_B / 100)
+ext_src2_prev_B = ext_source2_B[ext_hist_bar2_B + 1] * (1 + ext_offset2_B / 100)
+
+ext_raw_B = ext_enabled_B and f_external_compare(ext_src1_val_B, ext_operator_B, ext_src2_val_B, ext_src1_prev_B, ext_src2_prev_B)
+
+var int ext_bars_since_true_B = 999999
+if ext_raw_B
+    ext_bars_since_true_B := 0
+else
+    ext_bars_since_true_B := ext_bars_since_true_B + 1
+ext_signal_valid_B = ext_enabled_B and ext_bars_since_true_B <= ext_bars_valid_B
+
+ext_signal_entry_B = ext_signal_valid_B and ext_entry_B and f_profit_filter(ext_profit_filter_B)
+ext_signal_exit_B = ext_signal_valid_B and ext_exit_B and f_profit_filter(ext_profit_filter_B)
+
+// --- EXTERNAL C ---
+ext_src1_val_C = ext_source1_C[ext_hist_bar1_C] * (1 + ext_offset1_C / 100)
+ext_src2_val_C = ext_source2_C[ext_hist_bar2_C] * (1 + ext_offset2_C / 100)
+ext_src1_prev_C = ext_source1_C[ext_hist_bar1_C + 1] * (1 + ext_offset1_C / 100)
+ext_src2_prev_C = ext_source2_C[ext_hist_bar2_C + 1] * (1 + ext_offset2_C / 100)
+
+ext_raw_C = ext_enabled_C and f_external_compare(ext_src1_val_C, ext_operator_C, ext_src2_val_C, ext_src1_prev_C, ext_src2_prev_C)
+
+var int ext_bars_since_true_C = 999999
+if ext_raw_C
+    ext_bars_since_true_C := 0
+else
+    ext_bars_since_true_C := ext_bars_since_true_C + 1
+ext_signal_valid_C = ext_enabled_C and ext_bars_since_true_C <= ext_bars_valid_C
+
+ext_signal_entry_C = ext_signal_valid_C and ext_entry_C and f_profit_filter(ext_profit_filter_C)
+ext_signal_exit_C = ext_signal_valid_C and ext_exit_C and f_profit_filter(ext_profit_filter_C)
+
+// --- EXTERNAL D ---
+ext_src1_val_D = ext_source1_D[ext_hist_bar1_D] * (1 + ext_offset1_D / 100)
+ext_src2_val_D = ext_source2_D[ext_hist_bar2_D] * (1 + ext_offset2_D / 100)
+ext_src1_prev_D = ext_source1_D[ext_hist_bar1_D + 1] * (1 + ext_offset1_D / 100)
+ext_src2_prev_D = ext_source2_D[ext_hist_bar2_D + 1] * (1 + ext_offset2_D / 100)
+
+ext_raw_D = ext_enabled_D and f_external_compare(ext_src1_val_D, ext_operator_D, ext_src2_val_D, ext_src1_prev_D, ext_src2_prev_D)
+
+var int ext_bars_since_true_D = 999999
+if ext_raw_D
+    ext_bars_since_true_D := 0
+else
+    ext_bars_since_true_D := ext_bars_since_true_D + 1
+ext_signal_valid_D = ext_enabled_D and ext_bars_since_true_D <= ext_bars_valid_D
+
+ext_signal_entry_D = ext_signal_valid_D and ext_entry_D and f_profit_filter(ext_profit_filter_D)
+ext_signal_exit_D = ext_signal_valid_D and ext_exit_D and f_profit_filter(ext_profit_filter_D)
+
+// ============================================================================
+// ENTRY LOGIC GROUPS (3 Independent Tracks)
+// ============================================================================
+// AND-A: All AND-A entry signals must be TRUE → triggers entry
+// AND-B: All AND-B entry signals must be TRUE → triggers entry
+// OR:    Any OR entry signal TRUE → triggers entry independently
+
+// Count how many signals are assigned to each entry group (now includes E)
+entry_andA_count = (thresh_entry_A and thresh_entry_logic_A == "AND-A" ? 1 : 0) +
+                   (thresh_entry_B and thresh_entry_logic_B == "AND-A" ? 1 : 0) +
+                   (thresh_entry_C and thresh_entry_logic_C == "AND-A" ? 1 : 0) +
+                   (thresh_entry_D and thresh_entry_logic_D == "AND-A" ? 1 : 0) +
+                   (thresh_entry_E and thresh_entry_logic_E == "AND-A" ? 1 : 0) +
+                   (ext_entry_A and ext_entry_logic_A == "AND-A" ? 1 : 0) +
+                   (ext_entry_B and ext_entry_logic_B == "AND-A" ? 1 : 0) +
+                   (ext_entry_C and ext_entry_logic_C == "AND-A" ? 1 : 0) +
+                   (ext_entry_D and ext_entry_logic_D == "AND-A" ? 1 : 0)
+
+entry_andB_count = (thresh_entry_A and thresh_entry_logic_A == "AND-B" ? 1 : 0) +
+                   (thresh_entry_B and thresh_entry_logic_B == "AND-B" ? 1 : 0) +
+                   (thresh_entry_C and thresh_entry_logic_C == "AND-B" ? 1 : 0) +
+                   (thresh_entry_D and thresh_entry_logic_D == "AND-B" ? 1 : 0) +
+                   (thresh_entry_E and thresh_entry_logic_E == "AND-B" ? 1 : 0) +
+                   (ext_entry_A and ext_entry_logic_A == "AND-B" ? 1 : 0) +
+                   (ext_entry_B and ext_entry_logic_B == "AND-B" ? 1 : 0) +
+                   (ext_entry_C and ext_entry_logic_C == "AND-B" ? 1 : 0) +
+                   (ext_entry_D and ext_entry_logic_D == "AND-B" ? 1 : 0)
+
+// Count how many signals are TRUE in each entry group (now includes E)
+entry_andA_true = (thresh_signal_entry_A and thresh_entry_logic_A == "AND-A" ? 1 : 0) +
+                  (thresh_signal_entry_B and thresh_entry_logic_B == "AND-A" ? 1 : 0) +
+                  (thresh_signal_entry_C and thresh_entry_logic_C == "AND-A" ? 1 : 0) +
+                  (thresh_signal_entry_D and thresh_entry_logic_D == "AND-A" ? 1 : 0) +
+                  (thresh_signal_entry_E and thresh_entry_logic_E == "AND-A" ? 1 : 0) +
+                  (ext_signal_entry_A and ext_entry_logic_A == "AND-A" ? 1 : 0) +
+                  (ext_signal_entry_B and ext_entry_logic_B == "AND-A" ? 1 : 0) +
+                  (ext_signal_entry_C and ext_entry_logic_C == "AND-A" ? 1 : 0) +
+                  (ext_signal_entry_D and ext_entry_logic_D == "AND-A" ? 1 : 0)
+
+entry_andB_true = (thresh_signal_entry_A and thresh_entry_logic_A == "AND-B" ? 1 : 0) +
+                  (thresh_signal_entry_B and thresh_entry_logic_B == "AND-B" ? 1 : 0) +
+                  (thresh_signal_entry_C and thresh_entry_logic_C == "AND-B" ? 1 : 0) +
+                  (thresh_signal_entry_D and thresh_entry_logic_D == "AND-B" ? 1 : 0) +
+                  (thresh_signal_entry_E and thresh_entry_logic_E == "AND-B" ? 1 : 0) +
+                  (ext_signal_entry_A and ext_entry_logic_A == "AND-B" ? 1 : 0) +
+                  (ext_signal_entry_B and ext_entry_logic_B == "AND-B" ? 1 : 0) +
+                  (ext_signal_entry_C and ext_entry_logic_C == "AND-B" ? 1 : 0) +
+                  (ext_signal_entry_D and ext_entry_logic_D == "AND-B" ? 1 : 0)
+
+// AND-A Entry: All AND-A signals must be true (and at least 1 must exist)
+entry_andA_trigger = entry_andA_count > 0 and entry_andA_true == entry_andA_count
+
+// AND-B Entry: All AND-B signals must be true (and at least 1 must exist)
+entry_andB_trigger = entry_andB_count > 0 and entry_andB_true == entry_andB_count
+
+// OR Entry: Any OR signal can trigger independently (now includes E)
+entry_or_trigger = (thresh_signal_entry_A and thresh_entry_logic_A == "OR") or
+                   (thresh_signal_entry_B and thresh_entry_logic_B == "OR") or
+                   (thresh_signal_entry_C and thresh_entry_logic_C == "OR") or
+                   (thresh_signal_entry_D and thresh_entry_logic_D == "OR") or
+                   (thresh_signal_entry_E and thresh_entry_logic_E == "OR") or
+                   (ext_signal_entry_A and ext_entry_logic_A == "OR") or
+                   (ext_signal_entry_B and ext_entry_logic_B == "OR") or
+                   (ext_signal_entry_C and ext_entry_logic_C == "OR") or
+                   (ext_signal_entry_D and ext_entry_logic_D == "OR")
+
+// Final entry signal (any of the 3 tracks can trigger)
+entry_signal = entry_andA_trigger or entry_andB_trigger or entry_or_trigger
+
+// ============================================================================
+// EXIT LOGIC GROUPS (3 Independent Tracks)
+// ============================================================================
+
+// Count how many signals are assigned to each exit group (now includes E)
+exit_andA_count = (thresh_exit_A and thresh_exit_logic_A == "AND-A" ? 1 : 0) +
+                  (thresh_exit_B and thresh_exit_logic_B == "AND-A" ? 1 : 0) +
+                  (thresh_exit_C and thresh_exit_logic_C == "AND-A" ? 1 : 0) +
+                  (thresh_exit_D and thresh_exit_logic_D == "AND-A" ? 1 : 0) +
+                  (thresh_exit_E and thresh_exit_logic_E == "AND-A" ? 1 : 0) +
+                  (ext_exit_A and ext_exit_logic_A == "AND-A" ? 1 : 0) +
+                  (ext_exit_B and ext_exit_logic_B == "AND-A" ? 1 : 0) +
+                  (ext_exit_C and ext_exit_logic_C == "AND-A" ? 1 : 0) +
+                  (ext_exit_D and ext_exit_logic_D == "AND-A" ? 1 : 0)
+
+exit_andB_count = (thresh_exit_A and thresh_exit_logic_A == "AND-B" ? 1 : 0) +
+                  (thresh_exit_B and thresh_exit_logic_B == "AND-B" ? 1 : 0) +
+                  (thresh_exit_C and thresh_exit_logic_C == "AND-B" ? 1 : 0) +
+                  (thresh_exit_D and thresh_exit_logic_D == "AND-B" ? 1 : 0) +
+                  (thresh_exit_E and thresh_exit_logic_E == "AND-B" ? 1 : 0) +
+                  (ext_exit_A and ext_exit_logic_A == "AND-B" ? 1 : 0) +
+                  (ext_exit_B and ext_exit_logic_B == "AND-B" ? 1 : 0) +
+                  (ext_exit_C and ext_exit_logic_C == "AND-B" ? 1 : 0) +
+                  (ext_exit_D and ext_exit_logic_D == "AND-B" ? 1 : 0)
+
+// Count how many signals are TRUE in each exit group (now includes E)
+exit_andA_true = (thresh_signal_exit_A and thresh_exit_logic_A == "AND-A" ? 1 : 0) +
+                 (thresh_signal_exit_B and thresh_exit_logic_B == "AND-A" ? 1 : 0) +
+                 (thresh_signal_exit_C and thresh_exit_logic_C == "AND-A" ? 1 : 0) +
+                 (thresh_signal_exit_D and thresh_exit_logic_D == "AND-A" ? 1 : 0) +
+                 (thresh_signal_exit_E and thresh_exit_logic_E == "AND-A" ? 1 : 0) +
+                 (ext_signal_exit_A and ext_exit_logic_A == "AND-A" ? 1 : 0) +
+                 (ext_signal_exit_B and ext_exit_logic_B == "AND-A" ? 1 : 0) +
+                 (ext_signal_exit_C and ext_exit_logic_C == "AND-A" ? 1 : 0) +
+                 (ext_signal_exit_D and ext_exit_logic_D == "AND-A" ? 1 : 0)
+
+exit_andB_true = (thresh_signal_exit_A and thresh_exit_logic_A == "AND-B" ? 1 : 0) +
+                 (thresh_signal_exit_B and thresh_exit_logic_B == "AND-B" ? 1 : 0) +
+                 (thresh_signal_exit_C and thresh_exit_logic_C == "AND-B" ? 1 : 0) +
+                 (thresh_signal_exit_D and thresh_exit_logic_D == "AND-B" ? 1 : 0) +
+                 (thresh_signal_exit_E and thresh_exit_logic_E == "AND-B" ? 1 : 0) +
+                 (ext_signal_exit_A and ext_exit_logic_A == "AND-B" ? 1 : 0) +
+                 (ext_signal_exit_B and ext_exit_logic_B == "AND-B" ? 1 : 0) +
+                 (ext_signal_exit_C and ext_exit_logic_C == "AND-B" ? 1 : 0) +
+                 (ext_signal_exit_D and ext_exit_logic_D == "AND-B" ? 1 : 0)
+
+// AND-A Exit: All AND-A exit signals must be true
+exit_andA_trigger = exit_andA_count > 0 and exit_andA_true == exit_andA_count
+
+// AND-B Exit: All AND-B exit signals must be true
+exit_andB_trigger = exit_andB_count > 0 and exit_andB_true == exit_andB_count
+
+// OR Exit: Any OR exit signal triggers independently (now includes E)
+exit_or_trigger = (thresh_signal_exit_A and thresh_exit_logic_A == "OR") or
+                  (thresh_signal_exit_B and thresh_exit_logic_B == "OR") or
+                  (thresh_signal_exit_C and thresh_exit_logic_C == "OR") or
+                  (thresh_signal_exit_D and thresh_exit_logic_D == "OR") or
+                  (thresh_signal_exit_E and thresh_exit_logic_E == "OR") or
+                  (ext_signal_exit_A and ext_exit_logic_A == "OR") or
+                  (ext_signal_exit_B and ext_exit_logic_B == "OR") or
+                  (ext_signal_exit_C and ext_exit_logic_C == "OR") or
+                  (ext_signal_exit_D and ext_exit_logic_D == "OR")
+
+// Final exit signal (any of the 3 tracks can trigger)
+exit_signal = exit_andA_trigger or exit_andB_trigger or exit_or_trigger
+
+// ============================================================================
+// STRATEGY EXECUTION
+// ============================================================================
+
+is_long = stratDirection == "Long"
+is_short = stratDirection == "Short"
+
+// Long entries/exits
+if entry_signal and is_long
+    strategy.entry("Long", strategy.long)
+
+if exit_signal and is_long and strategy.position_size > 0
+    strategy.close("Long")
+
+// Short entries/exits
+if entry_signal and is_short
+    strategy.entry("Short", strategy.short)
+
+if exit_signal and is_short and strategy.position_size < 0
+    strategy.close("Short")
+
+// ============================================================================
+// VISUAL FEEDBACK
+// ============================================================================
+
+plotshape(entry_signal and is_long,
+    title = "Long Entry Signal",
+    location = location.belowbar,
+    color = color.new(color.green, 0),
+    style = shape.triangleup,
+    size = size.small)
+
+plotshape(entry_signal and is_short,
+    title = "Short Entry Signal",
+    location = location.abovebar,
+    color = color.new(color.red, 0),
+    style = shape.triangledown,
+    size = size.small)
+
+plotshape(exit_signal and is_long and strategy.position_size > 0,
+    title = "Long Exit Signal",
+    location = location.abovebar,
+    color = color.new(color.orange, 0),
+    style = shape.xcross,
+    size = size.tiny)
+
+plotshape(exit_signal and is_short and strategy.position_size < 0,
+    title = "Short Exit Signal",
+    location = location.belowbar,
+    color = color.new(color.blue, 0),
+    style = shape.xcross,
+    size = size.tiny)
+
+// Debug: Show signal states in data window
+plot(thresh_signal_valid_A ? 1 : 0, "Threshold A Valid", display = display.data_window)
+plot(thresh_signal_valid_B ? 1 : 0, "Threshold B Valid", display = display.data_window)
+plot(thresh_signal_valid_C ? 1 : 0, "Threshold C Valid", display = display.data_window)
+plot(thresh_signal_valid_D ? 1 : 0, "Threshold D Valid", display = display.data_window)
+plot(thresh_signal_valid_E ? 1 : 0, "Threshold E Valid", display = display.data_window)
+plot(ext_signal_valid_A ? 1 : 0, "External A Valid", display = display.data_window)
+plot(ext_signal_valid_B ? 1 : 0, "External B Valid", display = display.data_window)
+plot(ext_signal_valid_C ? 1 : 0, "External C Valid", display = display.data_window)
+plot(ext_signal_valid_D ? 1 : 0, "External D Valid", display = display.data_window)
+plot(entry_andA_trigger ? 1 : 0, "Entry AND-A", display = display.data_window)
+plot(entry_andB_trigger ? 1 : 0, "Entry AND-B", display = display.data_window)
+plot(entry_or_trigger ? 1 : 0, "Entry OR", display = display.data_window)
