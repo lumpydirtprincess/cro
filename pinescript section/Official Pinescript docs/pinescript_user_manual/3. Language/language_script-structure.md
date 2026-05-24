@@ -1,6 +1,6 @@
-![](https://www.tradingview.com/pine-script-docs/language/script-structure/)
+![](../3. Language/language_script-structure.md)
 
-# [Script structure](https://www.tradingview.com/pine-script-docs/language/script-structure/\#script-structure)
+# [Script structure](../3. Language/language_script-structure.md#script-structure)
 
 A Pine script follows this general structure:
 
@@ -12,17 +12,15 @@ A Pine script follows this general structure:
 <code>
 ```
 
-## [Version](https://www.tradingview.com/pine-script-docs/language/script-structure/\#version)
+## [Version](../3. Language/language_script-structure.md#version)
 
 A
-[compiler annotation](https://www.tradingview.com/pine-script-docs/language/script-structure/#compiler-annotations) in the following form tells the compiler which of the
+[compiler annotation](../3. Language/language_script-structure.md#compiler-annotations) in the following form tells the compiler which of the
 versions of Pine Script® the script is written in:
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
-
-`//@version=6
-`
+```pine
+//@version=6
+```
 
 - The version number is a number from 1 to 6.
 - The compiler annotation is not mandatory. When omitted, version 1 is
@@ -35,14 +33,14 @@ when it appears at the top of the script.
 Notable changes to the current version of Pine Script are documented in
 the [Release notes](https://www.tradingview.com/pine-script-docs/release-notes/).
 
-## [Declaration statement](https://www.tradingview.com/pine-script-docs/language/script-structure/\#declaration-statement)
+## [Declaration statement](../3. Language/language_script-structure.md#declaration-statement)
 
 All Pine scripts must contain one declaration statement, which is a call
 to one of these functions:
 
-- [indicator()](https://www.tradingview.com/pine-script-reference/v6/#fun_indicator)
-- [strategy()](https://www.tradingview.com/pine-script-reference/v6/#fun_strategy)
-- [library()](https://www.tradingview.com/pine-script-reference/v6/#fun_library)
+- [indicator()](../../reference manual/functions/indicator.md)
+- [strategy()](../../reference manual/functions/strategy.md)
+- [library()](../../reference manual/functions/library.md)
 
 The declaration statement:
 
@@ -58,37 +56,37 @@ commission, slippage, etc.
 
 Each script type has distinct basic requirements. Scripts that do not meet these criteria cause a compilation error:
 
-- Indicators must call at least one function that creates a script output, such as [plot()](https://www.tradingview.com/pine-script-reference/v6/#fun_plot), [plotshape()](https://www.tradingview.com/pine-script-reference/v6/#fun_plotshape), [barcolor()](https://www.tradingview.com/pine-script-reference/v6/#fun_barcolor), [line.new()](https://www.tradingview.com/pine-script-reference/v6/#fun_line.new), [log.info()](https://www.tradingview.com/pine-script-reference/v6/#fun_log.info), [alert()](https://www.tradingview.com/pine-script-reference/v6/#fun_alert), etc.
-- [Strategies](https://www.tradingview.com/pine-script-docs/concepts/strategies/) must call at least one [order placement command](https://www.tradingview.com/pine-script-docs/concepts/strategies/#order-placement-and-cancellation) or other output function.
-- [Libraries](https://www.tradingview.com/pine-script-docs/concepts/libraries/) must [export](https://www.tradingview.com/pine-script-reference/v6/#kw_export) at least one user-defined [function](https://www.tradingview.com/pine-script-docs/language/user-defined-functions/), [method](https://www.tradingview.com/pine-script-docs/language/methods/#user-defined-methods), [type](https://www.tradingview.com/pine-script-docs/language/type-system/#user-defined-types), or [enum](https://www.tradingview.com/pine-script-docs/language/enums/).
+- Indicators must call at least one function that creates a script output, such as [plot()](../../reference manual/functions/plot.md), [plotshape()](../../reference manual/functions/plotshape.md), [barcolor()](../../reference manual/functions/barcolor.md), [line.new()](../../reference manual/functions/line.new.md), [log.info()](../../reference manual/functions/log.info.md), [alert()](../../reference manual/functions/alert.md), etc.
+- [Strategies](../1. Concepts/concepts_strategies.md) must call at least one [order placement command](../1. Concepts/concepts_strategies.md#order-placement-and-cancellation) or other output function.
+- [Libraries](../1. Concepts/concepts_libraries.md) must [export](../../reference manual/keywords/export.md) at least one user-defined [function](../3. Language/language_user-defined-functions.md), [method](../3. Language/language_methods.md#user-defined-methods), [type](../3. Language/language_type-system.md#user-defined-types), or [enum](../3. Language/language_enums.md).
 
-## [Code](https://www.tradingview.com/pine-script-docs/language/script-structure/\#code)
+## [Code](../3. Language/language_script-structure.md#code)
 
 Lines in a script that are not
-[comments](https://www.tradingview.com/pine-script-docs/language/script-structure/#comments)
+[comments](../3. Language/language_script-structure.md#comments)
 or
-[compiler annotations](https://www.tradingview.com/pine-script-docs/language/script-structure/#compiler-annotations) are _statements_, which implement the script’s algorithm. A
+[compiler annotations](../3. Language/language_script-structure.md#compiler-annotations) are _statements_, which implement the script’s algorithm. A
 statement can be one of these:
 
-- [variable declaration](https://www.tradingview.com/pine-script-docs/language/variable-declarations/)
-- [variable reassignment](https://www.tradingview.com/pine-script-docs/language/variable-declarations/#variable-reassignment)
-- [function definition](https://www.tradingview.com/pine-script-docs/language/user-defined-functions/#structure-and-syntax)
-- [built-in function call](https://www.tradingview.com/pine-script-docs/language/built-ins/#built-in-functions),
-[user-defined function call](https://www.tradingview.com/pine-script-docs/language/user-defined-functions/) or
-[a library function call](https://www.tradingview.com/pine-script-docs/concepts/libraries/#using-a-library)
-- [if](https://www.tradingview.com/pine-script-reference/v6/#kw_if),
-[for](https://www.tradingview.com/pine-script-reference/v6/#kw_for),
-[while](https://www.tradingview.com/pine-script-reference/v6/#kw_while),
-[switch](https://www.tradingview.com/pine-script-reference/v6/#kw_switch),
-[type](https://www.tradingview.com/pine-script-reference/v6/#kw_type), or
-[enum](https://www.tradingview.com/pine-script-reference/v6/#kw_enum) _structure_.
+- [variable declaration](../3. Language/language_variable-declarations.md)
+- [variable reassignment](../3. Language/language_variable-declarations.md#variable-reassignment)
+- [function definition](../3. Language/language_user-defined-functions.md#structure-and-syntax)
+- [built-in function call](../3. Language/language_built-ins.md#built-in-functions),
+[user-defined function call](../3. Language/language_user-defined-functions.md) or
+[a library function call](../1. Concepts/concepts_libraries.md#using-a-library)
+- [if](../../reference manual/keywords/if.md),
+[for](../../reference manual/keywords/for.md),
+[while](../../reference manual/keywords/while.md),
+[switch](../../reference manual/keywords/switch.md),
+[type](../../reference manual/keywords/type.md), or
+[enum](../../reference manual/keywords/enum.md) _structure_.
 
 Statements can be arranged in multiple ways:
 
 - Some statements can be expressed in one line, like most variable
 declarations, lines containing only a function call or single-line
 function declarations. Lines can also be
-[wrapped](https://www.tradingview.com/pine-script-docs/language/script-structure/#line-wrapping) (continued on multiple lines). Multiple one-line
+[wrapped](../3. Language/language_script-structure.md#line-wrapping) (continued on multiple lines). Multiple one-line
 statements can be concatenated on a single line by using the comma
 as a separator.
 - Others statements such as structures or multiline function
@@ -105,182 +103,164 @@ A simple valid Pine Script indicator can be generated in the Pine
 Script Editor by using the “Open” button and choosing “New blank
 indicator”:
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
-
-`//@version=6
-indicator("My Script")
+```pine
+//@version=6
+indicator("My Script")
 plot(close)
-`
+```
 
 This indicator includes three local blocks, one in the `barIsUp()` function
 declaration, and two in the variable declaration using an
-[if](https://www.tradingview.com/pine-script-reference/v6/#kw_if)
+[if](../../reference manual/keywords/if.md)
 structure:
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
+```pine
+//@version=6
 
-`//@version=6
+indicator("", "", true)    // Declaration statement (global scope)
 
-indicator("", "", true)    // Declaration statement (global scope)
+barIsUp() =>    // Function declaration (global scope)
+    close > open    // Local block (local scope)
 
-barIsUp() =>    // Function declaration (global scope)
-    close > open    // Local block (local scope)
-
-plotColor = if barIsUp()  // Variable declaration (global scope)
-    color.green     // Local block (local scope)
+plotColor = if barIsUp()  // Variable declaration (global scope)
+    color.green     // Local block (local scope)
 else
-    color.red       // Local block (local scope)
+    color.red       // Local block (local scope)
 
-bgcolor(color.new(plotColor, 70))   // Call to a built-in function  (global scope)
-`
+bgcolor(color.new(plotColor, 70))   // Call to a built-in function  (global scope)
+```
 
 You can bring up a simple Pine Script strategy by selecting “New
 blank strategy” instead:
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
+```pine
+//@version=6
+strategy("My Strategy", overlay=true, margin_long=100, margin_short=100)
 
-`//@version=6
-strategy("My Strategy", overlay=true, margin_long=100, margin_short=100)
+longCondition = ta.crossover(ta.sma(close, 14), ta.sma(close, 28))
+if (longCondition)
+    strategy.entry("My Long Entry Id", strategy.long)
 
-longCondition = ta.crossover(ta.sma(close, 14), ta.sma(close, 28))
-if (longCondition)
-    strategy.entry("My Long Entry Id", strategy.long)
+shortCondition = ta.crossunder(ta.sma(close, 14), ta.sma(close, 28))
+if (shortCondition)
+    strategy.entry("My Short Entry Id", strategy.short)
+```
 
-shortCondition = ta.crossunder(ta.sma(close, 14), ta.sma(close, 28))
-if (shortCondition)
-    strategy.entry("My Short Entry Id", strategy.short)
-`
-
-## [Comments](https://www.tradingview.com/pine-script-docs/language/script-structure/\#comments)
+## [Comments](../3. Language/language_script-structure.md#comments)
 
 Double slashes (`//`) define comments in Pine Script. Comments can
 begin anywhere on the line. They can also follow Pine Script code on
 the same line:
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
-
-`//@version=6
+```pine
+//@version=6
 indicator("")
-// This line is a comment
-a = close // This is also a comment
+// This line is a comment
+a = close // This is also a comment
 plot(a)
-`
+```
 
 The Pine Editor has a keyboard shortcut to comment/uncomment lines:
 `ctrl` \+ `/`. You can use it on multiple lines by highlighting them
 first.
 
-## [Line wrapping](https://www.tradingview.com/pine-script-docs/language/script-structure/\#line-wrapping)
+## [Line wrapping](../3. Language/language_script-structure.md#line-wrapping)
 
-Scripts can use _line wrapping_ to define a long _single line_ of code across _multiple_ lines. Generally, each wrapped line after the first can use any indentation length _except_ multiples of four, because Pine uses four-space or tab indentations to define [local code blocks](https://www.tradingview.com/pine-script-docs/faq/programming/#what-does-scope-mean).
+Scripts can use _line wrapping_ to define a long _single line_ of code across _multiple_ lines. Generally, each wrapped line after the first can use any indentation length _except_ multiples of four, because Pine uses four-space or tab indentations to define [local code blocks](../6. FAQ/faq_programming.md#what-does-scope-mean).
 
 For example, consider the following line of code:
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
+```pine
+float x = open + high + low + close
+```
 
-`float x = open + high + low + close
-`
+We can distribute any part of this single line of code across two or more lines. Within a wrapped statement or expression, the subsequent lines can use different indentation lengths, and can also include [comments](../3. Language/language_script-structure.md#comments) without disrupting the code:
 
-We can distribute any part of this single line of code across two or more lines. Within a wrapped statement or expression, the subsequent lines can use different indentation lengths, and can also include [comments](https://www.tradingview.com/pine-script-docs/language/script-structure/#comments) without disrupting the code:
-
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
-
-`float x = open +
-high +           // Indented by 2 spaces.
-     low +         // Indented by 5 spaces.
-          close    // Indented by 10 spaces.
-`
+```pine
+float x = open +
+high +           // Indented by 2 spaces.
+     low +         // Indented by 5 spaces.
+          close    // Indented by 10 spaces.
+```
 
 If parts of a wrapped expression are enclosed in _parentheses_`( )`, such as function calls or parameter declarations, the wrapped lines within the parentheses _do not_ have any restriction on their indentation lengths. Therefore, those wrapped lines can use any indentation length _including_ multiples of four.
 
 For example, this script demonstrates various ways that expressions enclosed in parentheses can wrap across multiple lines:
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
+```pine
+//@version=6
+indicator("Line wrapping within parentheses demo")
 
-`//@version=6
-indicator("Line wrapping within parentheses demo")
+// We can enclose operations in parentheses to wrap them across multiple lines using a four-space indentation.
+float x = (open +
+    high +
+    low +
+    close)
 
-// We can enclose operations in parentheses to wrap them across multiple lines using a four-space indentation.
-float x = (open +
-    high +
-    low +
-    close)
+// We can wrap a long function call across two lines, for a minimal line wrapping style.
+plot(ta.sma(close, 14), title = "Avg close", color = color.new(color.purple, 70), style = plot.style_area,
+force_overlay = true, display = display.all - display.status_line)     // Indented by one space.
 
-// We can wrap a long function call across two lines, for a minimal line wrapping style.
-plot(ta.sma(close, 14), title = "Avg close", color = color.new(color.purple, 70), style = plot.style_area,
-force_overlay = true, display = display.all - display.status_line)     // Indented by one space.
-
-// We can also wrap a long function call across multiple lines, each with different indentation lengths.
-// The parentheses enclosing the wrapped lines can start and end on separate lines than the wrapped content.
+// We can also wrap a long function call across multiple lines, each with different indentation lengths.
+// The parentheses enclosing the wrapped lines can start and end on separate lines than the wrapped content.
 plot(
-series = x, title = "Sum OHLC",                              // Indented by one space.
-color = (x >= x[1] ? color.green : color.red),             // Indented by three spaces.
-    linewidth = 4,                                            // Indented by four spaces.
-        style = plot.style_stepline                           // Indented by eight spaces.
-)                                                             // No indentation.
-`
+series = x, title = "Sum OHLC",                              // Indented by one space.
+color = (x >= x[1] ? color.green : color.red),             // Indented by three spaces.
+    linewidth = 4,                                            // Indented by four spaces.
+        style = plot.style_stepline                           // Indented by eight spaces.
+)                                                             // No indentation.
+```
 
 Expressions inside _local_ code blocks can also use line wrapping. A local block requires indenting each line that belongs to its scope by four spaces or a tab relative to the local block’s header. Therefore, we recommend indenting any wrapped lines inside local blocks by a _larger_ indentation than that of the block’s scope for readability. For example:
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
+```pine
+upDown(float s) =>
+    // These lines are indented by four spaces relative to the `upDown()` function header to belong to its local scope.
+    var int ud = 0
+    bool isEqual   = s == s[1]
+    bool isGrowing = s > s[1]
+    // Within the local block, this statement wraps across multiple lines, where each line uses
+    // an indentation length that is larger than the indentation that signifies the local block's scope.
+    ud := isEqual ?
+           0 :
+           isGrowing ?
+               (ud <= 0 ?
+                    1 :
+                    ud + 1) :
+               (ud >= 0 ?
+                    -1 :
+                    ud - 1)
+```
 
-``upDown(float s) =>
-    // These lines are indented by four spaces relative to the `upDown()` function header to belong to its local scope.
-    var int ud = 0
-    bool isEqual   = s == s[1]
-    bool isGrowing = s > s[1]
-    // Within the local block, this statement wraps across multiple lines, where each line uses
-    // an indentation length that is larger than the indentation that signifies the local block's scope.
-    ud := isEqual ?
-           0 :
-           isGrowing ?
-               (ud <= 0 ?
-                    1 :
-                    ud + 1) :
-               (ud >= 0 ?
-                    -1 :
-                    ud - 1)
-``
+Scripts can also create line-wrapped expressions by using [multiline strings](../1. Concepts/concepts_strings.md#multiline-strings). A multiline string, enclosed by three pairs of quotation marks (e.g., `"""..."""`) or apostrophes (e.g., `'''...'''`), can occupy multiple lines in the Pine Editor, where each part of the code between the `"""` or `'''` delimiters represents _literal text_. If an expression uses a string spanning multiple lines as an operand or argument, Pine still treats that expression as part of a _single_ line of code. For example:
 
-Scripts can also create line-wrapped expressions by using [multiline strings](https://www.tradingview.com/pine-script-docs/concepts/strings/#multiline-strings). A multiline string, enclosed by three pairs of quotation marks (e.g., `"""..."""`) or apostrophes (e.g., `'''...'''`), can occupy multiple lines in the Pine Editor, where each part of the code between the `"""` or `'''` delimiters represents _literal text_. If an expression uses a string spanning multiple lines as an operand or argument, Pine still treats that expression as part of a _single_ line of code. For example:
+```pine
+//@version=6
+indicator("Line wrapping with multiline strings demo", overlay = true)
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
-
-``//@version=6
-indicator("Line wrapping with multiline strings demo", overlay = true)
-
-//@variable A string indicating whether the bar is rising, falling, or neutral.
-//          The strings in the ternary operations span multiple visible lines, but the entire expression is
-//          considered part of a single line.
-string labelText = close > open ? """
-Bar is rising.
-""" : close < open ? """
-Bar is falling.
-""" : """
-Bar is neutral.
+//@variable A string indicating whether the bar is rising, falling, or neutral.
+//          The strings in the ternary operations span multiple visible lines, but the entire expression is
+//          considered part of a single line.
+string labelText = close > open ? """
+Bar is rising.
+""" : close < open ? """
+Bar is falling.
+""" : """
+Bar is neutral.
 """
 
-// Draw a label to display the text from the current `labelText` string.
-label.new(bar_index, close, labelText)
-``
+// Draw a label to display the text from the current `labelText` string.
+label.new(bar_index, close, labelText)
+```
 
 Note that:
 
 - A multiline string treats _all_ characters between the `"""` or `'''` delimiters as literal text, including the _leading spaces_ on each visible code line. If a line in a multiline string definition is indented by any number of spaces, relative to _column 0_ in the Pine Editor, the line in the resulting string also includes that indentation.
 
-## [Compiler annotations](https://www.tradingview.com/pine-script-docs/language/script-structure/\#compiler-annotations)
+## [Compiler annotations](../3. Language/language_script-structure.md#compiler-annotations)
 
 Compiler annotations are
-[comments](https://www.tradingview.com/pine-script-docs/language/script-structure/#comments)
+[comments](../3. Language/language_script-structure.md#comments)
 that issue special instructions for a script:
 
 - `//@version=` specifies the PineScript version that the compiler
@@ -288,14 +268,14 @@ will use. The number in this annotation should not be confused with
 the script’s version number, which updates on every saved change
 to the code.
 - `//@description` sets a custom description for scripts that use the
-[library()](https://www.tradingview.com/pine-script-reference/v6/#fun_library)
+[library()](../../reference manual/functions/library.md)
 declaration statement.
 - `//@function`, `//@param` and `//@returns` add custom descriptions
-for a [user-defined function](https://www.tradingview.com/pine-script-docs/language/user-defined-functions/) or [method](https://www.tradingview.com/pine-script-docs/language/methods/), its parameters, and its result when placed above the function declaration.
-- `//@type` adds a custom description for a [user-defined type (UDT)](https://www.tradingview.com/pine-script-docs/language/type-system/#user-defined-types) when placed
+for a [user-defined function](../3. Language/language_user-defined-functions.md) or [method](../3. Language/language_methods.md), its parameters, and its result when placed above the function declaration.
+- `//@type` adds a custom description for a [user-defined type (UDT)](../3. Language/language_type-system.md#user-defined-types) when placed
 above the type declaration.
-- `//@enum` adds a custom description for an [enum types](https://www.tradingview.com/pine-script-docs/language/type-system/#enum-types) when placed above the enum declaration.
-- `//@field` adds a custom description for the field of a [user-defined type (UDT)](https://www.tradingview.com/pine-script-docs/language/type-system/#user-defined-types) or an [enum types](https://www.tradingview.com/pine-script-docs/language/type-system/#enum-types) when placed above the type or enum declaration.
+- `//@enum` adds a custom description for an [enum types](../3. Language/language_type-system.md#enum-types) when placed above the enum declaration.
+- `//@field` adds a custom description for the field of a [user-defined type (UDT)](../3. Language/language_type-system.md#user-defined-types) or an [enum types](../3. Language/language_type-system.md#enum-types) when placed above the type or enum declaration.
 - `//@variable` adds a custom description for a variable when placed
 above its declaration.
 - `//@strategy_alert_message` provides a default message for strategy
@@ -309,74 +289,72 @@ below it.
 This example draws a triangle using three interactively selected points on the chart.
 The script illustrates how one can use compiler and Editor annotations to document code and make it easier to navigate:
 
-![image](https://www.tradingview.com/pine-script-docs/_astro/ScriptStructure-CompilerAnnotations01.CdT2JzaQ_Z1O4gPl.webp)
+![image](../images/ScriptStructure-CompilerAnnotations01.CdT2JzaQ_Z1O4gPl.webp)
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
+```pine
+//@version=6
+indicator("Triangle", "", true)
 
-``//@version=6
-indicator("Triangle", "", true)
+//#region ———————————————————— Constants and inputs
 
-//#region ———————————————————— Constants and inputs
+int   TIME_DEFAULT  = 0
+float PRICE_DEFAULT = 0.0
 
-int   TIME_DEFAULT  = 0
-float PRICE_DEFAULT = 0.0
-
-x1Input = input.time(TIME_DEFAULT,   "Point 1", inline = "1", confirm = true)
-y1Input = input.price(PRICE_DEFAULT, "",        inline = "1", tooltip = "Pick point 1", confirm = true)
-x2Input = input.time(TIME_DEFAULT,   "Point 2", inline = "2", confirm = true)
-y2Input = input.price(PRICE_DEFAULT, "",        inline = "2", tooltip = "Pick point 2", confirm = true)
-x3Input = input.time(TIME_DEFAULT,   "Point 3", inline = "3", confirm = true)
-y3Input = input.price(PRICE_DEFAULT, "",        inline = "3", tooltip = "Pick point 3", confirm = true)
+x1Input = input.time(TIME_DEFAULT,   "Point 1", inline = "1", confirm = true)
+y1Input = input.price(PRICE_DEFAULT, "",        inline = "1", tooltip = "Pick point 1", confirm = true)
+x2Input = input.time(TIME_DEFAULT,   "Point 2", inline = "2", confirm = true)
+y2Input = input.price(PRICE_DEFAULT, "",        inline = "2", tooltip = "Pick point 2", confirm = true)
+x3Input = input.time(TIME_DEFAULT,   "Point 3", inline = "3", confirm = true)
+y3Input = input.price(PRICE_DEFAULT, "",        inline = "3", tooltip = "Pick point 3", confirm = true)
 //#endregion
 
-//#region ———————————————————— Types and functions
+//#region ———————————————————— Types and functions
 
-// @type            Used to represent the coordinates and color to draw a triangle.
-// @field time1     Time of first point.
-// @field time2     Time of second point.
-// @field time3     Time of third point.
-// @field price1    Price of first point.
-// @field price2    Price of second point.
-// @field price3    Price of third point.
-// @field lineColor Color to be used to draw the triangle lines.
-type Triangle
-    int   time1
-    int   time2
-    int   time3
-    float price1
-    float price2
-    float price3
-    color lineColor
+// @type            Used to represent the coordinates and color to draw a triangle.
+// @field time1     Time of first point.
+// @field time2     Time of second point.
+// @field time3     Time of third point.
+// @field price1    Price of first point.
+// @field price2    Price of second point.
+// @field price3    Price of third point.
+// @field lineColor Color to be used to draw the triangle lines.
+type Triangle
+    int   time1
+    int   time2
+    int   time3
+    float price1
+    float price2
+    float price3
+    color lineColor
 
-//@function Draws a triangle using the coordinates of the `t` object.
-//@param t  (Triangle) Object representing the triangle to be drawn.
-//@returns  The ID of the last line drawn.
-drawTriangle(Triangle t) =>
-    line.new(t.time1, t.price1, t.time2, t.price2, xloc = xloc.bar_time, color = t.lineColor)
-    line.new(t.time2, t.price2, t.time3, t.price3, xloc = xloc.bar_time, color = t.lineColor)
-    line.new(t.time1, t.price1, t.time3, t.price3, xloc = xloc.bar_time, color = t.lineColor)
+//@function Draws a triangle using the coordinates of the `t` object.
+//@param t  (Triangle) Object representing the triangle to be drawn.
+//@returns  The ID of the last line drawn.
+drawTriangle(Triangle t) =>
+    line.new(t.time1, t.price1, t.time2, t.price2, xloc = xloc.bar_time, color = t.lineColor)
+    line.new(t.time2, t.price2, t.time3, t.price3, xloc = xloc.bar_time, color = t.lineColor)
+    line.new(t.time1, t.price1, t.time3, t.price3, xloc = xloc.bar_time, color = t.lineColor)
 //#endregion
 
-//#region ———————————————————— Calculations
+//#region ———————————————————— Calculations
 
-// Draw the triangle only once on the last historical bar.
-if barstate.islastconfirmedhistory
-    //@variable Used to hold the Triangle object to be drawn.
-    Triangle triangle = Triangle.new()
+// Draw the triangle only once on the last historical bar.
+if barstate.islastconfirmedhistory
+    //@variable Used to hold the Triangle object to be drawn.
+    Triangle triangle = Triangle.new()
 
-    triangle.time1  := x1Input
-    triangle.time2  := x2Input
-    triangle.time3  := x3Input
-    triangle.price1 := y1Input
-    triangle.price2 := y2Input
-    triangle.price3 := y3Input
-    triangle.lineColor := color.purple
+    triangle.time1  := x1Input
+    triangle.time2  := x2Input
+    triangle.time3  := x3Input
+    triangle.price1 := y1Input
+    triangle.price2 := y2Input
+    triangle.price3 := y3Input
+    triangle.lineColor := color.purple
 
-    drawTriangle(triangle)
+    drawTriangle(triangle)
 //#endregion
-``
+```
 
-[Previous\\
-**Type system**](https://www.tradingview.com/pine-script-docs/language/type-system) [Next\\
-**Identifiers**](https://www.tradingview.com/pine-script-docs/language/identifiers)
+[Previous 
+**Type system**](../3. Language/language_type-system.md) [Next 
+**Identifiers**](../3. Language/language_identifiers.md)

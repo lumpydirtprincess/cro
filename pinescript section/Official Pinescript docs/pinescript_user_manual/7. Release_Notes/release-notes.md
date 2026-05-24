@@ -1,169 +1,159 @@
-![](https://www.tradingview.com/pine-script-docs/release-notes/)
-
-# [Release notes](https://www.tradingview.com/pine-script-docs/release-notes/\#release-notes)
+# [Release notes](../7. Release_Notes/release-notes_#release-notes.md)
 
 This page contains release notes describing notable changes to the Pine Script® experience.
 
-## [2026](https://www.tradingview.com/pine-script-docs/release-notes/\#2026)
+## [2026](../7. Release_Notes/release-notes_#2026.md)
 
-### [April 2026](https://www.tradingview.com/pine-script-docs/release-notes/\#april-2026)
+### [April 2026](../7. Release_Notes/release-notes_#april-2026.md)
 
-#### [Multiline strings](https://www.tradingview.com/pine-script-docs/release-notes/\#multiline-strings)
+#### [Multiline strings](../7. Release_Notes/release-notes_#multiline-strings.md)
 
-We’ve added support for [multiline strings](https://www.tradingview.com/pine-script-docs/concepts/strings/#multiline-strings). A multiline string is a literal “string” value enclosed by _three_ pairs of quotation marks (e.g., `"""..."""`) or apostrophes (e.g., `'''...'''`). Unlike [single-line string](https://www.tradingview.com/pine-script-docs/concepts/strings/#single-line-strings) syntax (e.g., `"..."`), which typically defines a literal string on a single line of code, the multiline syntax can define a literal string across _multiple_ visible code lines.
+We’ve added support for [multiline strings](../1. Concepts/concepts_strings.md#multiline-strings). A multiline string is a literal “string” value enclosed by _three_ pairs of quotation marks (e.g., `"""..."""`) or apostrophes (e.g., `'''...'''`). Unlike [single-line string](../1. Concepts/concepts_strings.md#single-line-strings) syntax (e.g., `"..."`), which typically defines a literal string on a single line of code, the multiline syntax can define a literal string across _multiple_ visible code lines.
 
-All code between the `"""` or `'''` delimiters in a multiline string definition represents _literal text_. Each code line between the delimiters defines a separate _text line_ for the string. The resulting string automatically includes the _newline_ control character between each separate line; it does _not_ require the `\n` [escape sequence](https://www.tradingview.com/pine-script-docs/concepts/strings/#escape-sequences) to insert the character at those points. For example:
+All code between the `"""` or `'''` delimiters in a multiline string definition represents _literal text_. Each code line between the delimiters defines a separate _text line_ for the string. The resulting string automatically includes the _newline_ control character between each separate line; it does _not_ require the `\n` [escape sequence](../1. Concepts/concepts_strings.md#escape-sequences) to insert the character at those points. For example:
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
+```pine
+//@version=6
+indicator("Multiline string demo")
 
-``//@version=6
-indicator("Multiline string demo")
+//@variable A multiline string enclosed by `"""` delimiters.
+string multilineStr = """This is a multiline string.
+Each of these code lines literally represents a separate line of text.
+The newline character is automatically included before each new line.
+We do not have to manually add the ` n` escape sequence to separate the lines."""
 
-//@variable A multiline string enclosed by `"""` delimiters.
-string multilineStr = """This is a multiline string.
-Each of these code lines literally represents a separate line of text.
-The newline character is automatically included before each new line.
-We do not have to manually add the `\\n` escape sequence to separate the lines."""
-
-// Log the string's text in the Pine Logs pane on the first bar.
-if barstate.isfirst
-    log.info(multilineStr)
-``
+// Log the string's text in the Pine Logs pane on the first bar.
+if barstate.isfirst
+    log.info(multilineStr)
+```
 
 Likewise, multiline strings automatically include _all spaces_ used for indentation in the code, regardless of the code blocks that include their definitions. For example:
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
+```pine
+//@version=6
+indicator("Indentation in multiline strings demo")
 
-`//@version=6
-indicator("Indentation in multiline strings demo")
-
-//@variable A multiline string with indentation defined in the global scope.
-string globalIndentedStr = """No indentation.
-Also no indentation.
-Indented by one space.
-    Indented by four spaces.
-            Indented by 12 spaces.
+//@variable A multiline string with indentation defined in the global scope.
+string globalIndentedStr = """No indentation.
+Also no indentation.
+Indented by one space.
+    Indented by four spaces.
+            Indented by 12 spaces.
 """
 
-if barstate.islastconfirmedhistory
-    //@variable A multiline string with indentation defined in a local block.
-    //          Although the block requires four spaces of intendation for its statements, the string itself does not.
-    //          Any indentation in the definition is still included literally in the string.
-    string localIndentedStr = """---
-No indentation.
-    Indented by four spaces.
-    """
+if barstate.islastconfirmedhistory
+    //@variable A multiline string with indentation defined in a local block.
+    //          Although the block requires four spaces of intendation for its statements, the string itself does not.
+    //          Any indentation in the definition is still included literally in the string.
+    string localIndentedStr = """---
+No indentation.
+    Indented by four spaces.
+    """
 
-    // Concatenate both strings and display the result in a label.
-    label.new(bar_index, 0, globalIndentedStr + localIndentedStr, textalign = text.align_left)
-`
+    // Concatenate both strings and display the result in a label.
+    label.new(bar_index, 0, globalIndentedStr + localIndentedStr, textalign = text.align_left)
+```
 
-Expressions can use multiline strings as operands and arguments, just like single-line strings. Therefore, programmers can use the multiline string syntax to create unique [line wrapping](https://www.tradingview.com/pine-script-docs/language/script-structure/#line-wrapping) formats in their code. For example:
+Expressions can use multiline strings as operands and arguments, just like single-line strings. Therefore, programmers can use the multiline string syntax to create unique [line wrapping](../3. Language/language_script-structure.md#line-wrapping) formats in their code. For example:
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
+```pine
+//@version=6
+indicator("Line wrapping expressions with multiline strings demo")
 
-`//@version=6
-indicator("Line wrapping expressions with multiline strings demo")
-
-//@variable A string formed by concatenating three multiline strings.
-string concatenated = """String 1
-""" + """String 2
-""" + '''String 3
+//@variable A string formed by concatenating three multiline strings.
+string concatenated = """String 1
+""" + """String 2
+""" + '''String 3
 '''
 
-// Log the resulting string's text in the Pine Logs pane on the first bar.
-if barstate.isfirst
-    log.info(concatenated)
-`
+// Log the resulting string's text in the Pine Logs pane on the first bar.
+if barstate.isfirst
+    log.info(concatenated)
+```
 
-See the [Multiline strings](https://www.tradingview.com/pine-script-docs/concepts/strings/#multiline-strings) section of the [Strings](https://www.tradingview.com/pine-script-docs/concepts/strings/) page to learn more about multiline strings and how they differ from single-line strings.
+See the [Multiline strings](../1. Concepts/concepts_strings.md#multiline-strings) section of the [Strings](../1. Concepts/concepts_strings.md) page to learn more about multiline strings and how they differ from single-line strings.
 
-#### [Updated editor settings](https://www.tradingview.com/pine-script-docs/release-notes/\#updated-editor-settings)
+#### [Updated editor settings](../7. Release_Notes/release-notes_#updated-editor-settings.md)
 
 The Pine Editor’s settings include a new “Use word wrap by default” checkbox. If selected, the Pine Editor automatically applies word wrapping when the user creates a new script, opens an existing script, or reopens the editor. The user can deactivate or reactivate word wrap for the current editor session at any time by using the `Alt + Z`/`Option + Z` hotkey or the “Toggle Word Wrap” option in the command palette.
 
-#### [Sorting UDT collections](https://www.tradingview.com/pine-script-docs/release-notes/\#sorting-udt-collections)
+#### [Sorting UDT collections](../7. Release_Notes/release-notes_#sorting-udt-collections.md)
 
-The [array.sort()](https://www.tradingview.com/pine-script-reference/v6/#fun_array.sort), [array.sort\_indices()](https://www.tradingview.com/pine-script-reference/v6/#fun_array.sort_indices), and [matrix.sort()](https://www.tradingview.com/pine-script-reference/v6/#fun_matrix.sort) functions can now sort [arrays](https://www.tradingview.com/pine-script-docs/language/arrays/) and [matrices](https://www.tradingview.com/pine-script-docs/language/matrices/) that store IDs of [user-defined types (UDTs)](https://www.tradingview.com/pine-script-docs/language/type-system/#user-defined-types). These functions sort UDT collections by comparing values from one of the “int”, “float”, or “string” _fields_ in the [objects](https://www.tradingview.com/pine-script-docs/language/objects/) referenced by their elements.
+The [array.sort()](../../reference manual/functions/array.sort.md), [array.sort\_indices()](../../reference manual/functions/array.sort_indices.md), and [matrix.sort()](../../reference manual/functions/matrix.sort.md) functions can now sort [arrays](../3. Language/language_arrays.md) and [matrices](../3. Language/language_matrices.md) that store IDs of [user-defined types (UDTs)](../3. Language/language_type-system.md#user-defined-types). These functions sort UDT collections by comparing values from one of the “int”, “float”, or “string” _fields_ in the [objects](../3. Language/language_objects.md) referenced by their elements.
 
 The new `sort_field` _parameter_ specifies _which_ object field a call to these functions compares to sort a UDT collection. It accepts either a _“const int”_ or _“const string”_ argument:
 
-- A “const int” argument specifies a field by its _field index_, where a value of 0 (the default) refers to the _first_ field in the [type declaration](https://www.tradingview.com/pine-script-docs/language/type-system/#user-defined-types).
+- A “const int” argument specifies a field by its _field index_, where a value of 0 (the default) refers to the _first_ field in the [type declaration](../3. Language/language_type-system.md#user-defined-types).
 - A “const string” argument specifies a field by its assigned _name_.
 
 For example:
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
+```pine
+//@version=6
+indicator("Sorting UDT collections demo")
 
-``//@version=6
-indicator("Sorting UDT collections demo")
+//@type  A custom type for creating objects that store "float", "int", and "string" data.
+type Data
+    float  price     // Field index 0.
+    int    timestamp // Field index 1.
+    string note      // Field index 2.
 
-//@type  A custom type for creating objects that store "float", "int", and "string" data.
-type Data
-    float  price     // Field index 0.
-    int    timestamp // Field index 1.
-    string note      // Field index 2.
-
-//@function Create a formatted string representation of an array of `Data` IDs.
-repr(array<Data> this) =>
-    string result = "\n[\n"\
-    for data in this\
-        result += str.format(\
-            "(price: {0,number,0.000}, timestamp: {1,number,0}, note: {2}),\n",\
-            data.price, data.timestamp, data.note\
-        )\
-    result := str.replace(str.substring(result, 0, str.length(result) - 2), "[ ", "[") + "\n]"\
+//@function Create a formatted string representation of an array of `Data` IDs.
+repr(array<Data> this) =>
+    string result = "\n[\n"\
+    for data in this\
+        result += str.format(\
+            "(price: {0,number,0.000}, timestamp: {1,number,0}, note: {2}),\n",\
+            data.price, data.timestamp, data.note\
+        )\
+    result := str.replace(str.substring(result, 0, str.length(result) - 2), "[ ", "[") + "\n]"\
 \
-if barstate.islastconfirmedhistory\
-    //@variable References an array of `Data` objects representing data from a specific timeframe.\
-    array<Data> reqData = array.new<Data>(1, Data.new(hl2, time, timeframe.period))\
-    //@variable The typical number of seconds in the chart's timeframe.\
-    int tfSeconds = timeframe.in_seconds()\
-    //@variable References an array of timeframe strings.\
-    array<string> timeframes = array.from(\
-        timeframe.from_seconds(tfSeconds * 2), timeframe.from_seconds(tfSeconds * 8),\
-        timeframe.from_seconds(tfSeconds * 4)\
-    )\
+if barstate.islastconfirmedhistory\
+    //@variable References an array of `Data` objects representing data from a specific timeframe.\
+    array<Data> reqData = array.new<Data>(1, Data.new(hl2, time, timeframe.period))\
+    //@variable The typical number of seconds in the chart's timeframe.\
+    int tfSeconds = timeframe.in_seconds()\
+    //@variable References an array of timeframe strings.\
+    array<string> timeframes = array.from(\
+        timeframe.from_seconds(tfSeconds * 2), timeframe.from_seconds(tfSeconds * 8),\
+        timeframe.from_seconds(tfSeconds * 4)\
+    )\
 \
-    // Request a `Data` object for each timeframe and push the object's ID into the `reqData` array.\
-    for tf in timeframes\
-        reqData.push(request.security("", tf, Data.new(hl2, time, timeframe.period)))\
+    // Request a `Data` object for each timeframe and push the object's ID into the `reqData` array.\
+    for tf in timeframes\
+        reqData.push(request.security("", tf, Data.new(hl2, time, timeframe.period)))\
 \
-    // Log a message showing the unsorted array's structure.\
-    log.info("Unsorted" + repr(reqData))\
+    // Log a message showing the unsorted array's structure.\
+    log.info("Unsorted" + repr(reqData))\
 \
-    //#region Display the structure of the array after sorting it using each field.\
+    //#region Display the structure of the array after sorting it using each field.\
 \
-    // First, let's sort the `reqData` array using the default `sort_field` argument (0) and log the result.\
-    // The default value refers to the *first field* listed in the `Data` type declaration (`price`).\
-    array.sort(reqData)\
-    log.info("Sorted using field 0 ('price')" + repr(reqData))\
+    // First, let's sort the `reqData` array using the default `sort_field` argument (0) and log the result.\
+    // The default value refers to the *first field* listed in the `Data` type declaration (`price`).\
+    array.sort(reqData)\
+    log.info("Sorted using field 0 ('price')" + repr(reqData))\
 \
-    // Next, let's sort the array using the field named `timestamp` (at index 1) and log the result.\
-    reqData.sort(sort_field = "timestamp")\
-    log.info("Sorted using field named 'timestamp' (index 1)" + repr(reqData))\
+    // Next, let's sort the array using the field named `timestamp` (at index 1) and log the result.\
+    reqData.sort(sort_field = "timestamp")\
+    log.info("Sorted using field named 'timestamp' (index 1)" + repr(reqData))\
 \
-    // Lastly, let's sort the array using the field at index 2 (`note`) and log the result.\
-    reqData.sort(sort_field = 2)\
-    log.info("Sorted using field 2 ('note')" + repr(reqData))\
-    //#endregion\
-``\
+    // Lastly, let's sort the array using the field at index 2 (`note`) and log the result.\
+    reqData.sort(sort_field = 2)\
+    log.info("Sorted using field 2 ('note')" + repr(reqData))\
+    //#endregion\
+```\
 \
-Refer to the [Sorting arrays of user-defined types](https://www.tradingview.com/pine-script-docs/language/arrays/#sorting-arrays-of-user-defined-types) section of the [Arrays](https://www.tradingview.com/pine-script-docs/language/arrays/) page and the [Sorting matrices of user-defined types](https://www.tradingview.com/pine-script-docs/language/matrices/#sorting-matrices-of-user-defined-types) section of the [Matrices](https://www.tradingview.com/pine-script-docs/language/matrices/) page to learn more about sorting UDT collections and the `sort_field` parameter.\
+Refer to the [Sorting arrays of user-defined types](../3. Language/language_arrays.md#sorting-arrays-of-user-defined-types) section of the [Arrays](../3. Language/language_arrays.md) page and the [Sorting matrices of user-defined types](../3. Language/language_matrices.md#sorting-matrices-of-user-defined-types) section of the [Matrices](../3. Language/language_matrices.md) page to learn more about sorting UDT collections and the `sort_field` parameter.\
 \
-### [January 2026](https://www.tradingview.com/pine-script-docs/release-notes/\#january-2026)\
+### [January 2026](../7. Release_Notes/release-notes_#january-2026.md)\
 \
-#### [Footprint requests](https://www.tradingview.com/pine-script-docs/release-notes/\#footprint-requests)\
+#### [Footprint requests](../7. Release_Notes/release-notes_#footprint-requests.md)\
 \
-We’ve added a new [request.footprint()](https://www.tradingview.com/pine-script-reference/v6/#fun_request.footprint) function and two new _data types_, [footprint](https://www.tradingview.com/pine-script-reference/v6/#type_footprint) and [volume\_row](https://www.tradingview.com/pine-script-reference/v6/#type_volume_row). These features enable scripts to retrieve and work with [volume footprint](https://www.tradingview.com/support/solutions/43000726164-volume-footprint-charts-a-complete-guide/) data for a chart’s dataset:\
+We’ve added a new [request.footprint()](../../reference manual/functions/request.footprint.md) function and two new _data types_, [footprint](../../reference manual/types/footprint.md) and [volume\_row](../../reference manual/types/volume_row.md). These features enable scripts to retrieve and work with [volume footprint](https://www.tradingview.com/support/solutions/43000726164-volume-footprint-charts-a-complete-guide/) data for a chart’s dataset:\
 \
-- The [request.footprint()](https://www.tradingview.com/pine-script-reference/v6/#fun_request.footprint) function requests volume footprint information for the current bar. It returns either the _reference (ID)_ of a [footprint](https://www.tradingview.com/pine-script-reference/v6/#type_footprint) _object_, or [na](https://www.tradingview.com/pine-script-reference/v6/#var_na) if no footprint data is available for the bar.\
-- A [footprint](https://www.tradingview.com/pine-script-reference/v6/#type_footprint) object contains the available volume footprint data retrieved for a specific bar. Scripts can use IDs of this type with the new `footprint.*()` functions to retrieve a bar’s overall footprint information, such as its total “buy” or “sell” volume and overall volume delta, or to retrieve [volume\_row](https://www.tradingview.com/pine-script-reference/v6/#type_volume_row) IDs for _individual rows_ within the footprint, including those for the bar’s Point of Control (POC) and Value Area (VA) boundaries.\
-- A [volume\_row](https://www.tradingview.com/pine-script-reference/v6/#type_volume_row) object contains data for a specific footprint row. Scripts can use IDs of this type with the new `volume_row.*()` functions to retrieve a footprint row’s information, including its price levels, volume values, volume delta, and imbalances.\
+- The [request.footprint()](../../reference manual/functions/request.footprint.md) function requests volume footprint information for the current bar. It returns either the _reference (ID)_ of a [footprint](../../reference manual/types/footprint.md) _object_, or [na](../../reference manual/variables/na.md) if no footprint data is available for the bar.\
+- A [footprint](../../reference manual/types/footprint.md) object contains the available volume footprint data retrieved for a specific bar. Scripts can use IDs of this type with the new `footprint.*()` functions to retrieve a bar’s overall footprint information, such as its total “buy” or “sell” volume and overall volume delta, or to retrieve [volume\_row](../../reference manual/types/volume_row.md) IDs for _individual rows_ within the footprint, including those for the bar’s Point of Control (POC) and Value Area (VA) boundaries.\
+- A [volume\_row](../../reference manual/types/volume_row.md) object contains data for a specific footprint row. Scripts can use IDs of this type with the new `volume_row.*()` functions to retrieve a footprint row’s information, including its price levels, volume values, volume delta, and imbalances.\
 \
 Programmers who have a Premium or Ultimate [plan](https://www.tradingview.com/pricing/) can use these features to create scripts that analyze volume footprint information across bars or perform custom footprint-based calculations. For example:\
 \
@@ -171,61 +161,61 @@ Programmers who have a Premium or Ultimate [plan](https://www.tradingview.com/pr
 Copied\
 \
 ``//@version=6\
-indicator("Footprint requests demo", overlay = true, behind_chart = false, max_labels_count = 50)\
+indicator("Footprint requests demo", overlay = true, behind_chart = false, max_labels_count = 50)\
 \
-//@variable The number of ticks to use as the price interval for each footprint row.\
-int numTicksInput = input.int(100, "Ticks per footprint row", minval = 1)\
-//@variable The percentage of each footprint's total volume to use for calculating the Value Area (VA).\
-int vaInput = input.int(70, "Value Area percentage", minval = 1)\
+//@variable The number of ticks to use as the price interval for each footprint row.\
+int numTicksInput = input.int(100, "Ticks per footprint row", minval = 1)\
+//@variable The percentage of each footprint's total volume to use for calculating the Value Area (VA).\
+int vaInput = input.int(70, "Value Area percentage", minval = 1)\
 \
-//@variable References a `footprint` object for the current bar, or holds `na` if no footprint data is available.\
-footprint reqFootprint = request.footprint(numTicksInput, vaInput)\
+//@variable References a `footprint` object for the current bar, or holds `na` if no footprint data is available.\
+footprint reqFootprint = request.footprint(numTicksInput, vaInput)\
 \
-// If footprint data is available for the bar, retrieve overall and row-wise information for the footprint.\
-[vaUpper, vaLower, pocUpper, pocLower] = if not na(reqFootprint)\
-    // Retrieve bar's total buy volume, sell volume, and volume delta from `footprint` object referenced by `reqFootprint`.\
-    // These `footprint.*()` functions return "float" volume values.\
-    float buyVolume   = reqFootprint.buy_volume()\
-    float sellVolume  = reqFootprint.sell_volume()\
-    float deltaVolume = reqFootprint.delta()\
+// If footprint data is available for the bar, retrieve overall and row-wise information for the footprint.\
+[vaUpper, vaLower, pocUpper, pocLower] = if not na(reqFootprint)\
+    // Retrieve bar's total buy volume, sell volume, and volume delta from `footprint` object referenced by `reqFootprint`.\
+    // These `footprint.*()` functions return "float" volume values.\
+    float buyVolume   = reqFootprint.buy_volume()\
+    float sellVolume  = reqFootprint.sell_volume()\
+    float deltaVolume = reqFootprint.delta()\
 \
-    // Get Value Area High (VAH), Value Area Low (VAL), and Point of Control (POC) row IDs from the `footprint` object.\
-    // These `footprint.*()` functions return IDs of `volume_row` objects containing data for the specific rows.\
-    volume_row vahRow = reqFootprint.vah()\
-    volume_row valRow = reqFootprint.val()\
-    volume_row pocRow = reqFootprint.poc()\
+    // Get Value Area High (VAH), Value Area Low (VAL), and Point of Control (POC) row IDs from the `footprint` object.\
+    // These `footprint.*()` functions return IDs of `volume_row` objects containing data for the specific rows.\
+    volume_row vahRow = reqFootprint.vah()\
+    volume_row valRow = reqFootprint.val()\
+    volume_row pocRow = reqFootprint.poc()\
 \
-    // Retrieve upper and lower price boundaries of VAH, VAL, and POC rows from `volume_row` objects.\
-    // These `volume_row.*()` functions return "float" price values.\
-    float vahUpperPrice = vahRow.up_price()\
-    float valLowerPrice = valRow.down_price()\
-    float pocUpperPrice = pocRow.up_price()\
-    float pocLowerPrice = pocRow.down_price()\
+    // Retrieve upper and lower price boundaries of VAH, VAL, and POC rows from `volume_row` objects.\
+    // These `volume_row.*()` functions return "float" price values.\
+    float vahUpperPrice = vahRow.up_price()\
+    float valLowerPrice = valRow.down_price()\
+    float pocUpperPrice = pocRow.up_price()\
+    float pocLowerPrice = pocRow.down_price()\
 \
-    // Draw a label on each bar to show the footprint's volume and price levels as formatted text.\
-    string footprintInfo = str.format(\
-        "Total buy volume: {0}\nTotal sell volume: {1}\nVolume delta: {2}\n---\nPOC range: {3}–{4}\nVA range: {5}–{6}",\
-        buyVolume, sellVolume, deltaVolume, pocLowerPrice, pocUpperPrice, valLowerPrice, vahUpperPrice\
-    )\
-    label.new(bar_index, high, text = footprintInfo, yloc = yloc.abovebar, size = 10)\
+    // Draw a label on each bar to show the footprint's volume and price levels as formatted text.\
+    string footprintInfo = str.format(\
+        "Total buy volume: {0}\nTotal sell volume: {1}\nVolume delta: {2}\n---\nPOC range: {3}–{4}\nVA range: {5}–{6}",\
+        buyVolume, sellVolume, deltaVolume, pocLowerPrice, pocUpperPrice, valLowerPrice, vahUpperPrice\
+    )\
+    label.new(bar_index, high, text = footprintInfo, yloc = yloc.abovebar, size = 10)\
 \
-    // Return VA and POC price boundaries to the variables in the tuple declaration.\
-    [vahUpperPrice, valLowerPrice, pocUpperPrice, pocLowerPrice]\
+    // Return VA and POC price boundaries to the variables in the tuple declaration.\
+    [vahUpperPrice, valLowerPrice, pocUpperPrice, pocLowerPrice]\
 \
-// Plot footprint row price boundaries to visualize VA and POC range of each bar. Hidden if requested footprint is `na`.\
-plot(vaUpper,  "VAH upper", color.navy,    3, plot.style_stepline, linestyle = plot.linestyle_dotted)\
-plot(vaLower,  "VAL lower", color.blue,    3, plot.style_stepline, linestyle = plot.linestyle_dotted)\
-plot(pocUpper, "POC upper", color.purple,  4, plot.style_stepline)\
-plot(pocLower, "POC lower", color.fuchsia, 4, plot.style_stepline)\
+// Plot footprint row price boundaries to visualize VA and POC range of each bar. Hidden if requested footprint is `na`.\
+plot(vaUpper,  "VAH upper", color.navy,    3, plot.style_stepline, linestyle = plot.linestyle_dotted)\
+plot(vaLower,  "VAL lower", color.blue,    3, plot.style_stepline, linestyle = plot.linestyle_dotted)\
+plot(pocUpper, "POC upper", color.purple,  4, plot.style_stepline)\
+plot(pocLower, "POC lower", color.fuchsia, 4, plot.style_stepline)\
 ``\
 \
-See the [`request.footprint()`](https://www.tradingview.com/pine-script-docs/concepts/other-timeframes-and-data/#requestfootprint) section of the [Other timeframes and data](https://www.tradingview.com/pine-script-docs/concepts/other-timeframes-and-data/) page to learn more about footprint requests. For more information about the [footprint](https://www.tradingview.com/pine-script-reference/v6/#type_footprint) and [volume\_row](https://www.tradingview.com/pine-script-reference/v6/#type_volume_row) types and the functions in their namespaces, refer to the [footprint and volume\_row](https://www.tradingview.com/pine-script-docs/language/type-system/#footprint-and-volume_row) section of the [Type system](https://www.tradingview.com/pine-script-docs/language/type-system/) page.\
+See the [`request.footprint()`](../1. Concepts/concepts_other-timeframes-and-data.md#requestfootprint) section of the [Other timeframes and data](../1. Concepts/concepts_other-timeframes-and-data.md) page to learn more about footprint requests. For more information about the [footprint](../../reference manual/types/footprint.md) and [volume\_row](../../reference manual/types/volume_row.md) types and the functions in their namespaces, refer to the [footprint and volume\_row](../3. Language/language_type-system.md#footprint-and-volume_row) section of the [Type system](../3. Language/language_type-system.md) page.\
 \
-## [2025](https://www.tradingview.com/pine-script-docs/release-notes/\#2025)\
+## [2025](../7. Release_Notes/release-notes_#2025.md)\
 \
-### [December 2025](https://www.tradingview.com/pine-script-docs/release-notes/\#december-2025)\
+### [December 2025](../7. Release_Notes/release-notes_#december-2025.md)\
 \
-#### [Updated line wrapping](https://www.tradingview.com/pine-script-docs/release-notes/\#updated-line-wrapping)\
+#### [Updated line wrapping](../7. Release_Notes/release-notes_#updated-line-wrapping.md)\
 \
 Scripts now have improved line wrapping behavior. Previously, all multiline text representing a _single line_ of code required indenting each line after the first by any number of spaces that was _not_ a multiple of four, because Pine reserved four-space indentation for local code blocks.\
 \
@@ -236,23 +226,23 @@ Copied\
 \
 `//@version=6\
 \
-// Before the update, wrapped lines in this code that start at multiples of four spaces caused compilation errors.\
+// Before the update, wrapped lines in this code that start at multiples of four spaces caused compilation errors.\
 \
 indicator(\
-    "Line wrapping between parentheses demo", // Indented by four spaces.\
-        overlay = true                        // Indented by eight spaces.\
-)                                             // No indentation.\
+    "Line wrapping between parentheses demo", // Indented by four spaces.\
+        overlay = true                        // Indented by eight spaces.\
+)                                             // No indentation.\
 \
-float median = 0.5 * (\
-    ta.highest(20) + ta.lowest(20) // Indented by four spaces.\
-)                                  // No indentation.\
+float median = 0.5 * (\
+    ta.highest(20) + ta.lowest(20) // Indented by four spaces.\
+)                                  // No indentation.\
 \
 plot(\
-median,              // No indentation.\
-"Median",          // Indented by two spaces.\
-chart.fg_color,   // Indented by three spaces.\
-    3                // Indented by four spaces.\
-)                    // No indentation.\
+median,              // No indentation.\
+"Median",          // Indented by two spaces.\
+chart.fg_color,   // Indented by three spaces.\
+    3                // Indented by four spaces.\
+)                    // No indentation.\
 `\
 \
 However, if a line-wrapped expression is not enclosed in parentheses, all subsequent lines still require an indentation that is _not_ a multiple of four spaces. For example:\
@@ -261,108 +251,108 @@ However, if a line-wrapped expression is not enclosed in parentheses, all subseq
 Copied\
 \
 ``//@version=6\
-indicator("Invalid line wrap demo", overlay = true)\
+indicator("Invalid line wrap demo", overlay = true)\
 \
-// The second line that starts with `*` in this wrapped expression causes a compilation error.\
-// For the script to compile successfully, do any of the following:\
-// - Move that part of the expression to line 9.\
-// - Add another leading space to line 10 so that it doesn't start after a multiple of four spaces.\
-// - Enclose the entire expression in another set of parentheses.\
-float median = 0.5\
-    * (\
-    ta.highest(20) + ta.lowest(20)\
+// The second line that starts with `*` in this wrapped expression causes a compilation error.\
+// For the script to compile successfully, do any of the following:\
+// - Move that part of the expression to line 9.\
+// - Add another leading space to line 10 so that it doesn't start after a multiple of four spaces.\
+// - Enclose the entire expression in another set of parentheses.\
+float median = 0.5\
+    * (\
+    ta.highest(20) + ta.lowest(20)\
 )\
 \
 plot(median)\
 ``\
 \
-### [November 2025](https://www.tradingview.com/pine-script-docs/release-notes/\#november-2025)\
+### [November 2025](../7. Release_Notes/release-notes_#november-2025.md)\
 \
-We’ve added a new variable, [syminfo.isin](https://www.tradingview.com/pine-script-reference/v6/#var_syminfo.isin), which holds a string containing the 12-character International Securities Identification Number (ISIN) for the security represented by the symbol, or an empty string if no ISIN is available. An ISIN uniquely identifies a security _globally_ and does not vary across exchanges, unlike ticker symbols. As such, programmers can use this variable to identify a symbol’s underlying stock or other instrument, regardless of the name listed by an exchange. For example:\
-\
-[Pine Script®](https://tradingview.com/pine-script-docs)\
-Copied\
-\
-``//@version=6\
-indicator("ISIN demo")\
-\
-// Define inputs for two symbols to compare.\
-string symbol1Input = input.symbol("NASDAQ:AAPL", "Symbol 1")\
-string symbol2Input = input.symbol("GETTEX:APC",  "Symbol 2")\
-\
-if barstate.islastconfirmedhistory\
-    // Retrieve ISIN strings for `symbol1Input` and `symbol2Input`.\
-    var string isin1 = request.security(symbol1Input, "", syminfo.isin)\
-    var string isin2 = request.security(symbol2Input, "", syminfo.isin)\
-\
-    // Log the retrieved ISIN codes.\
-    log.info("Symbol 1 ISIN: " + isin1)\
-    log.info("Symbol 2 ISIN: " + isin2)\
-\
-    // Log an error message if one of the symbols does not have ISIN information.\
-    if isin1 == "" or isin2 == ""\
-        log.error("ISIN information is not available for both symbols.")\
-    // If both symbols do have ISIN information, log a message to confirm whether both refer to the same security.\
-    else if isin1 == isin2\
-        log.info("Both symbols refer to the same security.")\
-    else\
-        log.info("The two symbols refer to different securities.")\
-``\
-\
-### [October 2025](https://www.tradingview.com/pine-script-docs/release-notes/\#october-2025)\
-\
-The [time()](https://www.tradingview.com/pine-script-reference/v6/#fun_time) and [time\_close()](https://www.tradingview.com/pine-script-reference/v6/#fun_time_close) functions feature a new parameter: `timeframe_bars_back`. In contrast to the `bars_back` parameter, which determines the bar offset on the script’s _main timeframe_ for the timestamp calculation, `timeframe_bars_back` determines the bar offset on the _separate timeframe_ specified by the `timeframe` argument. If the `timeframe_bars_back` value is positive, the function calculates the timestamp of the _past_ bar that is N bars _back_ on the specified timeframe. If negative, it calculates the _expected_ timestamp of the bar that is N bars _forward_ on that timeframe.\
-\
-If a call to [time()](https://www.tradingview.com/pine-script-reference/v6/#fun_time) or [time\_close()](https://www.tradingview.com/pine-script-reference/v6/#fun_time_close) includes arguments for _both_ the `bars_back` and `timeframe_bars_back` parameters, it determines the timestamp corresponding to the `bars_back` offset _first_. Then, it applies the `timeframe_bars_back` offset to that time to calculate the final timestamp. For example:\
+We’ve added a new variable, [syminfo.isin](../../reference manual/variables/syminfo.isin.md), which holds a string containing the 12-character International Securities Identification Number (ISIN) for the security represented by the symbol, or an empty string if no ISIN is available. An ISIN uniquely identifies a security _globally_ and does not vary across exchanges, unlike ticker symbols. As such, programmers can use this variable to identify a symbol’s underlying stock or other instrument, regardless of the name listed by an exchange. For example:\
 \
 [Pine Script®](https://tradingview.com/pine-script-docs)\
 Copied\
 \
 ``//@version=6\
-indicator("`bars_back` and `timeframe_bars_back` demo")\
+indicator("ISIN demo")\
 \
-//@variable The number of bars back on the script's main timeframe (chart timeframe).\
-int barsBackInput = input.int(10, "Chart bar offset")\
-//@variable The number of bars back on the "1M" timeframe.\
-int tfBarsBackInput = input.int(3, "'1M' bar offset")\
+// Define inputs for two symbols to compare.\
+string symbol1Input = input.symbol("NASDAQ:AAPL", "Symbol 1")\
+string symbol2Input = input.symbol("GETTEX:APC",  "Symbol 2")\
 \
-//@variable The opening UNIX timestamp of the current "1M" bar.\
-int monthTime = time("1M")\
-//@variable The opening time of the "1M" bar that contains the bar from `barsBackInput` bars back on the main timeframe.\
-int offsetTime1 = time("1M", bars_back = barsBackInput)\
-//@variable The "1M" opening time that is `tfBarsBackInput` monthly bars back, relative to the "1M" bar that opens at `offsetTime1`.\
-//          This `time()` call first determines the "1M" bar time corresponding to `barsBackInput` bars back on the\
-//          main timeframe, just like the previous call. Then, it calculates and returns the "1M" opening time that is\
-//          `tfBarsBackInput` *monthly* bars back relative to that time.\
-int offsetTime2 = time("1M", bars_back = barsBackInput, timeframe_bars_back = tfBarsBackInput)\
+if barstate.islastconfirmedhistory\
+    // Retrieve ISIN strings for `symbol1Input` and `symbol2Input`.\
+    var string isin1 = request.security(symbol1Input, "", syminfo.isin)\
+    var string isin2 = request.security(symbol2Input, "", syminfo.isin)\
 \
-// Plot the values for visual comparison.\
-plot(monthTime, "No offset")\
-plot(offsetTime1, "`bars_back`", color.red)\
-plot(offsetTime2, "`bars_back` + `timeframe_bars_back`", color.purple)\
-// Log formatted timestamps in the Pine Logs pane.\
-log.info("\n{0}\n{1}\n{2}", str.format_time(monthTime), str.format_time(offsetTime1), str.format_time(offsetTime2))\
+    // Log the retrieved ISIN codes.\
+    log.info("Symbol 1 ISIN: " + isin1)\
+    log.info("Symbol 2 ISIN: " + isin2)\
+\
+    // Log an error message if one of the symbols does not have ISIN information.\
+    if isin1 == "" or isin2 == ""\
+        log.error("ISIN information is not available for both symbols.")\
+    // If both symbols do have ISIN information, log a message to confirm whether both refer to the same security.\
+    else if isin1 == isin2\
+        log.info("Both symbols refer to the same security.")\
+    else\
+        log.info("The two symbols refer to different securities.")\
 ``\
 \
-### [September 2025](https://www.tradingview.com/pine-script-docs/release-notes/\#september-2025)\
+### [October 2025](../7. Release_Notes/release-notes_#october-2025.md)\
 \
-The [plot()](https://www.tradingview.com/pine-script-reference/v6/#fun_plot) function can now draw dotted and dashed lines via the new `linestyle` parameter, which takes one of the following arguments: [plot.linestyle\_solid](https://www.tradingview.com/pine-script-reference/v6/#const_plot.linestyle_solid), [plot.linestyle\_dashed](https://www.tradingview.com/pine-script-reference/v6/#const_plot.linestyle_dashed), or [plot.linestyle\_dotted](https://www.tradingview.com/pine-script-reference/v6/#const_plot.linestyle_dotted). The `linestyle` parameter setting takes effect only for `style` arguments that plot lines.\
+The [time()](../../reference manual/functions/time.md) and [time\_close()](../../reference manual/functions/time_close.md) functions feature a new parameter: `timeframe_bars_back`. In contrast to the `bars_back` parameter, which determines the bar offset on the script’s _main timeframe_ for the timestamp calculation, `timeframe_bars_back` determines the bar offset on the _separate timeframe_ specified by the `timeframe` argument. If the `timeframe_bars_back` value is positive, the function calculates the timestamp of the _past_ bar that is N bars _back_ on the specified timeframe. If negative, it calculates the _expected_ timestamp of the bar that is N bars _forward_ on that timeframe.\
 \
-### [August 2025](https://www.tradingview.com/pine-script-docs/release-notes/\#august-2025)\
+If a call to [time()](../../reference manual/functions/time.md) or [time\_close()](../../reference manual/functions/time_close.md) includes arguments for _both_ the `bars_back` and `timeframe_bars_back` parameters, it determines the timestamp corresponding to the `bars_back` offset _first_. Then, it applies the `timeframe_bars_back` offset to that time to calculate the final timestamp. For example:\
 \
-We’ve updated the maximum length for [strings](https://www.tradingview.com/pine-script-docs/concepts/strings/). Previously, a “string” value could not exceed 4,096 characters. Now, strings can contain up to 40,960 encoded characters.\
+[Pine Script®](https://tradingview.com/pine-script-docs)\
+Copied\
 \
-#### [Pine Editor changes](https://www.tradingview.com/pine-script-docs/release-notes/\#pine-editor-changes)\
+``//@version=6\
+indicator("`bars_back` and `timeframe_bars_back` demo")\
+\
+//@variable The number of bars back on the script's main timeframe (chart timeframe).\
+int barsBackInput = input.int(10, "Chart bar offset")\
+//@variable The number of bars back on the "1M" timeframe.\
+int tfBarsBackInput = input.int(3, "'1M' bar offset")\
+\
+//@variable The opening UNIX timestamp of the current "1M" bar.\
+int monthTime = time("1M")\
+//@variable The opening time of the "1M" bar that contains the bar from `barsBackInput` bars back on the main timeframe.\
+int offsetTime1 = time("1M", bars_back = barsBackInput)\
+//@variable The "1M" opening time that is `tfBarsBackInput` monthly bars back, relative to the "1M" bar that opens at `offsetTime1`.\
+//          This `time()` call first determines the "1M" bar time corresponding to `barsBackInput` bars back on the\
+//          main timeframe, just like the previous call. Then, it calculates and returns the "1M" opening time that is\
+//          `tfBarsBackInput` *monthly* bars back relative to that time.\
+int offsetTime2 = time("1M", bars_back = barsBackInput, timeframe_bars_back = tfBarsBackInput)\
+\
+// Plot the values for visual comparison.\
+plot(monthTime, "No offset")\
+plot(offsetTime1, "`bars_back`", color.red)\
+plot(offsetTime2, "`bars_back` + `timeframe_bars_back`", color.purple)\
+// Log formatted timestamps in the Pine Logs pane.\
+log.info("\n{0}\n{1}\n{2}", str.format_time(monthTime), str.format_time(offsetTime1), str.format_time(offsetTime2))\
+``\
+\
+### [September 2025](../7. Release_Notes/release-notes_#september-2025.md)\
+\
+The [plot()](../../reference manual/functions/plot.md) function can now draw dotted and dashed lines via the new `linestyle` parameter, which takes one of the following arguments: [plot.linestyle\_solid](../../reference manual/constants/plot.linestyle_solid.md), [plot.linestyle\_dashed](../../reference manual/constants/plot.linestyle_dashed.md), or [plot.linestyle\_dotted](../../reference manual/constants/plot.linestyle_dotted.md). The `linestyle` parameter setting takes effect only for `style` arguments that plot lines.\
+\
+### [August 2025](../7. Release_Notes/release-notes_#august-2025.md)\
+\
+We’ve updated the maximum length for [strings](../1. Concepts/concepts_strings.md). Previously, a “string” value could not exceed 4,096 characters. Now, strings can contain up to 40,960 encoded characters.\
+\
+#### [Pine Editor changes](../7. Release_Notes/release-notes_#pine-editor-changes.md)\
 \
 The Pine Editor is moving from the bottom panel to the _side panel_. This change will happen in phases over the following weeks.\
 \
 By default, the new editor view overlays on the right side of the screen. For wider screens, a _split-view_ mode is available, which automatically adjusts the chart’s width to keep it visible alongside the editor. With this new vertical orientation, users can easily edit code and view other tabs such as the Strategy Tester or Replay Trading at the same time.\
 \
-![image](https://www.tradingview.com/pine-script-docs/_astro/ReleaseNotes-SplitView.Vgle1Hws_Z12mUU7.webp)\
+![image](../images/ReleaseNotes-SplitView.Vgle1Hws_Z12mUU7.webp)\
 \
 The vertical editor view includes a _word wrap_ feature, which enables users to read or modify long lines of code without scrolling horizontally. Note that word wrapping is only a _visual_ feature; it does _not_ change the source code’s structure or line numbering. Users can activate or deactivate word wrapping with the `Alt + Z`/`Option + Z` hotkey.\
 \
-### [July 2025](https://www.tradingview.com/pine-script-docs/release-notes/\#july-2025)\
+### [July 2025](../7. Release_Notes/release-notes_#july-2025.md)\
 \
 All `input*()` functions feature a new parameter: `active`. This parameter specifies whether users can change the value of the input in the “Settings/Inputs” tab. If `true`, users can change the input’s value. If `false`, the input is _grayed out_, and users _cannot_ change the value. Programmers can use this parameter to define inputs whose states depend on the values of _other_ inputs. For example:\
 \
@@ -370,45 +360,45 @@ All `input*()` functions feature a new parameter: `active`. This parameter speci
 Copied\
 \
 ``//@version=6\
-indicator("Active input demo")\
+indicator("Active input demo")\
 \
-//@variable The length for the RSI calculation.\
-int rsiLengthInput = input.int(14, "RSI length")\
+//@variable The length for the RSI calculation.\
+int rsiLengthInput = input.int(14, "RSI length")\
 \
-string GRP1 = "Smoothing"\
-//@variable If `true`, the script applies smoothing based on the two inputs below.\
-//          If `false`, it does not apply smoothing, and those inputs are grayed out.\
-bool enableSmoothingInput = input.bool(false, "Enable", group = GRP1)\
+string GRP1 = "Smoothing"\
+//@variable If `true`, the script applies smoothing based on the two inputs below.\
+//          If `false`, it does not apply smoothing, and those inputs are grayed out.\
+bool enableSmoothingInput = input.bool(false, "Enable", group = GRP1)\
 \
-//@variable The length of the EMA for smoothing the RSI.\
-int smoothLengthInput = input.int(9, "Length", 1, inline = "01", group = GRP1, active = enableSmoothingInput)\
-//@variable The strength of the smoothing. If 1, the result is the EMA of the RSI.\
-//          If less than 1, the result is a mix between the EMA and the original RSI.\
-float mixInput = input.float(1.0, "Mix", 0, 1, 0.01, inline = "01", group = GRP1, active = enableSmoothingInput)\
+//@variable The length of the EMA for smoothing the RSI.\
+int smoothLengthInput = input.int(9, "Length", 1, inline = "01", group = GRP1, active = enableSmoothingInput)\
+//@variable The strength of the smoothing. If 1, the result is the EMA of the RSI.\
+//          If less than 1, the result is a mix between the EMA and the original RSI.\
+float mixInput = input.float(1.0, "Mix", 0, 1, 0.01, inline = "01", group = GRP1, active = enableSmoothingInput)\
 \
-//@variable The RSI of `close`.\
-float rsi = ta.rsi(close, rsiLengthInput)\
-//@variable The smoothed RSI.\
-float smoothed = ta.ema(rsi, enableSmoothingInput ? smoothLengthInput : 1)\
-//@variable The mixture between `rsi` and `smoothed`, based on the inputs.\
-float osc = enableSmoothingInput ? (1.0 - mixInput) * rsi + mixInput * smoothed : rsi\
+//@variable The RSI of `close`.\
+float rsi = ta.rsi(close, rsiLengthInput)\
+//@variable The smoothed RSI.\
+float smoothed = ta.ema(rsi, enableSmoothingInput ? smoothLengthInput : 1)\
+//@variable The mixture between `rsi` and `smoothed`, based on the inputs.\
+float osc = enableSmoothingInput ? (1.0 - mixInput) * rsi + mixInput * smoothed : rsi\
 \
-// Make horizontal lines, and fill the space between `obLine` and `osLine`.\
-obLine = hline(70)\
+// Make horizontal lines, and fill the space between `obLine` and `osLine`.\
+obLine = hline(70)\
 hline(50)\
-osLine = hline(30)\
-fill(obLine, osLine, color.new(color.purple, 90))\
-// Plot the `osc` series.\
-plot(osc, "Custom RSI")\
+osLine = hline(30)\
+fill(obLine, osLine, color.new(color.purple, 90))\
+// Plot the `osc` series.\
+plot(osc, "Custom RSI")\
 ``\
 \
 We’ve added a new `syminfo.*` variable:\
 \
-- [syminfo.current\_contract](https://www.tradingview.com/pine-script-reference/v6/#var_syminfo.current_contract) — The ticker identifier of the underlying contract, if the current symbol is a continuous futures contract; [na](https://www.tradingview.com/pine-script-reference/v6/#var_na) otherwise.\
+- [syminfo.current\_contract](../../reference manual/variables/syminfo.current_contract.md) — The ticker identifier of the underlying contract, if the current symbol is a continuous futures contract; [na](../../reference manual/variables/na.md) otherwise.\
 \
-### [June 2025](https://www.tradingview.com/pine-script-docs/release-notes/\#june-2025)\
+### [June 2025](../7. Release_Notes/release-notes_#june-2025.md)\
 \
-Libraries can now export user-defined constant variables. Exported variables must be of the “int”, “float”, “bool”, “color”, or “string” type and include the [const](https://www.tradingview.com/pine-script-reference/v6/#type_const) keyword in their declaration. For example:\
+Libraries can now export user-defined constant variables. Exported variables must be of the “int”, “float”, “bool”, “color”, or “string” type and include the [const](../../reference manual/types/const.md) keyword in their declaration. For example:\
 \
 [Pine Script®](https://tradingview.com/pine-script-docs)\
 Copied\
@@ -416,83 +406,83 @@ Copied\
 `//@version=6\
 library("MyConstants")\
 \
-export const float SILVER_RATIO = 1.0 + math.sqrt(2)\
+export const float SILVER_RATIO = 1.0 + math.sqrt(2)\
 `\
 \
-### [May 2025](https://www.tradingview.com/pine-script-docs/release-notes/\#may-2025)\
+### [May 2025](../7. Release_Notes/release-notes_#may-2025.md)\
 \
-The [time\_close](https://www.tradingview.com/pine-script-reference/v6/#var_time_close) variable and the [time\_close()](https://www.tradingview.com/pine-script-reference/v6/#fun_time_close) function have improved behavior on [tick charts](https://www.tradingview.com/support/solutions/43000709225/) and price-based charts ( [Renko](https://www.tradingview.com/support/solutions/43000502284/), [line break](https://www.tradingview.com/support/solutions/43000502273/), [Kagi](https://www.tradingview.com/support/solutions/43000502272/), [point & figure](https://www.tradingview.com/support/solutions/43000502276/), and [range](https://www.tradingview.com/support/solutions/43000474007/)). On chart types that are not time-based, the closing time of the open realtime bar is knowable only **after** the bar closes. Therefore, the value of [time\_close](https://www.tradingview.com/pine-script-reference/v6/#var_time_close) and [time\_close()](https://www.tradingview.com/pine-script-reference/v6/#fun_time_close) is always [na](https://www.tradingview.com/pine-script-reference/v6/#var_na) for that bar.\
+The [time\_close](../../reference manual/variables/time_close.md) variable and the [time\_close()](../../reference manual/functions/time_close.md) function have improved behavior on [tick charts](https://www.tradingview.com/support/solutions/43000709225/) and price-based charts ( [Renko](https://www.tradingview.com/support/solutions/43000502284/), [line break](https://www.tradingview.com/support/solutions/43000502273/), [Kagi](https://www.tradingview.com/support/solutions/43000502272/), [point & figure](https://www.tradingview.com/support/solutions/43000502276/), and [range](https://www.tradingview.com/support/solutions/43000474007/)). On chart types that are not time-based, the closing time of the open realtime bar is knowable only **after** the bar closes. Therefore, the value of [time\_close](../../reference manual/variables/time_close.md) and [time\_close()](../../reference manual/functions/time_close.md) is always [na](../../reference manual/variables/na.md) for that bar.\
 \
-Previously, it was impossible to use expressions such as `time_close[1]` or `time_close("", 1)` to retrieve the closing timestamp of an _elapsed realtime_ bar on these chart types. These expressions always returned [na](https://www.tradingview.com/pine-script-reference/v6/#var_na) when they referenced a realtime bar, because the bar’s timestamp was _not saved_ after the closing tick.\
+Previously, it was impossible to use expressions such as `time_close[1]` or `time_close("", 1)` to retrieve the closing timestamp of an _elapsed realtime_ bar on these chart types. These expressions always returned [na](../../reference manual/variables/na.md) when they referenced a realtime bar, because the bar’s timestamp was _not saved_ after the closing tick.\
 \
-With this new update, the closing timestamp of a realtime bar on tick charts or price-based charts is always available immediately after the bar closes. Now, scripts can use [time\_close](https://www.tradingview.com/pine-script-reference/v6/#var_time_close) with the `[]` [history-referencing operator](https://www.tradingview.com/pine-script-docs/language/operators/#-history-referencing-operator) or call [time\_close()](https://www.tradingview.com/pine-script-reference/v6/#fun_time_close) with a positive `bars_back` argument to retrieve the closing times of elapsed realtime bars on _any_ chart type. For example:\
+With this new update, the closing timestamp of a realtime bar on tick charts or price-based charts is always available immediately after the bar closes. Now, scripts can use [time\_close](../../reference manual/variables/time_close.md) with the `[]` [history-referencing operator](../3. Language/language_operators.md#-history-referencing-operator) or call [time\_close()](../../reference manual/functions/time_close.md) with a positive `bars_back` argument to retrieve the closing times of elapsed realtime bars on _any_ chart type. For example:\
 \
 [Pine Script®](https://tradingview.com/pine-script-docs)\
 Copied\
 \
 ``//@version=6\
-indicator("Previous closing time")\
+indicator("Previous closing time")\
 \
-// Plot the `time_close[1]` value, representing the UNIX timestamp of the past bar's closing time.\
-// This plot used to show `na` on all realtime bars of tick charts and price-based charts.\
-plot(time_close[1], "Previous bar's closing timestamp")\
+// Plot the `time_close[1]` value, representing the UNIX timestamp of the past bar's closing time.\
+// This plot used to show `na` on all realtime bars of tick charts and price-based charts.\
+plot(time_close[1], "Previous bar's closing timestamp")\
 ``\
 \
-### [April 2025](https://www.tradingview.com/pine-script-docs/release-notes/\#april-2025)\
+### [April 2025](../7. Release_Notes/release-notes_#april-2025.md)\
 \
-The `style` parameter of the [ticker.renko()](https://www.tradingview.com/pine-script-reference/v6/#fun_ticker.renko), [ticker.pointfigure()](https://www.tradingview.com/pine-script-reference/v6/#fun_ticker.pointfigure), and [ticker.kagi()](https://www.tradingview.com/pine-script-reference/v6/#fun_ticker.kagi) functions accepts a new argument for box sizing: `"PercentageLTP"`. When a call to these functions uses this `style` argument, the returned ticker ID refers to a non-standard chart dataset with box sizes based on a user-defined percentage of the last trading price.\
+The `style` parameter of the [ticker.renko()](../../reference manual/functions/ticker.renko.md), [ticker.pointfigure()](../../reference manual/functions/ticker.pointfigure.md), and [ticker.kagi()](../../reference manual/functions/ticker.kagi.md) functions accepts a new argument for box sizing: `"PercentageLTP"`. When a call to these functions uses this `style` argument, the returned ticker ID refers to a non-standard chart dataset with box sizes based on a user-defined percentage of the last trading price.\
 \
-### [March 2025](https://www.tradingview.com/pine-script-docs/release-notes/\#march-2025)\
+### [March 2025](../7. Release_Notes/release-notes_#march-2025.md)\
 \
-We’ve added a setter function for boxes: [box.set\_xloc()](https://www.tradingview.com/pine-script-reference/v6/#fun_box.set_xloc). It is similar to the `*.set_xloc()` functions for lines and labels. The function sets the left and right coordinates of the box borders, and defines whether their values represent bar indices or UNIX timestamps.\
+We’ve added a setter function for boxes: [box.set\_xloc()](../../reference manual/functions/box.set_xloc.md). It is similar to the `*.set_xloc()` functions for lines and labels. The function sets the left and right coordinates of the box borders, and defines whether their values represent bar indices or UNIX timestamps.\
 \
-#### [For loop updates](https://www.tradingview.com/pine-script-docs/release-notes/\#for-loop-updates)\
+#### [For loop updates](../7. Release_Notes/release-notes_#for-loop-updates.md)\
 \
-The [for](https://www.tradingview.com/pine-script-reference/v6/#kw_for) loop structure has updated boundary-checking behavior. Previously, any [for](https://www.tradingview.com/pine-script-reference/v6/#kw_for) statement established the loop counter’s end boundary (`to_num`) _before_ starting the first iteration, and the final possible counter value _could not change_ during the loop’s execution. Changing the result of an expression used as a [for](https://www.tradingview.com/pine-script-reference/v6/#kw_for) loop’s `to_num` argument inside the local scope _did not_ affect the loop’s iteration range.\
+The [for](../../reference manual/keywords/for.md) loop structure has updated boundary-checking behavior. Previously, any [for](../../reference manual/keywords/for.md) statement established the loop counter’s end boundary (`to_num`) _before_ starting the first iteration, and the final possible counter value _could not change_ during the loop’s execution. Changing the result of an expression used as a [for](../../reference manual/keywords/for.md) loop’s `to_num` argument inside the local scope _did not_ affect the loop’s iteration range.\
 \
-Now, a [for](https://www.tradingview.com/pine-script-reference/v6/#kw_for) loop evaluates the `to_num` boundary _dynamically_, before _every iteration_. With this update, the loop statement can modify its stopping condition after any change to the `to_num` argument’s result across iterations.\
+Now, a [for](../../reference manual/keywords/for.md) loop evaluates the `to_num` boundary _dynamically_, before _every iteration_. With this update, the loop statement can modify its stopping condition after any change to the `to_num` argument’s result across iterations.\
 \
-To learn more about this new behavior, refer to the [\`for\` loops](https://www.tradingview.com/pine-script-docs/language/loops/#for-loops) section of the [Loops](https://www.tradingview.com/pine-script-docs/language/loops/) page and the [Dynamic \`for\` loop boundaries](https://www.tradingview.com/pine-script-docs/migration-guides/to-pine-version-6/#dynamic-for-loop-boundaries) section of the [v6 migration guide](https://www.tradingview.com/pine-script-docs/migration-guides/to-pine-version-6/).\
+To learn more about this new behavior, refer to the [\`for\` loops](../3. Language/language_loops.md#for-loops) section of the [Loops](../3. Language/language_loops.md) page and the [Dynamic \`for\` loop boundaries](https://www.tradingview.com/pine-script-docs/migration-guides/to-pine-version-6/#dynamic-for-loop-boundaries) section of the [v6 migration guide](https://www.tradingview.com/pine-script-docs/migration-guides/to-pine-version-6/).\
 \
-### [February 2025](https://www.tradingview.com/pine-script-docs/release-notes/\#february-2025)\
+### [February 2025](../7. Release_Notes/release-notes_#february-2025.md)\
 \
-We’ve removed the scope count limit. Previously, any script’s total number of scopes, including the global scope and all local scopes from [user-defined functions](https://www.tradingview.com/pine-script-docs/language/user-defined-functions/) and [methods](https://www.tradingview.com/pine-script-docs/language/methods/#user-defined-methods), [loops](https://www.tradingview.com/pine-script-docs/language/loops/), [conditional structures](https://www.tradingview.com/pine-script-docs/language/conditional-structures/), [user-defined types](https://www.tradingview.com/pine-script-docs/language/type-system/#user-defined-types), and [enums](https://www.tradingview.com/pine-script-docs/language/enums/), was limited to 550. Now, scripts can contain an indefinite number of local scopes from these structures.\
+We’ve removed the scope count limit. Previously, any script’s total number of scopes, including the global scope and all local scopes from [user-defined functions](../3. Language/language_user-defined-functions.md) and [methods](../3. Language/language_methods.md#user-defined-methods), [loops](../3. Language/language_loops.md), [conditional structures](../3. Language/language_conditional-structures.md), [user-defined types](../3. Language/language_type-system.md#user-defined-types), and [enums](../3. Language/language_enums.md), was limited to 550. Now, scripts can contain an indefinite number of local scopes from these structures.\
 \
 We’ve introduced two new built-in variables, `bid` and `ask`, providing access to real-time market prices:\
 \
-- [bid](https://www.tradingview.com/pine-script-reference/v6/#var_bid) \- represents the highest price an active buyer is willing to pay for the instrument at its current value.\
-- [ask](https://www.tradingview.com/pine-script-reference/v6/#var_ask) \- represents the lowest price an active seller will accept for the instrument at its current value.\
+- [bid](../../reference manual/variables/bid.md) \- represents the highest price an active buyer is willing to pay for the instrument at its current value.\
+- [ask](../../reference manual/variables/ask.md) \- represents the lowest price an active seller will accept for the instrument at its current value.\
 \
 These variables are only available on the `"1T"` timeframe. On other timeframes, their values are `na`.\
 \
-## [2024](https://www.tradingview.com/pine-script-docs/release-notes/\#2024)\
+## [2024](../7. Release_Notes/release-notes_#2024.md)\
 \
-### [December 2024](https://www.tradingview.com/pine-script-docs/release-notes/\#december-2024)\
+### [December 2024](../7. Release_Notes/release-notes_#december-2024.md)\
 \
-The [strategy.exit()](https://www.tradingview.com/pine-script-reference/v6/#fun_strategy.exit) function has updated calculation behaviors. Previously, calls to this command with arguments for the absolute and relative parameters defining a price level for the same exit order always prioritized the _absolute_ parameter and _ignored_ the relative one. For example, a call with specified `limit` and `profit` values always ignored the `profit` value. Now, the command evaluates _both_ related parameters and uses the level that the market price is expected to _activate first_. See [this section](https://www.tradingview.com/pine-script-docs/migration-guides/to-pine-version-6/#strategyexit-evaluates-parameter-pairs) of the [v6 migration guide](https://www.tradingview.com/pine-script-docs/migration-guides/to-pine-version-6/) for more information.\
+The [strategy.exit()](../../reference manual/functions/strategy.exit.md) function has updated calculation behaviors. Previously, calls to this command with arguments for the absolute and relative parameters defining a price level for the same exit order always prioritized the _absolute_ parameter and _ignored_ the relative one. For example, a call with specified `limit` and `profit` values always ignored the `profit` value. Now, the command evaluates _both_ related parameters and uses the level that the market price is expected to _activate first_. See [this section](https://www.tradingview.com/pine-script-docs/migration-guides/to-pine-version-6/#strategyexit-evaluates-parameter-pairs) of the [v6 migration guide](https://www.tradingview.com/pine-script-docs/migration-guides/to-pine-version-6/) for more information.\
 \
-### [November 2024](https://www.tradingview.com/pine-script-docs/release-notes/\#november-2024)\
+### [November 2024](../7. Release_Notes/release-notes_#november-2024.md)\
 \
-#### [Introducing Pine Script v6](https://www.tradingview.com/pine-script-docs/release-notes/\#introducing-pine-script-v6)\
+#### [Introducing Pine Script v6](../7. Release_Notes/release-notes_#introducing-pine-script-v6.md)\
 \
 Pine Script has graduated to v6! Starting today, future Pine updates will apply exclusively to this version. Therefore, we recommend converting existing v5 scripts to access new features as we roll them out. See our [migration guide](https://www.tradingview.com/pine-script-docs/migration-guides/to-pine-version-6/) to understand the changes to existing Pine behaviors and learn how to convert scripts to v6.\
 \
 Several new features and behaviors come with this version’s release:\
 \
-- Scripts can now call `request.*()` functions with _“series string”_ arguments for the parameters that define the requested context, meaning a single `request.*()` call can change its requested data feed on _any_ historical bar. Additionally, it is now possible to call `request.*()` functions inside the local scopes of [loops](https://www.tradingview.com/pine-script-docs/language/loops/), [conditional structures](https://www.tradingview.com/pine-script-docs/language/conditional-structures/), and exported [library](https://www.tradingview.com/pine-script-docs/concepts/libraries/) functions. See the [Dynamic requests](https://www.tradingview.com/pine-script-docs/concepts/other-timeframes-and-data/#dynamic-requests) section of the [Other timeframes and data](https://www.tradingview.com/concepts/other-timeframes-and-data/) page to learn more.\
-- Values of the “bool” type are now strictly `true` or `false`. They are never [na](https://www.tradingview.com/pine-script-reference/v6/#var_na) in v6. Additionally, the [or](https://www.tradingview.com/pine-script-reference/v6/#kw_or) and [and](https://www.tradingview.com/pine-script-reference/v6/#kw_and) operators now feature _short-circuit (“lazy”)_ evaluation. If the first expression of an [or](https://www.tradingview.com/pine-script-reference/v6/#kw_or) operation is `true`, or the first expression of an [and](https://www.tradingview.com/pine-script-reference/v6/#kw_and) operation is `false`, the script does **not** evaluate the second expression because it is not necessary to determine the result. These improvements help boost the runtime efficiency of scripts that rely on “bool” values and conditional expressions.\
-- The `size` property of [labels](https://www.tradingview.com/pine-script-docs/visuals/text-and-shapes/#labels) and the `text_size` property of [boxes](https://www.tradingview.com/pine-script-docs/visuals/lines-and-boxes/#boxes) and [tables](https://www.tradingview.com/pine-script-docs/visuals/tables/) now support “int” values in addition to the `size.*` constants. These “int” values represent sizes in _typographic points_, offering a more granular and wide range of text size possibilities.\
-- The new `text_formatting` parameter of the [label.new()](https://www.tradingview.com/pine-script-reference/v6/#fun_label.new), [box.new()](https://www.tradingview.com/pine-script-reference/v6/#fun_box.new), and [table.cell()](https://www.tradingview.com/pine-script-reference/v6/#fun_table.cell) functions determines whether the object’s displayed text is **bold**, _italicized_, or _**both**_. It accepts one of these three new `text.*` constants: [text.format\_bold](https://www.tradingview.com/pine-script-reference/v6/#const_text.format_bold), [text.format\_italic](https://www.tradingview.com/pine-script-reference/v6/#const_text.format_italic), [text.format\_none](https://www.tradingview.com/pine-script-reference/v6/#const_text.format_none). To modify a drawing object’s `text_formatting` property, use the corresponding `*set_text_formatting()` functions.\
-- [Strategies](https://www.tradingview.com/pine-script-docs/concepts/strategies/) no longer stop calculating and raise an error when they reach the 9000 trade limit while not using Deep Backtesting mode. Instead, they _trim_ the oldest orders to make space for new ones. The trimmed orders are _not_ visible in the [Strategy Tester](https://www.tradingview.com/pine-script-docs/concepts/strategies/#strategy-tester), but that does not change the strategy’s simulation. To retrieve the trade index of the earliest _non-trimmed_ order, use the [strategy.closedtrades.first\_index](https://www.tradingview.com/pine-script-reference/v6/#var_strategy.closedtrades.first_index) variable.\
-- The [array.get()](https://www.tradingview.com/pine-script-reference/v6/#fun_array.get), [array.set()](https://www.tradingview.com/pine-script-reference/v6/#fun_array.set), [array.insert()](https://www.tradingview.com/pine-script-reference/v6/#fun_array.insert), and [array.remove()](https://www.tradingview.com/pine-script-reference/v6/#fun_array.remove) functions now support _negative_`index` arguments to reference elements starting from the _end_ of an [array](https://www.tradingview.com/pine-script-docs/language/arrays/#arrays). For instance, the call `array.get(myArray, -2)` retrieves the second to last element in `myArray`, which is equivalent to `array.get(myArray, array.size(myArray) - 2)`.\
-- The new [syminfo.mincontract](https://www.tradingview.com/pine-script-reference/v6/#var_syminfo.mincontract) variable holds a value representing the smallest number of contracts/shares/lots/units required to trade the current symbol, as set by the exchange.\
-- Two new variables, [syminfo.main\_tickerid](https://www.tradingview.com/pine-script-reference/v6/#var_syminfo.main_tickerid) and [timeframe.main\_period](https://www.tradingview.com/pine-script-reference/v6/#var_timeframe.main_period), reference the ticker ID and timeframe from the script’s _main context_, even if the script uses them in the `expression` argument of a `request.*()` call. Here, “main context” refers to the current chart’s symbol and timeframe, unless the script is an [indicator()](https://www.tradingview.com/pine-script-reference/v6/#fun_indicator) that includes `symbol` or `timeframe` arguments in its declaration statement.\
+- Scripts can now call `request.*()` functions with _“series string”_ arguments for the parameters that define the requested context, meaning a single `request.*()` call can change its requested data feed on _any_ historical bar. Additionally, it is now possible to call `request.*()` functions inside the local scopes of [loops](../3. Language/language_loops.md), [conditional structures](../3. Language/language_conditional-structures.md), and exported [library](../1. Concepts/concepts_libraries.md) functions. See the [Dynamic requests](../1. Concepts/concepts_other-timeframes-and-data.md#dynamic-requests) section of the [Other timeframes and data](https://www.tradingview.com/concepts/other-timeframes-and-data/) page to learn more.\
+- Values of the “bool” type are now strictly `true` or `false`. They are never [na](../../reference manual/variables/na.md) in v6. Additionally, the [or](../../reference manual/keywords/or.md) and [and](../../reference manual/keywords/and.md) operators now feature _short-circuit (“lazy”)_ evaluation. If the first expression of an [or](../../reference manual/keywords/or.md) operation is `true`, or the first expression of an [and](../../reference manual/keywords/and.md) operation is `false`, the script does **not** evaluate the second expression because it is not necessary to determine the result. These improvements help boost the runtime efficiency of scripts that rely on “bool” values and conditional expressions.\
+- The `size` property of [labels](../2. Visuals/visuals_text-and-shapes.md#labels) and the `text_size` property of [boxes](../2. Visuals/visuals_lines-and-boxes.md#boxes) and [tables](../2. Visuals/visuals_tables.md) now support “int” values in addition to the `size.*` constants. These “int” values represent sizes in _typographic points_, offering a more granular and wide range of text size possibilities.\
+- The new `text_formatting` parameter of the [label.new()](../../reference manual/functions/label.new.md), [box.new()](../../reference manual/functions/box.new.md), and [table.cell()](../../reference manual/functions/table.cell.md) functions determines whether the object’s displayed text is **bold**, _italicized_, or _**both**_. It accepts one of these three new `text.*` constants: [text.format\_bold](../../reference manual/constants/text.format_bold.md), [text.format\_italic](../../reference manual/constants/text.format_italic.md), [text.format\_none](../../reference manual/constants/text.format_none.md). To modify a drawing object’s `text_formatting` property, use the corresponding `*set_text_formatting()` functions.\
+- [Strategies](../1. Concepts/concepts_strategies.md) no longer stop calculating and raise an error when they reach the 9000 trade limit while not using Deep Backtesting mode. Instead, they _trim_ the oldest orders to make space for new ones. The trimmed orders are _not_ visible in the [Strategy Tester](../1. Concepts/concepts_strategies.md#strategy-tester), but that does not change the strategy’s simulation. To retrieve the trade index of the earliest _non-trimmed_ order, use the [strategy.closedtrades.first\_index](../../reference manual/variables/strategy.closedtrades.first_index.md) variable.\
+- The [array.get()](../../reference manual/functions/array.get.md), [array.set()](../../reference manual/functions/array.set.md), [array.insert()](../../reference manual/functions/array.insert.md), and [array.remove()](../../reference manual/functions/array.remove.md) functions now support _negative_`index` arguments to reference elements starting from the _end_ of an [array](../3. Language/language_arrays.md#arrays). For instance, the call `array.get(myArray, -2)` retrieves the second to last element in `myArray`, which is equivalent to `array.get(myArray, array.size(myArray) - 2)`.\
+- The new [syminfo.mincontract](../../reference manual/variables/syminfo.mincontract.md) variable holds a value representing the smallest number of contracts/shares/lots/units required to trade the current symbol, as set by the exchange.\
+- Two new variables, [syminfo.main\_tickerid](../../reference manual/variables/syminfo.main_tickerid.md) and [timeframe.main\_period](../../reference manual/variables/timeframe.main_period.md), reference the ticker ID and timeframe from the script’s _main context_, even if the script uses them in the `expression` argument of a `request.*()` call. Here, “main context” refers to the current chart’s symbol and timeframe, unless the script is an [indicator()](../../reference manual/functions/indicator.md) that includes `symbol` or `timeframe` arguments in its declaration statement.\
 \
-### [October 2024](https://www.tradingview.com/pine-script-docs/release-notes/\#october-2024)\
+### [October 2024](../7. Release_Notes/release-notes_#october-2024.md)\
 \
 We’ve added an optional `behind_chart` parameter to the [indicator()](https://www.tradingview.com/pine-script-reference/v5/#fun_indicator) and [strategy()](https://www.tradingview.com/pine-script-reference/v5/#fun_strategy) functions. This parameter specifies where plots and drawings appear relative to the main chart display when the `overlay` parameter is `true`. If `behind_chart` is `true`, the script’s visuals appear behind the chart display. If `false`, they appear in front of the chart display. The default is `true`.\
 \
-### [August 2024](https://www.tradingview.com/pine-script-docs/release-notes/\#august-2024)\
+### [August 2024](../7. Release_Notes/release-notes_#august-2024.md)\
 \
 The [ticker.new()](https://www.tradingview.com/pine-script-reference/v5/#fun_ticker.new) and [ticker.modify()](https://www.tradingview.com/pine-script-reference/v5/#fun_ticker.modify) functions feature two new parameters: `settlement_as_close` and `backadjustment`. Users can specify whether these parameters are on, off, or set to inherit the symbol’s default settings. These settings only affect the data from futures symbols with these options available on their charts. They have no effect on other symbols.\
 \
@@ -503,17 +493,17 @@ The [ticker.new()](https://www.tradingview.com/pine-script-reference/v5/#fun_tic
 \
 The Sharpe and Sortino ratios in the Strategy Tester module have updated calculations. Previously, the ratios used strategy returns over monthly periods if the trading range was three or more months and daily periods if the range was three or more days but less than three months. Both ratios now always use monthly periods for consistency.\
 \
-### [June 2024](https://www.tradingview.com/pine-script-docs/release-notes/\#june-2024)\
+### [June 2024](../7. Release_Notes/release-notes_#june-2024.md)\
 \
 We’ve added a new parameter to the [box.new()](https://www.tradingview.com/pine-script-reference/v5/#fun_box.new), [label.new()](https://www.tradingview.com/pine-script-reference/v5/#fun_label.new), [line.new()](https://www.tradingview.com/pine-script-reference/v5/#fun_line.new), [polyline.new()](https://www.tradingview.com/pine-script-reference/v5/#fun_polyline.new), and [table.new()](https://www.tradingview.com/pine-script-reference/v5/#fun_table.new) functions:\
 \
 - `force_overlay` \- If true, the drawing will display on the main chart pane, even when the script occupies a separate pane. Optional. The default is false.\
 \
-#### [Pine Script Enums](https://www.tradingview.com/pine-script-docs/release-notes/\#pine-script-enums)\
+#### [Pine Script Enums](../7. Release_Notes/release-notes_#pine-script-enums.md)\
 \
-Enums, also known as _enumerations_, _enumerated types_, or [enum types](https://www.tradingview.com/pine-script-docs/language/type-system/#enum-types), are unique data types with all possible values declared by the programmer. They can help programmers maintain more strict control over the values allowed by variables, conditional expressions, and [collections](https://www.tradingview.com/pine-script-docs/language/type-system/#collections), and they enable convenient dropdown input creation with the new [input.enum()](https://www.tradingview.com/pine-script-docs/concepts/inputs/#enum-input) function. See our User Manual’s [Enums](https://www.tradingview.com/pine-script-docs/language/enums/) page to learn more about these new types and how to use them.\
+Enums, also known as _enumerations_, _enumerated types_, or [enum types](../3. Language/language_type-system.md#enum-types), are unique data types with all possible values declared by the programmer. They can help programmers maintain more strict control over the values allowed by variables, conditional expressions, and [collections](../3. Language/language_type-system.md#collections), and they enable convenient dropdown input creation with the new [input.enum()](../1. Concepts/concepts_inputs.md#enum-input) function. See our User Manual’s [Enums](../3. Language/language_enums.md) page to learn more about these new types and how to use them.\
 \
-### [May 2024](https://www.tradingview.com/pine-script-docs/release-notes/\#may-2024)\
+### [May 2024](../7. Release_Notes/release-notes_#may-2024.md)\
 \
 We’ve added an optional `calc_bars_count` parameter to the [indicator()](https://www.tradingview.com/pine-script-reference/v5/#fun_indicator), [strategy()](https://www.tradingview.com/pine-script-reference/v5/#fun_strategy), [request.security()](https://www.tradingview.com/pine-script-reference/v5/#fun_request.security),\
 [request.security\_lower\_tf()](https://www.tradingview.com/pine-script-reference/v5/#fun_request.security_lower_tf), and [request.seed()](https://www.tradingview.com/pine-script-reference/v5/#fun_request.seed) functions that allows users to limit the number of recent historical bars a script or data request can execute across. When a script’s [indicator()](https://www.tradingview.com/pine-script-reference/v5/#fun_indicator) or [strategy()](https://www.tradingview.com/pine-script-reference/v5/#fun_strategy) declaration statement includes a `calc_bars_count` argument, its “Settings/Inputs” tab will include a “Calculated bars” input in the “Calculation” section. The default value in all these functions is 0, which signifies that the script or request executes across all the available data.\
@@ -544,26 +534,26 @@ trades.\
 Returns the average percentage loss per losing trade. Calculated as\
 the sum of loss percentages divided by the number of losing trades.\
 \
-#### [Pine Profiler](https://www.tradingview.com/pine-script-docs/release-notes/\#pine-profiler)\
+#### [Pine Profiler](../7. Release_Notes/release-notes_#pine-profiler.md)\
 \
 Our new\
-[Pine Profiler](https://www.tradingview.com/pine-script-docs/writing/profiling-and-optimization/#pine-profiler) is a powerful utility that analyzes the executions of all\
+[Pine Profiler](../4. Writing_Scripts/writing_profiling-and-optimization.md#pine-profiler) is a powerful utility that analyzes the executions of all\
 significant code in a script and displays helpful performance\
 information next to the code lines _inside_ the Pine Editor. The\
-[Profiler](https://www.tradingview.com/pine-script-docs/writing/profiling-and-optimization/#pine-profiler)’s information provides insight into a script’s runtime,\
+[Profiler](../4. Writing_Scripts/writing_profiling-and-optimization.md#pine-profiler)’s information provides insight into a script’s runtime,\
 the distribution of runtime across significant code regions, and the\
 number of times each code region executes. With these insights,\
 programmers can effectively pinpoint performance _bottlenecks_ and\
 ensure they focus on\
-[optimizing](https://www.tradingview.com/pine-script-docs/writing/profiling-and-optimization/#optimization) their code where it truly matters when they need to improve\
+[optimizing](../4. Writing_Scripts/writing_profiling-and-optimization.md#optimization) their code where it truly matters when they need to improve\
 execution times.\
 \
 See the new\
-[Profiling and optimization](https://www.tradingview.com/pine-script-docs/writing/profiling-and-optimization/) page to learn more about the Profiler, how it works, and how\
+[Profiling and optimization](../4. Writing_Scripts/writing_profiling-and-optimization.md) page to learn more about the Profiler, how it works, and how\
 to use it to analyze a script’s performance and identify optimization\
 opportunities.\
 \
-#### [Pine Editor improvements](https://www.tradingview.com/pine-script-docs/release-notes/\#pine-editor-improvements)\
+#### [Pine Editor improvements](../7. Release_Notes/release-notes_#pine-editor-improvements.md)\
 \
 When opening the detached Pine Editor from a tab with a chart, it now\
 links directly to that tab, as indicated by the “Linked” status and\
@@ -573,7 +563,7 @@ affect the charts on the main tab.\
 \
 The detached Pine Editor now includes the Pine console.\
 \
-### [April 2024](https://www.tradingview.com/pine-script-docs/release-notes/\#april-2024)\
+### [April 2024](../7. Release_Notes/release-notes_#april-2024.md)\
 \
 We’ve added a new parameter to the\
 [plot()](https://www.tradingview.com/pine-script-reference/v5/#fun_plot),\
@@ -589,7 +579,7 @@ functions:\
 - `force_overlay` \- If true, the output will display on the main chart\
 pane, even when the script occupies a separate pane.\
 \
-### [March 2024](https://www.tradingview.com/pine-script-docs/release-notes/\#march-2024)\
+### [March 2024](../7. Release_Notes/release-notes_#march-2024.md)\
 \
 The `syminfo.*` namespace features a new built-in variable:\
 \
@@ -609,7 +599,7 @@ its timeframe. It can also calculate the expected time of a future\
 bar up to 500 bars away if the argument is a negative value.\
 Optional. The default is 0.\
 \
-### [February 2024](https://www.tradingview.com/pine-script-docs/release-notes/\#february-2024)\
+### [February 2024](../7. Release_Notes/release-notes_#february-2024.md)\
 \
 We’ve added two new functions for working with strings:\
 \
@@ -633,10 +623,10 @@ For example:\
 Copied\
 \
 `//@version=5\
-indicator("Daily financial data demo")\
+indicator("Daily financial data demo")\
 \
-//@variable The daily Premium/Discount to Net Asset Value for "AMEX:SPY"\
-float f1 = request.financial("AMEX:SPY", "NAV", "D")\
+//@variable The daily Premium/Discount to Net Asset Value for "AMEX:SPY"\
+float f1 = request.financial("AMEX:SPY", "NAV", "D")\
 plot(f1)\
 `\
 \
@@ -646,7 +636,7 @@ available capital in a strategy’s simulation:\
 - [strategy.opentrades.capital\_held](https://www.tradingview.com/pine-script-reference/v5/#var_strategy.opentrades.capital_held) -\
 Returns the capital amount currently held by open trades.\
 \
-### [January 2024](https://www.tradingview.com/pine-script-docs/release-notes/\#january-2024)\
+### [January 2024](../7. Release_Notes/release-notes_#january-2024.md)\
 \
 The `syminfo.*` namespace features new built-in variables:\
 \
@@ -707,9 +697,9 @@ rating.\
 The number of analysts who gave the current symbol a “Strong Sell”\
 rating.\
 \
-## [2023](https://www.tradingview.com/pine-script-docs/release-notes/\#2023)\
+## [2023](../7. Release_Notes/release-notes_#2023.md)\
 \
-### [December 2023](https://www.tradingview.com/pine-script-docs/release-notes/\#december-2023)\
+### [December 2023](../7. Release_Notes/release-notes_#december-2023.md)\
 \
 We’ve added `format` and `precision` parameters to all `plot*()`\
 functions, allowing indicators and strategies to selectively apply\
@@ -728,13 +718,13 @@ For example:\
 Copied\
 \
 `//@version=5\
-indicator("My script", format = format.percent, precision = 4)\
+indicator("My script", format = format.percent, precision = 4)\
 \
-plot(close, format = format.price)           // Price format with 4-digit precision.\
-plot(100 * bar_index / close, precision = 2) // Percent format with 2-digit precision.\
+plot(close, format = format.price)           // Price format with 4-digit precision.\
+plot(100 * bar_index / close, precision = 2) // Percent format with 2-digit precision.\
 `\
 \
-### [November 2023](https://www.tradingview.com/pine-script-docs/release-notes/\#november-2023)\
+### [November 2023](../7. Release_Notes/release-notes_#november-2023.md)\
 \
 We’ve added the following variables and functions to the `strategy.*`\
 namespace:\
@@ -776,24 +766,24 @@ possible profit during the trade, expressed as a percentage.\
 Returns the profit/loss of the open trade, expressed as a\
 percentage. Losses are expressed as negative values.\
 \
-### [October 2023](https://www.tradingview.com/pine-script-docs/release-notes/\#october-2023)\
+### [October 2023](../7. Release_Notes/release-notes_#october-2023.md)\
 \
-#### [Pine Script Polylines](https://www.tradingview.com/pine-script-docs/release-notes/\#pine-script-polylines)\
+#### [Pine Script Polylines](../7. Release_Notes/release-notes_#pine-script-polylines.md)\
 \
 Polylines are drawings that sequentially connect the coordinates from an\
 [array](https://www.tradingview.com/pine-script-reference/v5/#type_array)\
 of up to 10,000\
-[chart points](https://www.tradingview.com/pine-script-docs/language/type-system/#chart-points) using straight or _curved_ line segments, allowing scripts\
+[chart points](../3. Language/language_type-system.md#chart-points) using straight or _curved_ line segments, allowing scripts\
 to draw custom formations that are difficult or impossible to achieve\
 using\
 [line](https://www.tradingview.com/pine-script-reference/v5/#type_line)\
 or [box](https://www.tradingview.com/pine-script-reference/v5/#type_box)\
 objects. To learn more about this new drawing type, see the\
-[Polylines](https://www.tradingview.com/pine-script-docs/visuals/lines-and-boxes/#polylines)\
+[Polylines](../2. Visuals/visuals_lines-and-boxes.md#polylines)\
 section of our User Manual’s page on\
-[Lines and boxes](https://www.tradingview.com/pine-script-docs/visuals/lines-and-boxes/).\
+[Lines and boxes](../2. Visuals/visuals_lines-and-boxes.md).\
 \
-### [September 2023](https://www.tradingview.com/pine-script-docs/release-notes/\#september-2023)\
+### [September 2023](../7. Release_Notes/release-notes_#september-2023.md)\
 \
 New functions were added:\
 \
@@ -820,8 +810,8 @@ dividend adjustment, currency conversion, non-standard chart types,\
 back-adjustment, settlement-as-close, etc.\
 - [timeframe.from\_seconds()](https://www.tradingview.com/pine-script-reference/v5/#fun_timeframe.from_seconds) -\
 Converts a specified number of `seconds` into a valid timeframe\
-string based on our [timeframe specification\\
-format](https://www.tradingview.com/pine-script-docs/concepts/timeframes/#timeframe-string-specifications).\
+string based on our [timeframe specification 
+format](../1. Concepts/concepts_timeframes.md#timeframe-string-specifications).\
 \
 The `dividends.*` namespace now includes variables for retrieving future\
 dividend information:\
@@ -854,19 +844,19 @@ types of variables in their scripts. For example:\
 Copied\
 \
 ``//@version=5\
-indicator("My script")\
+indicator("My script")\
 \
-//@variable A constant `string` used as the `title` in the `plot()` function.\
-const string plotTitle = "My plot"\
-//@variable An `int` variable whose value is consistent after the first chart bar.\
-simple int a = 10\
-//@variable An `int` variable whose value can change on every bar.\
-series int b = bar_index\
+//@variable A constant `string` used as the `title` in the `plot()` function.\
+const string plotTitle = "My plot"\
+//@variable An `int` variable whose value is consistent after the first chart bar.\
+simple int a = 10\
+//@variable An `int` variable whose value can change on every bar.\
+series int b = bar_index\
 \
-plot(b % a, title = plotTitle)\
+plot(b % a, title = plotTitle)\
 ``\
 \
-### [August 2023](https://www.tradingview.com/pine-script-docs/release-notes/\#august-2023)\
+### [August 2023](../7. Release_Notes/release-notes_#august-2023.md)\
 \
 Added the following alert\
 [placeholders](https://www.tradingview.com/support/solutions/43000531021):\
@@ -878,19 +868,19 @@ current symbol if the symbol refers to a currency pair. Otherwise,\
 it returns `na`. For example, it returns “EUR” when the symbol is\
 “EURUSD”.\
 \
-#### [Pine Script Maps](https://www.tradingview.com/pine-script-docs/release-notes/\#pine-script-maps)\
+#### [Pine Script Maps](../7. Release_Notes/release-notes_#pine-script-maps.md)\
 \
 Maps are collections that hold elements in the form of _key-value_\
 _pairs_. They associate unique keys of a _fundamental type_ with values\
 of a _built-in_ or\
-[user-defined](https://www.tradingview.com/pine-script-docs/language/type-system/#user-defined-types) type. Unlike [arrays](https://www.tradingview.com/pine-script-docs/language/arrays/),\
+[user-defined](../3. Language/language_type-system.md#user-defined-types) type. Unlike [arrays](../3. Language/language_arrays.md),\
 these collections are _unordered_ and do not utilize an internal lookup\
 index. Instead, scripts access the values of maps by referencing the\
 _keys_ from the key-value pairs put into them. For more information on\
 these new collections, see our\
-[User Manual’s page on Maps](https://www.tradingview.com/pine-script-docs/language/maps/).\
+[User Manual’s page on Maps](../3. Language/language_maps.md).\
 \
-### [July 2023](https://www.tradingview.com/pine-script-docs/release-notes/\#july-2023)\
+### [July 2023](../7. Release_Notes/release-notes_#july-2023.md)\
 \
 Fixed an issue that caused strategies to occasionally calculate the\
 sizes of limit orders incorrectly due to improper tick rounding of the\
@@ -902,7 +892,7 @@ Added a new built-in variable to the `strategy.*` namespace:\
 When a strategy uses margin, returns the price value after which a\
 margin call will occur.\
 \
-### [June 2023](https://www.tradingview.com/pine-script-docs/release-notes/\#june-2023)\
+### [June 2023](../7. Release_Notes/release-notes_#june-2023.md)\
 \
 New `syminfo.*` built-in variables were added:\
 \
@@ -925,7 +915,7 @@ and\
 Combinations of these arguments using plus or minus signs are allowed, and regardless of the argument used,\
 input values will always continue to appear in the `Inputs` tab of the script’s settings.\
 \
-### [May 2023](https://www.tradingview.com/pine-script-docs/release-notes/\#may-2023)\
+### [May 2023](../7. Release_Notes/release-notes_#may-2023.md)\
 \
 New parameter added to the\
 [strategy.entry()](https://www.tradingview.com/pine-script-reference/v5/#fun_strategy.entry),\
@@ -962,7 +952,7 @@ types, in which case zero values are considered `false`, and all others\
 `true`.\
 \
 \
-### [April 2023](https://www.tradingview.com/pine-script-docs/release-notes/\#april-2023)\
+### [April 2023](../7. Release_Notes/release-notes_#april-2023.md)\
 \
 Fixed an issue with trailing stops in\
 [strategy.exit()](https://www.tradingview.com/pine-script-reference/v5/#fun_strategy.exit)\
@@ -976,7 +966,7 @@ and\
 Now these functions will return the smallest value when the data has no\
 most frequent value.\
 \
-### [March 2023](https://www.tradingview.com/pine-script-docs/release-notes/\#march-2023)\
+### [March 2023](../7. Release_Notes/release-notes_#march-2023.md)\
 \
 It is now possible to use seconds-based timeframe strings for the\
 `timeframe` parameter in\
@@ -990,9 +980,9 @@ A new function was added:\
 provides a daily rate to convert a value expressed in the `from`\
 currency to another in the `to` currency.\
 \
-### [February 2023](https://www.tradingview.com/pine-script-docs/release-notes/\#february-2023)\
+### [February 2023](../7. Release_Notes/release-notes_#february-2023.md)\
 \
-#### [Pine Script Methods](https://www.tradingview.com/pine-script-docs/release-notes/\#pine-script-methods)\
+#### [Pine Script Methods](../7. Release_Notes/release-notes_#pine-script-methods.md)\
 \
 Pine Script methods are specialized functions associated with specific\
 instances of built-in or user-defined types. They offer a more\
@@ -1010,9 +1000,9 @@ and\
 types and facilitates user-defined methods with the new\
 [method](https://www.tradingview.com/pine-script-reference/v5/#kw_method)\
 keyword. For more details on this new feature, see our\
-[User Manual’s page on methods](https://www.tradingview.com/pine-script-docs/language/methods/).\
+[User Manual’s page on methods](../3. Language/language_methods.md).\
 \
-### [January 2023](https://www.tradingview.com/pine-script-docs/release-notes/\#january-2023)\
+### [January 2023](../7. Release_Notes/release-notes_#january-2023.md)\
 \
 New array functions were added:\
 \
@@ -1021,11 +1011,11 @@ Returns the array’s first element.\
 - [array.last()](https://www.tradingview.com/pine-script-reference/v5/#fun_array.last) -\
 Returns the array’s last element.\
 \
-## [2022](https://www.tradingview.com/pine-script-docs/release-notes/\#2022)\
+## [2022](../7. Release_Notes/release-notes_#2022.md)\
 \
-### [December 2022](https://www.tradingview.com/pine-script-docs/release-notes/\#december-2022)\
+### [December 2022](../7. Release_Notes/release-notes_#december-2022.md)\
 \
-#### [Pine Objects](https://www.tradingview.com/pine-script-docs/release-notes/\#pine-objects)\
+#### [Pine Objects](../7. Release_Notes/release-notes_#pine-objects.md)\
 \
 Pine objects are instantiations of the new user-defined composite types\
 (UDTs) declared using the\
@@ -1033,8 +1023,8 @@ Pine objects are instantiations of the new user-defined composite types\
 keyword. Experienced programmers can think of UDTs as method-less\
 classes. They allow users to create custom types that organize different\
 values under one logical entity. A detailed rundown of the new\
-functionality can be found in our [User Manual’s page on\\
-objects](https://www.tradingview.com/pine-script-docs/language/objects/).\
+functionality can be found in our [User Manual’s page on 
+objects](../3. Language/language_objects.md).\
 \
 A new function was added:\
 \
@@ -1055,23 +1045,23 @@ entry.\
 The function returns the comment message of the closed trade’s\
 exit.\
 \
-### [November 2022](https://www.tradingview.com/pine-script-docs/release-notes/\#november-2022)\
+### [November 2022](../7. Release_Notes/release-notes_#november-2022.md)\
 \
 Fixed behaviour of\
 [math.round\_to\_mintick()](https://www.tradingview.com/pine-script-reference/v5/#fun_math.round_to_mintick)\
 function. For ‘na’ values it returns ‘na’.\
 \
-### [October 2022](https://www.tradingview.com/pine-script-docs/release-notes/\#october-2022)\
+### [October 2022](../7. Release_Notes/release-notes_#october-2022.md)\
 \
 Pine Script now has a new, more powerful and better-integrated editor.\
-Read [our\\
+Read [our 
 blog](https://www.tradingview.com/blog/en/new-vsc-style-pine-script-editor-34159/)\
 to find out everything to know about all the new features and upgrades.\
 \
 New overload for the\
 [fill()](https://www.tradingview.com/pine-script-reference/v5/#fun_fill)\
 function was added. Now it can create vertical gradients. More info\
-about it in the [blog\\
+about it in the [blog 
 post](https://www.tradingview.com/blog/en/pine-script-vertical-gradients-33586/).\
 \
 A new function was added:\
@@ -1080,7 +1070,7 @@ A new function was added:\
 Converts a timestamp to a formatted string using the specified\
 format and time zone.\
 \
-### [September 2022](https://www.tradingview.com/pine-script-docs/release-notes/\#september-2022)\
+### [September 2022](../7. Release_Notes/release-notes_#september-2022.md)\
 \
 The `text_font_family` parameter now allows the selection of a monospace\
 font in\
@@ -1105,7 +1095,7 @@ The function sets the font family of the text inside the box.\
 - [table.cell\_set\_text\_font\_family()](https://www.tradingview.com/pine-script-reference/v5/#fun_table.cell_set_text_font_family) -\
 The function sets the font family of the text inside the cell.\
 \
-### [August 2022](https://www.tradingview.com/pine-script-docs/release-notes/\#august-2022)\
+### [August 2022](../7. Release_Notes/release-notes_#august-2022.md)\
 \
 A new label style\
 [label.style\_text\_outline](https://www.tradingview.com/pine-script-reference/v5/#const_label.style_text_outline)\
@@ -1164,12 +1154,12 @@ Alert\] window.\
 Copied\
 \
 `//@version=5\
-// @strategy_alert_message My Default Alert Message\
-strategy("My Strategy")\
+// @strategy_alert_message My Default Alert Message\
+strategy("My Strategy")\
 plot(close)\
 `\
 \
-### [July 2022](https://www.tradingview.com/pine-script-docs/release-notes/\#july-2022)\
+### [July 2022](../7. Release_Notes/release-notes_#july-2022.md)\
 \
 It is now possible to fine-tune where a script’s plot values are\
 displayed through the introduction of new arguments for the `display`\
@@ -1214,7 +1204,7 @@ information everywhere except in the script’s status line.\
 - `display.price_scale + display.status_line` will display the plot in\
 the price scale and status line only.\
 \
-### [June 2022](https://www.tradingview.com/pine-script-docs/release-notes/\#june-2022)\
+### [June 2022](../7. Release_Notes/release-notes_#june-2022.md)\
 \
 The behavior of the argument used with the `qty_percent` parameter of\
 [strategy.exit()](https://www.tradingview.com/pine-script-reference/v5/#fun_strategy.exit)\
@@ -1227,10 +1217,10 @@ position size. When executing the following strategy, for example:\
 Copied\
 \
 `//@version=5\
-strategy("strategy.exit() example", overlay = true)\
-strategy.entry("Long", strategy.long, qty = 100)\
-strategy.exit("Exit Long1", "Long", trail_points = 50, trail_offset = 0, qty_percent = 20)\
-strategy.exit("Exit Long2", "Long", trail_points = 100, trail_offset = 0, qty_percent = 20)\
+strategy("strategy.exit() example", overlay = true)\
+strategy.entry("Long", strategy.long, qty = 100)\
+strategy.exit("Exit Long1", "Long", trail_points = 50, trail_offset = 0, qty_percent = 20)\
+strategy.exit("Exit Long2", "Long", trail_points = 100, trail_offset = 0, qty_percent = 20)\
 `\
 \
 20% of the initial position will be closed on each\
@@ -1292,16 +1282,16 @@ chart.\
 returns the `time` of the rightmost bar currently visible on the\
 chart.\
 \
-### [May 2022](https://www.tradingview.com/pine-script-docs/release-notes/\#may-2022)\
+### [May 2022](../7. Release_Notes/release-notes_#may-2022.md)\
 \
-Support for [matrices](https://www.tradingview.com/pine-script-docs/language/matrices/#matrices) has been added to the\
+Support for [matrices](../3. Language/language_matrices.md#matrices) has been added to the\
 [request.security()](https://www.tradingview.com/pine-script-reference/v5/#fun_request.security)\
 function.\
 \
 The historical states of\
-[arrays](https://www.tradingview.com/pine-script-docs/language/arrays/#arrays)\
+[arrays](../3. Language/language_arrays.md#arrays)\
 and\
-[matrices](https://www.tradingview.com/pine-script-docs/language/matrices/#matrices)\
+[matrices](../3. Language/language_matrices.md#matrices)\
 can now be referenced with the\
 [\[\]](https://www.tradingview.com/pine-script-reference/v5/#op_%5B%5D)\
 operator. In the example below, we reference the historical state of a\
@@ -1311,11 +1301,11 @@ matrix 10 bars ago:\
 Copied\
 \
 `//@version=5\
-indicator("matrix.new<float> example")\
-m = matrix.new<float>(1, 1, close)\
-float x = na\
-if bar_index > 10\
-    x := matrix.get(m[10], 0, 0)\
+indicator("matrix.new<float> example")\
+m = matrix.new<float>(1, 1, close)\
+float x = na\
+if bar_index > 10\
+    x := matrix.get(m[10], 0, 0)\
 plot(x)\
 plot(close)\
 `\
@@ -1356,8 +1346,8 @@ requests data from a lower timeframe than the chart’s.\
 \
 Added `use_bar_magnifier` parameter for the\
 [strategy()](https://www.tradingview.com/pine-script-reference/v5/#fun_strategy)\
-function. When `true`, the [Broker\\
-Emulator](https://www.tradingview.com/pine-script-docs/concepts/strategies/#broker-emulator)\
+function. When `true`, the [Broker 
+Emulator](../1. Concepts/concepts_strategies.md#broker-emulator)\
 uses lower timeframe data during history backtesting to achieve more\
 realistic results.\
 \
@@ -1386,7 +1376,7 @@ triggered by crossing `stop` or `loss` specifically.\
 `'{{strategy.order.alert_message}}'` placeholder if the exit was\
 triggered by crossing `trail_offset` specifically.\
 \
-### [April 2022](https://www.tradingview.com/pine-script-docs/release-notes/\#april-2022)\
+### [April 2022](../7. Release_Notes/release-notes_#april-2022.md)\
 \
 Added the `display` parameter to the following functions:\
 [barcolor](https://www.tradingview.com/pine-script-reference/v5/#fun_barcolor),\
@@ -1558,7 +1548,7 @@ function:\
 percentage change in the value of an investment with minimal or zero\
 risk, used to calculate the Sharpe and Sortino ratios.\
 \
-### [March 2022](https://www.tradingview.com/pine-script-docs/release-notes/\#march-2022)\
+### [March 2022](../7. Release_Notes/release-notes_#march-2022.md)\
 \
 New array functions were added:\
 \
@@ -1599,7 +1589,7 @@ Added `index` in\
 [for…in](https://www.tradingview.com/pine-script-reference/v5/#op_for...in)\
 operator. It tracks the current iteration’s index.\
 \
-#### [Table merging and cell tooltips](https://www.tradingview.com/pine-script-docs/release-notes/\#table-merging-and-cell-tooltips)\
+#### [Table merging and cell tooltips](../7. Release_Notes/release-notes_#table-merging-and-cell-tooltips.md)\
 \
 - It is now possible to merge several cells in a table. A merged cell\
 doesn’t have to be a header: you can merge cells in any direction,\
@@ -1616,7 +1606,7 @@ function or use the new\
 [table.cell\_set\_tooltip()](https://www.tradingview.com/pine-script-reference/v5/#fun_table.cell_set_tooltip)\
 function.\
 \
-### [February 2022](https://www.tradingview.com/pine-script-docs/release-notes/\#february-2022)\
+### [February 2022](../7. Release_Notes/release-notes_#february-2022.md)\
 \
 Added templates and the ability to create arrays via templates. Instead\
 of using one of the `array.new_*()` functions, a template function\
@@ -1628,13 +1618,13 @@ an array filled with `float` values:\
 Copied\
 \
 `//@version=5\
-indicator("array.new<float> example")\
-length = 5\
-var a = array.new<float>(length, close)\
-if array.size(a) == length\
-    array.remove(a, 0)\
-    array.push(a, close)\
-plot(array.sum(a) / length, "SMA")\
+indicator("array.new<float> example")\
+length = 5\
+var a = array.new<float>(length, close)\
+if array.size(a) == length\
+    array.remove(a, 0)\
+    array.push(a, close)\
+plot(array.sum(a) / length, "SMA")\
 `\
 \
 New functions were added:\
@@ -1651,7 +1641,7 @@ returns the id of the closed trade’s exit.\
 - [strategy.opentrades.entry\_id()](https://www.tradingview.com/pine-script-reference/v5/#fun_strategy.opentrades.entry_id) -\
 returns the id of the open trade’s entry.\
 \
-### [January 2022](https://www.tradingview.com/pine-script-docs/release-notes/\#january-2022)\
+### [January 2022](../7. Release_Notes/release-notes_#january-2022.md)\
 \
 Added new functions to clone drawings:\
 \
@@ -1659,11 +1649,11 @@ Added new functions to clone drawings:\
 - [label.copy()](https://www.tradingview.com/pine-script-reference/v5/#fun_label.copy)\
 - [box.copy()](https://www.tradingview.com/pine-script-reference/v5/#fun_box.copy)\
 \
-## [2021](https://www.tradingview.com/pine-script-docs/release-notes/\#2021)\
+## [2021](../7. Release_Notes/release-notes_#2021.md)\
 \
-### [December 2021](https://www.tradingview.com/pine-script-docs/release-notes/\#december-2021)\
+### [December 2021](../7. Release_Notes/release-notes_#december-2021.md)\
 \
-#### [Linefills](https://www.tradingview.com/pine-script-docs/release-notes/\#linefills)\
+#### [Linefills](../7. Release_Notes/release-notes_#linefills.md)\
 \
 The space between lines drawn in Pine Script can now be filled! We’ve\
 added a new `linefill` drawing type, along with a number of functions\
@@ -1684,21 +1674,21 @@ New linefill-related functions:\
 - [linefill.set\_color()](https://www.tradingview.com/pine-script-reference/v5/#fun_linefill.set_color)\
 - [linefill.all()](https://www.tradingview.com/pine-script-reference/v5/#var_linefill.all)\
 \
-#### [New functions for string manipulation](https://www.tradingview.com/pine-script-docs/release-notes/\#new-functions-for-string-manipulation)\
+#### [New functions for string manipulation](../7. Release_Notes/release-notes_#new-functions-for-string-manipulation.md)\
 \
 Added a number of new functions that provide more ways to process\
 strings, and introduce regular expressions to Pine Script:\
 \
-- [str.contains(source,\\
+- [str.contains(source, 
 str)](https://www.tradingview.com/pine-script-reference/v5/#fun_str.contains) -\
 Determines if the `source` string contains the `str` substring.\
-- [str.pos(source,\\
+- [str.pos(source, 
 str)](https://www.tradingview.com/pine-script-reference/v5/#fun_str.pos) -\
 Returns the position of the `str` string in the `source` string.\
-- [str.substring(source, begin\_pos,\\
+- [str.substring(source, begin\_pos, 
 end\_pos)](https://www.tradingview.com/pine-script-reference/v5/#fun_str.substring) -\
 Extracts a substring from the `source` string.\
-- [str.replace(source, target, replacement,\\
+- [str.replace(source, target, replacement, 
 occurrence)](https://www.tradingview.com/pine-script-reference/v5/#fun_str.replace) -\
 Contrary to the existing\
 [str.replace\_all()](https://www.tradingview.com/pine-script-reference/v5/#fun_str.replace_all)\
@@ -1708,18 +1698,18 @@ matched substring with a replacement string.\
 and\
 [str.upper(source)](https://www.tradingview.com/pine-script-reference/v5/#fun_str.upper) -\
 Convert all letters of the `source` string to lower or upper case:\
-- [str.startswith(source,\\
+- [str.startswith(source, 
 str)](https://www.tradingview.com/pine-script-reference/v5/#fun_str.startswith)\
-and [str.endswith(source,\\
+and [str.endswith(source, 
 str)](https://www.tradingview.com/pine-script-reference/v5/#fun_str.endswith) -\
 Determine if the `source` string starts or ends with the `str`\
 substring.\
-- [str.match(source,\\
+- [str.match(source, 
 regex)](https://www.tradingview.com/pine-script-reference/v5/#fun_str.match) -\
-Extracts the substring matching the specified [regular\\
+Extracts the substring matching the specified [regular 
 expression](https://en.wikipedia.org/wiki/Regular_expression#Perl_and_PCRE).\
 \
-#### [Textboxes](https://www.tradingview.com/pine-script-docs/release-notes/\#textboxes)\
+#### [Textboxes](../7. Release_Notes/release-notes_#textboxes.md)\
 \
 Box drawings now supports text. The\
 [box.new()](https://www.tradingview.com/pine-script-reference/v5/#fun_box.new)\
@@ -1734,7 +1724,7 @@ boxes were added:\
 - [box.set\_text\_valign()](https://www.tradingview.com/pine-script-reference/v5/#fun_box.set_text_valign)\
 - [box.set\_text\_halign()](https://www.tradingview.com/pine-script-reference/v5/#fun_box.set_text_halign)\
 \
-#### [New built-in variables](https://www.tradingview.com/pine-script-docs/release-notes/\#new-built-in-variables)\
+#### [New built-in variables](../7. Release_Notes/release-notes_#new-built-in-variables.md)\
 \
 Added new built-in variables that return the `bar_index` and `time`\
 values of the last bar in the dataset. Their values are known at the\
@@ -1751,9 +1741,9 @@ New built-in `source` variable:\
 A shortcut for `(high + low + close + close)/4`. It averages the\
 high and low values with the double-weighted close.\
 \
-### [November 2021](https://www.tradingview.com/pine-script-docs/release-notes/\#november-2021)\
+### [November 2021](../7. Release_Notes/release-notes_#november-2021.md)\
 \
-#### [for…in](https://www.tradingview.com/pine-script-docs/release-notes/\#forin)\
+#### [for…in](../7. Release_Notes/release-notes_#forin.md)\
 \
 Added a new\
 [for…in](https://www.tradingview.com/pine-script-reference/v5/#op_for...in)\
@@ -1763,20 +1753,20 @@ operator to iterate over all elements of an array:\
 Copied\
 \
 `//@version=5\
-indicator("My Script")\
-int[] a1 = array.from(1, 3, 6, 3, 8, 0, -9, 5)\
+indicator("My Script")\
+int[] a1 = array.from(1, 3, 6, 3, 8, 0, -9, 5)\
 \
-highest(array) =>\
-    var int highestNum = na\
-    for item in array\
-            if na(highestNum) or item > highestNum\
-        highestNum := item\
-    highestNum\
+highest(array) =>\
+    var int highestNum = na\
+    for item in array\
+            if na(highestNum) or item > highestNum\
+        highestNum := item\
+    highestNum\
 \
 plot(highest(a1))\
 `\
 \
-#### [Function overloads](https://www.tradingview.com/pine-script-docs/release-notes/\#function-overloads)\
+#### [Function overloads](../7. Release_Notes/release-notes_#function-overloads.md)\
 \
 Added function overloads. Several functions in a script can now share\
 the same name, as long one of the following conditions is true:\
@@ -1787,18 +1777,18 @@ the same name, as long one of the following conditions is true:\
 Copied\
 \
 `//@version=5\
-indicator("Function overload")\
+indicator("Function overload")\
 \
-// Two parameters\
-mult(x1, x2) =>\
-    x1 * x2\
+// Two parameters\
+mult(x1, x2) =>\
+    x1 * x2\
 \
-// Three parameters\
-mult(x1, x2, x3) =>\
-    x1 * x2 * x3\
+// Three parameters\
+mult(x1, x2, x3) =>\
+    x1 * x2 * x3\
 \
-plot(mult(7, 4))\
-plot(mult(7, 4, 2))\
+plot(mult(7, 4))\
+plot(mult(7, 4, 2))\
 `\
 \
 - When overloads have the same number of parameters, all parameters in\
@@ -1809,31 +1799,31 @@ combinations must be unique:\
 Copied\
 \
 `//@version=5\
-indicator("Function overload")\
+indicator("Function overload")\
 \
-// Accepts both 'int' and 'float' values - any 'int' can be automatically cast to 'float'\
-mult(float x1, float x2) =>\
-    x1 * x2\
+// Accepts both 'int' and 'float' values - any 'int' can be automatically cast to 'float'\
+mult(float x1, float x2) =>\
+    x1 * x2\
 \
-// Returns a 'bool' value instead of a number\
-mult(bool x1, bool x2) =>\
-    x1 and x2 ? true : false\
+// Returns a 'bool' value instead of a number\
+mult(bool x1, bool x2) =>\
+    x1 and x2 ? true : false\
 \
-mult(string x1, string x2) =>\
-    str.tonumber(x1) * str.tonumber(x2)\
+mult(string x1, string x2) =>\
+    str.tonumber(x1) * str.tonumber(x2)\
 \
-// Has three parameters, so explicit types are not required\
-mult(x1, x2, x3) =>\
-    x1 * x2 * x3\
+// Has three parameters, so explicit types are not required\
+mult(x1, x2, x3) =>\
+    x1 * x2 * x3\
 \
-plot(mult(7, 4))\
-plot(mult(7.5, 4.2))\
-plot(mult(true, false) ? 1 : 0)\
-plot(mult("5", "6"))\
-plot(mult(7, 4, 2))\
+plot(mult(7, 4))\
+plot(mult(7.5, 4.2))\
+plot(mult(true, false) ? 1 : 0)\
+plot(mult("5", "6"))\
+plot(mult(7, 4, 2))\
 `\
 \
-#### [Currency conversion](https://www.tradingview.com/pine-script-docs/release-notes/\#currency-conversion)\
+#### [Currency conversion](../7. Release_Notes/release-notes_#currency-conversion.md)\
 \
 Added a new \[currency\] argument to most `request.*()`\
 functions. If specified, price values returned by the function will be\
@@ -1845,18 +1835,18 @@ functions are affected:\
 - [request.financial()](https://www.tradingview.com/pine-script-reference/v5/#fun_request.financial)\
 - [request.security()](https://www.tradingview.com/pine-script-reference/v5/#fun_request.security)\
 \
-### [October 2021](https://www.tradingview.com/pine-script-docs/release-notes/\#october-2021)\
+### [October 2021](../7. Release_Notes/release-notes_#october-2021.md)\
 \
 Pine Script v5 is here! This is a list of the **new** features added to\
 the language, and a few of the **changes** made. See the Pine Script v5\
 [Migration guide](https://www.tradingview.com/pine-script-docs/migration-guides/to-pine-version-5) for\
 a complete list of the **changes** in v5.\
 \
-#### [New features](https://www.tradingview.com/pine-script-docs/release-notes/\#new-features)\
+#### [New features](../7. Release_Notes/release-notes_#new-features.md)\
 \
 Libraries are a new type of publication. They allow you to create custom\
 functions for reuse in other scripts. See this manual’s page on\
-[Libraries](https://www.tradingview.com/pine-script-docs/concepts/libraries/).\
+[Libraries](../1. Concepts/concepts_libraries.md).\
 \
 Pine Script now supports\
 [switch](https://www.tradingview.com/pine-script-reference/v5/#kw_switch)\
@@ -1933,7 +1923,7 @@ function allows requesting standardized earnings data.\
 A v4 to v5 converter is now included in the Pine Script Editor. See the\
 Pine Script v5 [Migration guide](https://www.tradingview.com/pine-script-docs/migration-guides/to-pine-version-5) for more information on converting your scripts to v5.\
 \
-The [Reference\\
+The [Reference 
 Manual](https://www.tradingview.com/pine-script-reference/v5/) now\
 includes the systematic mention of the form and type (e.g., “simple\
 int”) required for each function parameter.\
@@ -1941,7 +1931,7 @@ int”) required for each function parameter.\
 The User Manual was\
 reorganized and new content was added.\
 \
-#### [Changes](https://www.tradingview.com/pine-script-docs/release-notes/\#changes)\
+#### [Changes](../7. Release_Notes/release-notes_#changes.md)\
 \
 Many built-in variables, functions and function arguments were renamed\
 or moved to new namespaces in v5. The venerable `study()`, for example,\
@@ -1958,7 +1948,7 @@ See the Pine Script v5\
 [Migration guide](https://www.tradingview.com/pine-script-docs/migration-guides/to-pine-version-5) for\
 a complete list of the **changes** made in v5.\
 \
-### [September 2021](https://www.tradingview.com/pine-script-docs/release-notes/\#september-2021)\
+### [September 2021](../7. Release_Notes/release-notes_#september-2021.md)\
 \
 New parameter has been added for the `dividends()`, `earnings()`,\
 `financial()`, `quandl()`, `security()`, and `splits()` functions:\
@@ -1968,7 +1958,7 @@ the specified symbol is not found: if `false`, the script will halt\
 and return a runtime error; if `true`, the function will return `na`\
 and execution will continue.\
 \
-### [July 2021](https://www.tradingview.com/pine-script-docs/release-notes/\#july-2021)\
+### [July 2021](../7. Release_Notes/release-notes_#july-2021.md)\
 \
 `tostring` now accepts “bool” and “string” types.\
 \
@@ -1976,7 +1966,7 @@ New argument for `time` and `time_close` functions was added:\
 \
 - `timezone` \- timezone of the `session` argument, can only be used\
 when a session is specified. Can be written out in GMT notation\
-(e.g. “GMT-5”) or as an [IANA time zone database\\
+(e.g. “GMT-5”) or as an [IANA time zone database 
 name](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)\
 (e.g. “America/New\_York”).\
 \
@@ -1991,7 +1981,7 @@ plots will be drawn based on the order in which they appear in the\
 indicator’s code, each newer plot being drawn above the previous\
 ones.\
 \
-### [June 2021](https://www.tradingview.com/pine-script-docs/release-notes/\#june-2021)\
+### [June 2021](../7. Release_Notes/release-notes_#june-2021.md)\
 \
 New variable was added:\
 \
@@ -2013,7 +2003,7 @@ formatting arguments:\
 - `format.volume` to abbreviate large values.\
 - `format.percent` to format percentages.\
 \
-### [May 2021](https://www.tradingview.com/pine-script-docs/release-notes/\#may-2021)\
+### [May 2021](../7. Release_Notes/release-notes_#may-2021.md)\
 \
 Improved backtesting functionality by adding the Leverage mechanism.\
 \
@@ -2021,7 +2011,7 @@ Added support for table drawings and functions for working with them.\
 Tables are unique objects that are not anchored to specific bars; they\
 float in a script’s space, independently of the chart bars being viewed\
 or the zoom factor used. For more information, see the\
-[Tables](https://www.tradingview.com/pine-script-docs/visuals/tables/) User Manual page.\
+[Tables](../2. Visuals/visuals_tables.md) User Manual page.\
 \
 New functions were added:\
 \
@@ -2041,13 +2031,13 @@ type.\
 A new `box` drawing has been added to Pine Script, making it possible\
 to draw rectangles on charts using the Pine Script syntax. For more\
 details, see the Pine Script reference entry for [box.new()](https://www.tradingview.com/pine-script-reference/v5/#fun_box.new)\
-and the [Lines and boxes](https://www.tradingview.com/pine-script-docs/visuals/lines-and-boxes/) User Manual page.\
+and the [Lines and boxes](../2. Visuals/visuals_lines-and-boxes.md) User Manual page.\
 \
 The `color.new` function can now accept series and input arguments, in\
 which case, the colors will be calculated at runtime. For more\
-information about this, see our [Colors](https://www.tradingview.com/pine-script-docs/visuals/colors/) User Manual page.\
+information about this, see our [Colors](../2. Visuals/visuals_colors.md) User Manual page.\
 \
-### [April 2021](https://www.tradingview.com/pine-script-docs/release-notes/\#april-2021)\
+### [April 2021](../7. Release_Notes/release-notes_#april-2021.md)\
 \
 New math constants were added:\
 \
@@ -2093,7 +2083,7 @@ of the post-market, `false` otherwise.\
 formats. Accepts certain `number` modifiers: `integer`, `currency`,\
 `percent`.\
 \
-### [March 2021](https://www.tradingview.com/pine-script-docs/release-notes/\#march-2021)\
+### [March 2021](../7. Release_Notes/release-notes_#march-2021.md)\
 \
 New assignment operators were added:\
 \
@@ -2139,14 +2129,14 @@ New arguments for the study() function were added:\
 higher timeframes when using `resolution`.\
 - `format.percent` \- formats the script output values as a percentage.\
 \
-### [February 2021](https://www.tradingview.com/pine-script-docs/release-notes/\#february-2021)\
+### [February 2021](../7. Release_Notes/release-notes_#february-2021.md)\
 \
 New variable was added:\
 \
 - `time_tradingday` \- the beginning time of the trading day the\
 current bar belongs to.\
 \
-### [January 2021](https://www.tradingview.com/pine-script-docs/release-notes/\#january-2021)\
+### [January 2021](../7. Release_Notes/release-notes_#january-2021.md)\
 \
 The following functions now accept a series length parameter:\
 \
@@ -2170,12 +2160,12 @@ The following functions now accept a series length parameter:\
 - [wpr()](https://www.tradingview.com/pine-script-reference/v4/#fun_wpr)\
 \
 A new type of alerts was added - script alerts. More information can be\
-found in our [Help\\
+found in our [Help 
 Center](https://www.tradingview.com/support/solutions/43000597494/).\
 \
-## [2020](https://www.tradingview.com/pine-script-docs/release-notes/\#2020)\
+## [2020](../7. Release_Notes/release-notes_#2020.md)\
 \
-### [December 2020](https://www.tradingview.com/pine-script-docs/release-notes/\#december-2020)\
+### [December 2020](../7. Release_Notes/release-notes_#december-2020.md)\
 \
 New array types were added:\
 \
@@ -2190,7 +2180,7 @@ New functions were added:\
 a string and separates these elements with the specified separator.\
 - `str.split()` \- splits a string at a given substring separator.\
 \
-### [November 2020](https://www.tradingview.com/pine-script-docs/release-notes/\#november-2020)\
+### [November 2020](../7. Release_Notes/release-notes_#november-2020.md)\
 \
 - New `max_labels_count` and `max_lines_count` parameters were added\
 to the study and strategy functions. Now you can manage the number\
@@ -2202,7 +2192,7 @@ New function was added:\
 - `array.range()` \- return the difference between the min and max\
 values in the array.\
 \
-### [October 2020](https://www.tradingview.com/pine-script-docs/release-notes/\#october-2020)\
+### [October 2020](../7. Release_Notes/release-notes_#october-2020.md)\
 \
 The behavior of `rising()` and `falling()` functions have changed. For\
 example, `rising(close,3)` is now calculated as following:\
@@ -2210,10 +2200,10 @@ example, `rising(close,3)` is now calculated as following:\
 [Pine Script®](https://tradingview.com/pine-script-docs)\
 Copied\
 \
-`close[0] > close[1] and close[1] > close[2] and close[2] > close[3]\
+`close[0] > close[1] and close[1] > close[2] and close[2] > close[3]\
 `\
 \
-### [September 2020](https://www.tradingview.com/pine-script-docs/release-notes/\#september-2020)\
+### [September 2020](../7. Release_Notes/release-notes_#september-2020.md)\
 \
 Added support for `input.color` to the `input()` function. Now you can\
 provide script users with color selection through the script’s\
@@ -2225,19 +2215,19 @@ TradingView user interface. Learn more about this feature in our\
 Copied\
 \
 `//@version=4\
-study("My Script", overlay = true)\
-color c_labelColor = input(color.green, "Main Color", input.color)\
-var l = label.new(bar_index, close, yloc = yloc.abovebar, text = "Colored label")\
-label.set_x(l, bar_index)\
-label.set_color(l, c_labelColor)\
+study("My Script", overlay = true)\
+color c_labelColor = input(color.green, "Main Color", input.color)\
+var l = label.new(bar_index, close, yloc = yloc.abovebar, text = "Colored label")\
+label.set_x(l, bar_index)\
+label.set_color(l, c_labelColor)\
 `\
 \
-![image](https://www.tradingview.com/pine-script-docs/_astro/input_color.BV9qKm_h_KkuMk.webp)\
+![image](../images/input_color.BV9qKm_h_KkuMk.webp)\
 \
 Added support for arrays and functions for working with them. You can\
 now use the powerful new array feature to build custom datasets. See our\
-[User Manual page on\\
-arrays](https://www.tradingview.com/pine-script-docs/language/arrays/)\
+[User Manual page on 
+arrays](../3. Language/language_arrays.md)\
 and our\
 [blog](https://www.tradingview.com/blog/en/arrays-are-now-available-in-pine-script-20052/)\
 \
@@ -2245,11 +2235,11 @@ and our\
 Copied\
 \
 `//@version=4\
-study("My Script")\
-a = array.new_float(0)\
-for i = 0 to 5\
-    array.push(a, close[i] - open[i])\
-plot(array.get(a, 4))\
+study("My Script")\
+a = array.new_float(0)\
+for i = 0 to 5\
+    array.push(a, close[i] - open[i])\
+plot(array.get(a, 4))\
 `\
 \
 The following functions now accept a series length parameter. Learn more\
@@ -2273,30 +2263,30 @@ about this feature in our\
 Copied\
 \
 `//@version=4\
-study("My Script", overlay = true)\
-length = input(10, "Length", input.integer, minval = 1, maxval = 100)\
-avgBar = avg(highestbars(length), lowestbars(length))\
-float dynLen = nz(abs(avgBar) + 1, length)\
-dynSma = sma(close, int(dynLen))\
+study("My Script", overlay = true)\
+length = input(10, "Length", input.integer, minval = 1, maxval = 100)\
+avgBar = avg(highestbars(length), lowestbars(length))\
+float dynLen = nz(abs(avgBar) + 1, length)\
+dynSma = sma(close, int(dynLen))\
 plot(dynSma)\
 `\
 \
-### [August 2020](https://www.tradingview.com/pine-script-docs/release-notes/\#august-2020)\
+### [August 2020](../7. Release_Notes/release-notes_#august-2020.md)\
 \
 - Optimized script compilation time. Scripts now compile 1.5 to 2\
 times faster.\
 \
-### [July 2020](https://www.tradingview.com/pine-script-docs/release-notes/\#july-2020)\
+### [July 2020](../7. Release_Notes/release-notes_#july-2020.md)\
 \
 - Minor bug fixes and improvements.\
 \
-### [June 2020](https://www.tradingview.com/pine-script-docs/release-notes/\#june-2020)\
+### [June 2020](../7. Release_Notes/release-notes_#june-2020.md)\
 \
 - New `resolution` parameter was added to the `study` function. Now\
 you can add MTF functionality to scripts and decide the timeframe\
 you want the indicator to run on.\
 \
-![image](https://www.tradingview.com/pine-script-docs/_astro/Mtf.CuSZJR6J_1XdMWM.webp)\
+![image](../images/Mtf.CuSZJR6J_1XdMWM.webp)\
 \
 Please note that you need to reapply the indicator in order for the\
 \[resolution\] parameter to appear.\
@@ -2308,30 +2298,30 @@ with the `label.set_tooltip` function:\
 Copied\
 \
 `//@version=4\
-study("My Script", overlay=true)\
-var l=label.new(bar_index, close, yloc=yloc.abovebar, text="Label")\
+study("My Script", overlay=true)\
+var l=label.new(bar_index, close, yloc=yloc.abovebar, text="Label")\
 label.set_x(l,bar_index)\
-label.set_tooltip(l, "Label Tooltip")\
+label.set_tooltip(l, "Label Tooltip")\
 `\
 \
-![image](https://www.tradingview.com/pine-script-docs/_astro/Tooltip.6OxddeKb_Z1sgFLs.webp)\
+![image](../images/Tooltip.6OxddeKb_Z1sgFLs.webp)\
 \
-- Added an ability to create [alerts on\\
+- Added an ability to create [alerts on 
 strategies](https://www.tradingview.com/support/solutions/43000481368).\
 - A new function\
 [line.get\_price()](https://www.tradingview.com/pine-script-reference/v4/#fun_line.get_price)\
 can be used to determine the price level at which the line is\
 located on a certain bar.\
-- New [label\\
-styles](https://www.tradingview.com/pine-script-docs/concepts/text-and-shapes/#positioning-labels)\
+- New [label 
+styles](../1. Concepts/concepts_text-and-shapes.md#positioning-labels)\
 allow you to position the label pointer in any direction.\
 \
-![image](https://www.tradingview.com/pine-script-docs/_astro/new_label_styles.CnpdeFiL_Z1tyQ7f.webp)\
+![image](../images/new_label_styles.CnpdeFiL_Z1tyQ7f.webp)\
 \
 - Find and Replace was added to Pine Editor. To use this, press CTRL+F\
 (find) or CTRL+H (find and replace).\
 \
-![image](https://www.tradingview.com/pine-script-docs/_astro/FindReplace.COurJNjE_Z11hHOi.webp)\
+![image](../images/FindReplace.COurJNjE_Z11hHOi.webp)\
 \
 - `timezone` argument was added for time functions. Now you can\
 specify timezone for `second`, `minute`, `hour`, `year`, `month`,\
@@ -2341,26 +2331,26 @@ specify timezone for `second`, `minute`, `hour`, `year`, `month`,\
 Copied\
 \
 `//@version=4\
-study("My Script")\
-plot(hour(1591012800000, "GMT+1"))\
+study("My Script")\
+plot(hour(1591012800000, "GMT+1"))\
 `\
 \
 - `syminfo.basecurrency` variable was added. Returns the base currency\
 code of the current symbol. For EURUSD symbol returns EUR.\
 \
-### [May 2020](https://www.tradingview.com/pine-script-docs/release-notes/\#may-2020)\
+### [May 2020](../7. Release_Notes/release-notes_#may-2020.md)\
 \
 - `else if` statement was added\
 - The behavior of `security()` function has changed: the `expression`\
 parameter can be series or tuple.\
 \
-### [April 2020](https://www.tradingview.com/pine-script-docs/release-notes/\#april-2020)\
+### [April 2020](../7. Release_Notes/release-notes_#april-2020.md)\
 \
 New function was added:\
 \
 - `quandl()` \- request quandl data for a symbol\
 \
-### [March 2020](https://www.tradingview.com/pine-script-docs/release-notes/\#march-2020)\
+### [March 2020](../7. Release_Notes/release-notes_#march-2020.md)\
 \
 New function was added:\
 \
@@ -2379,10 +2369,10 @@ New functions for common indicators were added:\
 - `hma()` \- Hull Moving Average\
 - `supertrend()` \- SuperTrend\
 \
-Added a detailed description of all the fields in the [Strategy Tester\\
+Added a detailed description of all the fields in the [Strategy Tester 
 Report](https://www.tradingview.com/support/folders/43000587044-i-d-like-to-know-more-about-values-in-the-strategy-tester-report/).\
 \
-### [February 2020](https://www.tradingview.com/pine-script-docs/release-notes/\#february-2020)\
+### [February 2020](../7. Release_Notes/release-notes_#february-2020.md)\
 \
 - New Pine Script indicator VWAP Anchored was added. Now you can\
 specify the time period: Session, Month, Week, Year.\
@@ -2406,14 +2396,14 @@ control the alignment of the label’s text:\
 Copied\
 \
 `//@version=4\
-study("My Script", overlay = true)\
-var l = label.new(bar_index, high, text="Right\n aligned\n text", textalign=text.align_right)\
-label.set_xy(l, bar_index, high)\
+study("My Script", overlay = true)\
+var l = label.new(bar_index, high, text="Right\n aligned\n text", textalign=text.align_right)\
+label.set_xy(l, bar_index, high)\
 \
-.. image:: images/ReleaseNotes-Label_text_align.png\
+.. image:: images/ReleaseNotes-Label_text_align.png\
 `\
 \
-### [January 2020](https://www.tradingview.com/pine-script-docs/release-notes/\#january-2020)\
+### [January 2020](../7. Release_Notes/release-notes_#january-2020.md)\
 \
 New built-in variables were added:\
 \
@@ -2437,9 +2427,9 @@ New parameter was added for `strategy.close_all`:\
 \
 - `comment` \- additional notes on the order\
 \
-## [2019](https://www.tradingview.com/pine-script-docs/release-notes/\#2019)\
+## [2019](../7. Release_Notes/release-notes_#2019.md)\
 \
-### [December 2019](https://www.tradingview.com/pine-script-docs/release-notes/\#december-2019)\
+### [December 2019](../7. Release_Notes/release-notes_#december-2019.md)\
 \
 - Warning messages were added.\
 \
@@ -2453,7 +2443,7 @@ editor.\
 functions. Now you can use up to ten arguments in these functions.\
 \
 \
-### [October 2019](https://www.tradingview.com/pine-script-docs/release-notes/\#october-2019)\
+### [October 2019](../7. Release_Notes/release-notes_#october-2019.md)\
 \
 - `plotchar()` function now supports most of the Unicode symbols:\
 \
@@ -2461,10 +2451,10 @@ functions. Now you can use up to ten arguments in these functions.\
 Copied\
 \
 `//@version=4\
-study("My Script", overlay=true)\
-plotchar(open > close, char="🐻")\
+study("My Script", overlay=true)\
+plotchar(open > close, char="🐻")\
 \
-.. image:: images/ReleaseNotes-Bears_in_plotchar.png\
+.. image:: images/ReleaseNotes-Bears_in_plotchar.png\
 `\
 \
 - New `bordercolor` argument of the `plotcandle()` function allows you\
@@ -2474,8 +2464,8 @@ to change the color of candles’ borders:\
 Copied\
 \
 `//@version=4\
-study("My Script")\
-plotcandle(open, high, low, close, title='Title', color = open < close ? color.green : color.red, wickcolor=color.black, bordercolor=color.orange)\
+study("My Script")\
+plotcandle(open, high, low, close, title='Title', color = open < close ? color.green : color.red, wickcolor=color.black, bordercolor=color.orange)\
 `\
 \
 - New variables added:\
@@ -2486,7 +2476,7 @@ plotcandle(open, high, low, close, title='Title', color = open < close�
   - `syminfo.type` \- returns the type of the current symbol (stock,\
     futures, index, etc.)\
 \
-### [September 2019](https://www.tradingview.com/pine-script-docs/release-notes/\#september-2019)\
+### [September 2019](../7. Release_Notes/release-notes_#september-2019.md)\
 \
 New parameters to the `strategy` function were added:\
 \
@@ -2506,7 +2496,7 @@ constants\
 replaces each occurrence of a `target` string in the `source` string\
 with a `replacement` string\
 \
-### [July-August 2019](https://www.tradingview.com/pine-script-docs/release-notes/\#july-august-2019)\
+### [July-August 2019](../7. Release_Notes/release-notes_#july-august-2019.md)\
 \
 New variables added:\
 \
@@ -2552,18 +2542,18 @@ called:\
 Copied\
 \
 ```//@version=3\
-strategy(title = "My Strategy")\
-long() =>\
-    strategy.entry("long", true, 1, when = open > high[1])\
-    1\
-c = 0\
-c := true ? 1 : long()\
+strategy(title = "My Strategy")\
+long() =>\
+    strategy.entry("long", true, 1, when = open > high[1])\
+    1\
+c = 0\
+c := true ? 1 : long()\
 plot(c)\
 \
-Pine Script v4 contains built-in functions with side effects ( ``line.new`` and ``label.new`` ). If calls to these functions are present in both branches of a ternary operator, both function calls would be executed following v3 conventions. Thus, in Pine Script v4, only the branch corresponding to the evaluated condition is calculated. While this provides a viable solution in some cases, it will modify the behavior of scripts which depended on the fact that both branches of a ternary were evaluated. The solution is to pre-evaluate expressions prior to the ternary operator. The conversion utility takes this requirement into account when converting scripts from v3 to v4, so that script behavior will be identical in v3 and v4.\
+Pine Script v4 contains built-in functions with side effects ( ``line.new`` and ``label.new`` ). If calls to these functions are present in both branches of a ternary operator, both function calls would be executed following v3 conventions. Thus, in Pine Script v4, only the branch corresponding to the evaluated condition is calculated. While this provides a viable solution in some cases, it will modify the behavior of scripts which depended on the fact that both branches of a ternary were evaluated. The solution is to pre-evaluate expressions prior to the ternary operator. The conversion utility takes this requirement into account when converting scripts from v3 to v4, so that script behavior will be identical in v3 and v4.\
 ```\
 \
-### [June 2019](https://www.tradingview.com/pine-script-docs/release-notes/\#june-2019)\
+### [June 2019](../7. Release_Notes/release-notes_#june-2019.md)\
 \
 - Support for drawing objects. Added _label_ and _line_ drawings\
 - `var` keyword for one time variable initialization\
@@ -2577,38 +2567,38 @@ Pine Script v4 contains built-in functions with side effects ( ``line.
 history buffer sizes\
 - Pine Script documentation versioning\
 \
-## [2018](https://www.tradingview.com/pine-script-docs/release-notes/\#2018)\
+## [2018](../7. Release_Notes/release-notes_#2018.md)\
 \
-### [October 2018](https://www.tradingview.com/pine-script-docs/release-notes/\#october-2018)\
+### [October 2018](../7. Release_Notes/release-notes_#october-2018.md)\
 \
 - To increase the number of indicators available to the whole\
 community, Invite-Only scripts can now be published by Premium users\
 only.\
 \
-### [April 2018](https://www.tradingview.com/pine-script-docs/release-notes/\#april-2018)\
+### [April 2018](../7. Release_Notes/release-notes_#april-2018.md)\
 \
 - Improved the Strategy Tester by reworking the Maximum Drawdown\
 calculation formula.\
 \
-## [2017](https://www.tradingview.com/pine-script-docs/release-notes/\#2017)\
+## [2017](../7. Release_Notes/release-notes_#2017.md)\
 \
-### [August 2017](https://www.tradingview.com/pine-script-docs/release-notes/\#august-2017)\
+### [August 2017](../7. Release_Notes/release-notes_#august-2017.md)\
 \
 - With the new argument `show_last` in the plot-type functions, you\
 can restrict the number of bars that the plot is displayed on.\
 \
-### [June 2017](https://www.tradingview.com/pine-script-docs/release-notes/\#june-2017)\
+### [June 2017](../7. Release_Notes/release-notes_#june-2017.md)\
 \
 - A major script publishing improvement: it is now possible to update\
 your script without publishing a new one via the Update button in\
 the publishing dialog.\
 \
-### [May 2017](https://www.tradingview.com/pine-script-docs/release-notes/\#may-2017)\
+### [May 2017](../7. Release_Notes/release-notes_#may-2017.md)\
 \
 - Expanded the type system by adding a new type of constants that can\
 be calculated during compilation.\
 \
-### [April 2017](https://www.tradingview.com/pine-script-docs/release-notes/\#april-2017)\
+### [April 2017](../7. Release_Notes/release-notes_#april-2017.md)\
 \
 - Expanded the keyword argument functionality: it is now possible to\
 use keyword arguments in all built-in functions.\
@@ -2618,7 +2608,7 @@ are calculated based on the closed bars only.\
 - The `options` argument for the `input()` function creates an input\
 with a set of options defined by the script’s author.\
 \
-### [March 2017](https://www.tradingview.com/pine-script-docs/release-notes/\#march-2017)\
+### [March 2017](../7. Release_Notes/release-notes_#march-2017.md)\
 \
 - Pine Script v3 is here! Some important changes:\
   - Changes to the default behavior of the `security()` function: it\
@@ -2631,7 +2621,7 @@ with a set of options defined by the script’s author.\
     Any PineScript code that used those language constructions can\
     be equivalently rewritten using mutable variables.\
 \
-### [February 2017](https://www.tradingview.com/pine-script-docs/release-notes/\#february-2017)\
+### [February 2017](../7. Release_Notes/release-notes_#february-2017.md)\
 \
 - Several improvements to the strategy tester and the strategy report:\
   - New Buy & Hold equity graph — a new graph that lets you compare\
@@ -2655,59 +2645,59 @@ with a set of options defined by the script’s author.\
     dialog or through the commission\_type and commission\_value\
     arguments in the `strategy()` function.\
 \
-## [2016](https://www.tradingview.com/pine-script-docs/release-notes/\#2016)\
+## [2016](../7. Release_Notes/release-notes_#2016.md)\
 \
-### [December 2016](https://www.tradingview.com/pine-script-docs/release-notes/\#december-2016)\
+### [December 2016](../7. Release_Notes/release-notes_#december-2016.md)\
 \
 - Added invite-only scripts. The invite-only indicators are visible in\
 the Community Scripts, but nobody can use them without explicit\
 permission from the author, and only the author can see the source\
 code.\
 \
-### [October 2016](https://www.tradingview.com/pine-script-docs/release-notes/\#october-2016)\
+### [October 2016](../7. Release_Notes/release-notes_#october-2016.md)\
 \
 - Introduded indicator revisions. Each time an indicator is saved, it\
 gets a new revision, and it is possible to easily switch to any past\
 revision from the Pine Editor.\
 \
-### [September 2016](https://www.tradingview.com/pine-script-docs/release-notes/\#september-2016)\
+### [September 2016](../7. Release_Notes/release-notes_#september-2016.md)\
 \
 - It is now possible to publish indicators with protected source code.\
 These indicators are available in the public Script Library, and any\
 user can use them, but only the author can see the source code.\
 \
-### [July 2016](https://www.tradingview.com/pine-script-docs/release-notes/\#july-2016)\
+### [July 2016](../7. Release_Notes/release-notes_#july-2016.md)\
 \
 - Improved the behavior of the `fill()` function: one call can now\
 support several different colors.\
 \
-### [March 2016](https://www.tradingview.com/pine-script-docs/release-notes/\#march-2016)\
+### [March 2016](../7. Release_Notes/release-notes_#march-2016.md)\
 \
 - Color type variables now have an additional parameter to set default\
 transparency. The transparency can be set with the `color.new()`\
 function, or by adding an alpha-channel value to a hex color code.\
 \
-### [February 2016](https://www.tradingview.com/pine-script-docs/release-notes/\#february-2016)\
+### [February 2016](../7. Release_Notes/release-notes_#february-2016.md)\
 \
 - Added `for` loops and keywords `break` and `continue`.\
 - Pine Script now supports mutable variables! Use the `:=` operator\
 to assign a new value to a variable that has already been defined.\
 - Multiple improvements and bug fixes for strategies.\
 \
-### [January 2016](https://www.tradingview.com/pine-script-docs/release-notes/\#january-2016)\
+### [January 2016](../7. Release_Notes/release-notes_#january-2016.md)\
 \
 - A new `alertcondition()` function allows for creating custom alert\
 conditions in Pine Script-based indicators.\
 \
-## [2015](https://www.tradingview.com/pine-script-docs/release-notes/\#2015)\
+## [2015](../7. Release_Notes/release-notes_#2015.md)\
 \
-### [October 2015](https://www.tradingview.com/pine-script-docs/release-notes/\#october-2015)\
+### [October 2015](../7. Release_Notes/release-notes_#october-2015.md)\
 \
 - Pine has graduated to v2! The new version of Pine Script added\
 support for `if` statements, making it easier to write more readable\
 and concise code.\
 \
-### [September 2015](https://www.tradingview.com/pine-script-docs/release-notes/\#september-2015)\
+### [September 2015](../7. Release_Notes/release-notes_#september-2015.md)\
 \
 - Added backtesting functionality to Pine Script. It is now possible\
 to create trading strategies, i.e. scripts that can send, modify and\
@@ -2718,7 +2708,7 @@ according to your algorithms. Detailed information about the\
 strategy’s calculations and the order fills can be seen in the\
 newly added Strategy Tester tab.\
 \
-### [July 2015](https://www.tradingview.com/pine-script-docs/release-notes/\#july-2015)\
+### [July 2015](../7. Release_Notes/release-notes_#july-2015.md)\
 \
 - A new `editable` parameter allows hiding the plot from the Style\
 menu in the indicator settings so that it is not possible to edit\
@@ -2726,12 +2716,12 @@ its style. The parameter has been added to all the following\
 functions: all plot-type functions, `barcolor()`, `bgcolor()`,\
 `hline()`, and `fill()`.\
 \
-### [June 2015](https://www.tradingview.com/pine-script-docs/release-notes/\#june-2015)\
+### [June 2015](../7. Release_Notes/release-notes_#june-2015.md)\
 \
 - Added two new functions to display custom barsets using PineScipt:\
 `plotbar()` and `plotcandle()`.\
 \
-### [April 2015](https://www.tradingview.com/pine-script-docs/release-notes/\#april-2015)\
+### [April 2015](../7. Release_Notes/release-notes_#april-2015.md)\
 \
 - Added two new shapes to the `plotshape()` function: shape.labelup\
 and shape.labeldown.\
@@ -2740,27 +2730,27 @@ bottom of the page.\
 - Added a new `step` argument for the `input()` function, allowing to\
 specify the step size for the indicator’s inputs.\
 \
-### [March 2015](https://www.tradingview.com/pine-script-docs/release-notes/\#march-2015)\
+### [March 2015](../7. Release_Notes/release-notes_#march-2015.md)\
 \
 - Added support for inputs with the `source` type to the `input()`\
 function, allowing to select the data source for the indicator’s\
 calculations from its settings.\
 \
-### [February 2015](https://www.tradingview.com/pine-script-docs/release-notes/\#february-2015)\
+### [February 2015](../7. Release_Notes/release-notes_#february-2015.md)\
 \
 - Added a new `text` argument to `plotshape()` and `plotchar()`\
 functions.\
 - Added four new shapes to the `plotshape()` function: shape.arrowup,\
 shape.arrowdown, shape.square, shape.diamond.\
 \
-## [2014](https://www.tradingview.com/pine-script-docs/release-notes/\#2014)\
+## [2014](../7. Release_Notes/release-notes_#2014.md)\
 \
-### [August 2014](https://www.tradingview.com/pine-script-docs/release-notes/\#august-2014)\
+### [August 2014](../7. Release_Notes/release-notes_#august-2014.md)\
 \
 - Improved the script sharing capabilities, changed the layout of the\
 Indicators menu and separated published scripts from ideas.\
 \
-### [July 2014](https://www.tradingview.com/pine-script-docs/release-notes/\#july-2014)\
+### [July 2014](../7. Release_Notes/release-notes_#july-2014.md)\
 \
 - Added three new plotting functions, `plotshape()`, `plotchar()`, and\
 `plotarrow()` for situations when you need to highlight specific\
@@ -2768,16 +2758,16 @@ bars on a chart without drawing a line.\
 - Integrated QUANDL data into Pine Script. The data can be accessed\
 by passing the QUANDL ticker to the `security` function.\
 \
-### [June 2014](https://www.tradingview.com/pine-script-docs/release-notes/\#june-2014)\
+### [June 2014](../7. Release_Notes/release-notes_#june-2014.md)\
 \
 - Added Pine Script sharing, enabling programmers and traders to\
 share their scripts with the rest of the TradingView community.\
 \
-### [April 2014](https://www.tradingview.com/pine-script-docs/release-notes/\#april-2014)\
+### [April 2014](../7. Release_Notes/release-notes_#april-2014.md)\
 \
 - Added line wrapping.\
 \
-### [February 2014](https://www.tradingview.com/pine-script-docs/release-notes/\#february-2014)\
+### [February 2014](../7. Release_Notes/release-notes_#february-2014.md)\
 \
 - Added support for inputs, allowing users to edit the indicator\
 inputs through the properties window, without needing to edit the\
@@ -2801,11 +2791,11 @@ required.\
   - Added the `round()` function to round and convert float values\
     to integers.\
 \
-## [2013](https://www.tradingview.com/pine-script-docs/release-notes/\#2013)\
+## [2013](../7. Release_Notes/release-notes_#2013.md)\
 \
 - The first version of Pine Script is introduced to all TradingView\
 users, initially as an open beta, on December 13th.\
 \
-[Previous\\
-**FAQ**](https://www.tradingview.com/pine-script-docs/faq) [Next\\
+[Previous 
+**FAQ**](https://www.tradingview.com/pine-script-docs/faq) [Next 
 **To Pine Script® version 5**](https://www.tradingview.com/pine-script-docs/migration-guides/to-pine-version-5)

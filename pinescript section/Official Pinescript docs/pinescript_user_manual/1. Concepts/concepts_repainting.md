@@ -1,8 +1,8 @@
-![](https://www.tradingview.com/pine-script-docs/concepts/repainting/)
+![](../1. Concepts/concepts_repainting.md)
 
-# [Repainting](https://www.tradingview.com/pine-script-docs/concepts/repainting/\#repainting)
+# [Repainting](../1. Concepts/concepts_repainting.md#repainting)
 
-## [Introduction](https://www.tradingview.com/pine-script-docs/concepts/repainting/\#introduction)
+## [Introduction](../1. Concepts/concepts_repainting.md#introduction)
 
 We define repainting as: **script behavior causing historical vs**
 **realtime calculations or plots to behave differently**.
@@ -27,17 +27,17 @@ scripts they use, depending on what a script’s calculations entail:
 - **Widespread but often acceptable**: A script may use values that
 update with realtime price changes on the unconfirmed bar. For
 example, if one uses the
-[close](https://www.tradingview.com/pine-script-reference/v6/#var_close)
+[close](../../reference manual/variables/close.md)
 variable in calculations performed on an open chart bar, its values
 will reflect the most recent price in the bar. However, the script
 will only commit a new data point to its historical series once the
 bar closes. Another common case is using
-[request.security()](https://www.tradingview.com/pine-script-reference/v6/#fun_request.security)
+[request.security()](../../reference manual/functions/request.security.md)
 to fetch higher-timeframe data on realtime bars, as explained in the
-[Historical and realtime behavior](https://www.tradingview.com/pine-script-docs/concepts/other-timeframes-and-data/#historical-and-realtime-behavior) section of the
-[Other timeframes and data](https://www.tradingview.com/pine-script-docs/concepts/other-timeframes-and-data/) page. As with the unconfirmed chart bar in the chart’s
+[Historical and realtime behavior](../1. Concepts/concepts_other-timeframes-and-data.md#historical-and-realtime-behavior) section of the
+[Other timeframes and data](../1. Concepts/concepts_other-timeframes-and-data.md) page. As with the unconfirmed chart bar in the chart’s
 timeframe,
-[request.security()](https://www.tradingview.com/pine-script-reference/v6/#fun_request.security)
+[request.security()](../../reference manual/functions/request.security.md)
 can track unconfirmed values from a higher-timeframe context on
 realtime bars, which can lead to repainting after the script
 restarts its execution. There is often nothing wrong with using such
@@ -51,16 +51,16 @@ calculate results on realtime bars that one cannot replicate on
 historical bars, or relocate past events are potentially misleading.
 For example, Ichimoku, most scripts based on pivots, most strategies
 using `calc_on_every_tick = true`, scripts using
-[request.security()](https://www.tradingview.com/pine-script-reference/v6/#fun_request.security)
+[request.security()](../../reference manual/functions/request.security.md)
 when it behaves differently on realtime bars, many scripts using
-[varip](https://www.tradingview.com/pine-script-reference/v6/#kw_varip),
+[varip](../../reference manual/keywords/varip.md),
 many scripts using
-[timenow](https://www.tradingview.com/pine-script-reference/v6/#var_timenow),
+[timenow](../../reference manual/variables/timenow.md),
 and some scripts that use `barstate.*` variables can exhibit
 misleading repainting behavior.
 - **Unacceptable**: Scripts that leak future information into the
 past, strategies that execute on
-[non-standard charts](https://www.tradingview.com/pine-script-docs/concepts/non-standard-charts-data/), and scripts using realtime intrabars to generate alerts
+[non-standard charts](../1. Concepts/concepts_non-standard-charts-data.md), and scripts using realtime intrabars to generate alerts
 or orders, are examples that can produce heavily misleading
 repainting behavior.
 - **Unavoidable**: Revisions of the data feed from a provider and
@@ -79,11 +79,11 @@ repainting may be exactly what a script needs. What’s important is to
 know when repainting behavior is **not** acceptable for one’s needs. To
 avoid repainting that’s not acceptable, it’s important to understand
 how a tool works or how you should design the tools you build. If you
-[publish](https://www.tradingview.com/pine-script-docs/writing/publishing/) scripts, ensure
+[publish](../4. Writing_Scripts/writing_publishing.md) scripts, ensure
 you mention any potentially misleading behavior along with the other
 limitations of your script in the publication’s description.
 
-### [For script users](https://www.tradingview.com/pine-script-docs/concepts/repainting/\#for-script-users)
+### [For script users](../1. Concepts/concepts_repainting.md#for-script-users)
 
 One can decide to use repainting indicators if they understand the
 behavior, and whether that behavior meets their analysis requirements.
@@ -106,7 +106,7 @@ bar before showing?
 - Does the script plot/draw values into the past?
 - Does the strategy use `calc_on_every_tick = true`?
 - Do the script’s
-[request.security()](https://www.tradingview.com/pine-script-reference/v6/#fun_request.security)
+[request.security()](../../reference manual/functions/request.security.md)
 calls leak future information into the past on historical bars?
 
 What’s important is that you understand how the tools you use work, and
@@ -117,7 +117,7 @@ Pine Script®, this page will help you understand the array of causes
 that can lead to repainting, and hopefully enable more meaningful
 discussions with script authors.
 
-### [For Pine Script programmers](https://www.tradingview.com/pine-script-docs/concepts/repainting/\#for-pine-script-programmers)
+### [For Pine Script programmers](../1. Concepts/concepts_repainting.md#for-pine-script-programmers)
 
 As discussed above, not all forms of repainting behavior must be avoided
 at all costs, nor is all potential repainting behavior necessarily
@@ -127,72 +127,70 @@ mind. This page’s content should help make you aware of common coding
 mistakes that produce misleading repainting results.
 
 Whatever your design decisions are, if you
-[publish](https://www.tradingview.com/pine-script-docs/writing/publishing/) your script,
+[publish](../4. Writing_Scripts/writing_publishing.md) your script,
 explain the script to traders so they can understand how it behaves.
 
 This page covers three broad categories of repainting causes:
 
-- [Historical vs realtime calculations](https://www.tradingview.com/pine-script-docs/concepts/repainting/#historical-vs-realtime-calculations)
-- [Plotting in the past](https://www.tradingview.com/pine-script-docs/concepts/repainting/#plotting-in-the-past)
-- [Dataset variations](https://www.tradingview.com/pine-script-docs/concepts/repainting/#dataset-variations)
+- [Historical vs realtime calculations](../1. Concepts/concepts_repainting.md#historical-vs-realtime-calculations)
+- [Plotting in the past](../1. Concepts/concepts_repainting.md#plotting-in-the-past)
+- [Dataset variations](../1. Concepts/concepts_repainting.md#dataset-variations)
 
-## [Historical vs realtime calculations](https://www.tradingview.com/pine-script-docs/concepts/repainting/\#historical-vs-realtime-calculations)
+## [Historical vs realtime calculations](../1. Concepts/concepts_repainting.md#historical-vs-realtime-calculations)
 
-### [Fluid data values](https://www.tradingview.com/pine-script-docs/concepts/repainting/\#fluid-data-values)
+### [Fluid data values](../1. Concepts/concepts_repainting.md#fluid-data-values)
 
 Historical data does not include records of intermediary price movements
 on bars; only
-[open](https://www.tradingview.com/pine-script-reference/v6/#var_open),
-[high](https://www.tradingview.com/pine-script-reference/v6/#var_high),
-[low](https://www.tradingview.com/pine-script-reference/v6/#var_low) and
-[close](https://www.tradingview.com/pine-script-reference/v6/#var_close)
+[open](../../reference manual/variables/open.md),
+[high](../../reference manual/variables/high.md),
+[low](../../reference manual/variables/low.md) and
+[close](../../reference manual/variables/close.md)
 values (OHLC).
 
 On realtime bars (bars running when the instrument’s market is open),
 however, the
-[high](https://www.tradingview.com/pine-script-reference/v6/#var_high),
-[low](https://www.tradingview.com/pine-script-reference/v6/#var_low) and
-[close](https://www.tradingview.com/pine-script-reference/v6/#var_close)
+[high](../../reference manual/variables/high.md),
+[low](../../reference manual/variables/low.md) and
+[close](../../reference manual/variables/close.md)
 values are not fixed; they can change values many times before the
 realtime bar closes and its HLC values are fixed. They are _fluid_. This
 leads to a script sometimes working differently on historical data and
 in real time, where only the
-[open](https://www.tradingview.com/pine-script-reference/v6/#var_open)
+[open](../../reference manual/variables/open.md)
 price will not change during the bar.
 
 Any script using values like
-[high](https://www.tradingview.com/pine-script-reference/v6/#var_high),
-[low](https://www.tradingview.com/pine-script-reference/v6/#var_low) and
-[close](https://www.tradingview.com/pine-script-reference/v6/#var_close)
+[high](../../reference manual/variables/high.md),
+[low](../../reference manual/variables/low.md) and
+[close](../../reference manual/variables/close.md)
 in realtime is subject to producing calculations that may not be
 repeatable on historical bars — thus repaint.
 
 Let’s look at this simple script. It detects crosses of the
-[close](https://www.tradingview.com/pine-script-reference/v6/#var_close)
+[close](../../reference manual/variables/close.md)
 value (in the realtime bar, this corresponds to the current price of the
 instrument) over and under an
 [EMA](https://www.tradingview.com/support/solutions/43000592270):
 
-![image](https://www.tradingview.com/pine-script-docs/_astro/Repainting-01.B4bnEQz8_Z2nDDER.webp)
+![image](../images/Repainting-01.B4bnEQz8_Z2nDDER.webp)
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
-
-`//@version=6
-indicator("Repainting", "", true)
-ma = ta.ema(close, 5)
-xUp = ta.crossover(close, ma)
-xDn = ta.crossunder(close, ma)
-plot(ma, "MA", color.black, 2)
-bgcolor(xUp ? color.new(color.lime, 80) : xDn ? color.new(color.fuchsia, 80) : na)
-`
+```pine
+//@version=6
+indicator("Repainting", "", true)
+ma = ta.ema(close, 5)
+xUp = ta.crossover(close, ma)
+xDn = ta.crossunder(close, ma)
+plot(ma, "MA", color.black, 2)
+bgcolor(xUp ? color.new(color.lime, 80) : xDn ? color.new(color.fuchsia, 80) : na)
+```
 
 Note that:
 
 - The script uses
-[bgcolor()](https://www.tradingview.com/pine-script-reference/v6/#fun_bgcolor)
+[bgcolor()](../../reference manual/functions/bgcolor.md)
 to color the background green when
-[close](https://www.tradingview.com/pine-script-reference/v6/#var_close)
+[close](../../reference manual/variables/close.md)
 crosses over the EMA, and red on crosses under the EMA.
 - The screen snapshot shows the script in realtime on a 30sec
 chart. A cross over the EMA has been detected, thus the
@@ -207,7 +205,7 @@ To prevent this repainting, we must rewrite our script so that it does
 not use values that fluctuate during the realtime bar. This will require
 using values from a bar that has elapsed (typically the preceding bar),
 or the
-[open](https://www.tradingview.com/pine-script-reference/v6/#var_open)
+[open](../../reference manual/variables/open.md)
 price, which does not vary in realtime.
 
 We can achieve this in many ways. This method adds a
@@ -216,109 +214,101 @@ requires the script to be executing on the bar’s last iteration, when
 it closes and prices are confirmed. It is a simple way to avoid
 repainting:
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
-
-`//@version=6
-indicator("Repainting", "", true)
-ma = ta.ema(close, 5)
-xUp = ta.crossover(close, ma) and barstate.isconfirmed
-xDn = ta.crossunder(close, ma) and barstate.isconfirmed
-plot(ma, "MA", color.black, 2)
-bgcolor(xUp ? color.new(color.lime, 80) : xDn ? color.new(color.fuchsia, 80) : na)
-`
+```pine
+//@version=6
+indicator("Repainting", "", true)
+ma = ta.ema(close, 5)
+xUp = ta.crossover(close, ma) and barstate.isconfirmed
+xDn = ta.crossunder(close, ma) and barstate.isconfirmed
+plot(ma, "MA", color.black, 2)
+bgcolor(xUp ? color.new(color.lime, 80) : xDn ? color.new(color.fuchsia, 80) : na)
+```
 
 This uses the crosses detected on the previous bar:
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
-
-`//@version=6
-indicator("Repainting", "", true)
-ma = ta.ema(close, 5)
-xUp = ta.crossover(close, ma)[1]
-xDn = ta.crossunder(close, ma)[1]
-plot(ma, "MA", color.black, 2)
-bgcolor(xUp ? color.new(color.lime, 80) : xDn ? color.new(color.fuchsia, 80) : na)
-`
+```pine
+//@version=6
+indicator("Repainting", "", true)
+ma = ta.ema(close, 5)
+xUp = ta.crossover(close, ma)[1]
+xDn = ta.crossunder(close, ma)[1]
+plot(ma, "MA", color.black, 2)
+bgcolor(xUp ? color.new(color.lime, 80) : xDn ? color.new(color.fuchsia, 80) : na)
+```
 
 This uses only confirmed
-[close](https://www.tradingview.com/pine-script-reference/v6/#var_close)
+[close](../../reference manual/variables/close.md)
 and EMA values for its calculations:
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
-
-`//@version=6
-indicator("Repainting", "", true)
-ma = ta.ema(close[1], 5)
-xUp = ta.crossover(close[1], ma)
-xDn = ta.crossunder(close[1], ma)
-plot(ma, "MA", color.black, 2)
-bgcolor(xUp ? color.new(color.lime, 80) : xDn ? color.new(color.fuchsia, 80) : na)
-`
+```pine
+//@version=6
+indicator("Repainting", "", true)
+ma = ta.ema(close[1], 5)
+xUp = ta.crossover(close[1], ma)
+xDn = ta.crossunder(close[1], ma)
+plot(ma, "MA", color.black, 2)
+bgcolor(xUp ? color.new(color.lime, 80) : xDn ? color.new(color.fuchsia, 80) : na)
+```
 
 This detects crosses between the realtime bar’s
-[open](https://www.tradingview.com/pine-script-reference/v6/#var_open)
+[open](../../reference manual/variables/open.md)
 and the value of the EMA from the previous bars. Notice that the EMA is
 calculated using
-[close](https://www.tradingview.com/pine-script-reference/v6/#var_close),
+[close](../../reference manual/variables/close.md),
 so it repaints. We must ensure we use a confirmed value to detect
 crosses, thus `ma[1]` in the cross detection logic:
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
-
-`//@version=6
-indicator("Repainting", "", true)
-ma = ta.ema(close, 5)
-xUp = ta.crossover(open, ma[1])
-xDn = ta.crossunder(open, ma[1])
-plot(ma, "MA", color.black, 2)
-bgcolor(xUp ? color.new(color.lime, 80) : xDn ? color.new(color.fuchsia, 80) : na)
-`
+```pine
+//@version=6
+indicator("Repainting", "", true)
+ma = ta.ema(close, 5)
+xUp = ta.crossover(open, ma[1])
+xDn = ta.crossunder(open, ma[1])
+plot(ma, "MA", color.black, 2)
+bgcolor(xUp ? color.new(color.lime, 80) : xDn ? color.new(color.fuchsia, 80) : na)
+```
 
 **All these methods have one thing in common: while they prevent**
 **repainting, they will also trigger signals later than repainting**
 **scripts. This is an inevitable compromise if one wants to avoid**
 **repainting. You can’t have your cake and eat it too.**
 
-### [Repainting ​`request.security()`​ calls](https://www.tradingview.com/pine-script-docs/concepts/repainting/\#repainting-requestsecurity-calls)
+### [Repainting ​`request.security()`​ calls](../1. Concepts/concepts_repainting.md#repainting-requestsecurity-calls)
 
 The
-[request.security()](https://www.tradingview.com/pine-script-reference/v6/#fun_request.security)
+[request.security()](../../reference manual/functions/request.security.md)
 function behaves differently on historical and realtime bars. On
 historical bars, it only returns _confirmed_ values from its requested
 context, wheras it can return _unconfirmed_ values on realtime bars.
 When the script restarts its execution, the bars that had a realtime
 state become historical bars, and will therefore only contain the values
 it confirmed on those bars. If the values returned by
-[request.security()](https://www.tradingview.com/pine-script-reference/v6/#fun_request.security)
+[request.security()](../../reference manual/functions/request.security.md)
 fluctuate on realtime bars without confirmation from the context, the
 script will repaint them when it restarts its execution. See the
-[Historical and realtime behavior](https://www.tradingview.com/pine-script-docs/concepts/other-timeframes-and-data/#historical-and-realtime-behavior) section of the
-[Other timeframes and data](https://www.tradingview.com/pine-script-docs/concepts/other-timeframes-and-data/) page for a detailed explanation.
+[Historical and realtime behavior](../1. Concepts/concepts_other-timeframes-and-data.md#historical-and-realtime-behavior) section of the
+[Other timeframes and data](../1. Concepts/concepts_other-timeframes-and-data.md) page for a detailed explanation.
 
 One can ensure higher-timeframe data requests only return confirmed
 values on all bars, regardless of bar state, by offsetting the
 `expression` argument by at least one bar with the history-referencing
 operator
-[\[\]](https://www.tradingview.com/pine-script-reference/v6/#op_%5B%5D)
+[\[\]](../../reference manual/operators/[].md)
 and using
-[barmerge.lookahead\_on](https://www.tradingview.com/pine-script-reference/v6/#var_barmerge.lookahead_on)
+[barmerge.lookahead\_on](../../reference manual/variables/barmerge.lookahead_on.md)
 for the `lookahead` argument in the
-[request.security()](https://www.tradingview.com/pine-script-reference/v6/#fun_request.security)
+[request.security()](../../reference manual/functions/request.security.md)
 call, as explained
-[here](https://www.tradingview.com/pine-script-docs/concepts/other-timeframes-and-data/#higher-timeframe-data).
+[here](../1. Concepts/concepts_other-timeframes-and-data.md#higher-timeframe-data).
 
 The script below demonstrates the difference between repainting and
 non-repainting HTF data requests. It contains two
-[request.security()](https://www.tradingview.com/pine-script-reference/v6/#fun_request.security)
+[request.security()](../../reference manual/functions/request.security.md)
 calls. The first function call requests
-[close](https://www.tradingview.com/pine-script-reference/v6/#var_close)
+[close](../../reference manual/variables/close.md)
 data from the `higherTimeframe` without additional specification, and
 the second call requests the same series with an offset and
-[barmerge.lookahead\_on](https://www.tradingview.com/pine-script-reference/v6/#var_barmerge.lookahead_on).
+[barmerge.lookahead\_on](../../reference manual/variables/barmerge.lookahead_on.md).
 
 As we see on all realtime
 bars (the ones with an orange background), the `repaintingClose` series
@@ -328,41 +318,39 @@ its executions. The `nonRepaintingClose`, on the other hand, behaves the
 same on realtime and historical bars, i.e., it only changes its value
 when new, confirmed data is available:
 
-![image](https://www.tradingview.com/pine-script-docs/_astro/Repainting-Repainting-request-security-calls-1.DKoD6okt_yEmjM.webp)
+![image](../images/Repainting-Repainting-request-security-calls-1.DKoD6okt_yEmjM.webp)
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
+```pine
+//@version=6
+indicator("Repainting vs non-repainting `request.security()` demo", overlay = true)
 
-``//@version=6
-indicator("Repainting vs non-repainting `request.security()` demo", overlay = true)
+//@variable The timeframe to request data from.
+string higherTimeframe = input.timeframe("30", "Timeframe")
 
-//@variable The timeframe to request data from.
-string higherTimeframe = input.timeframe("30", "Timeframe")
+if timeframe.in_seconds() > timeframe.in_seconds(higherTimeframe)
+    runtime.error("The 'Timeframe' input is smaller than the chart's timeframe. Choose a higher timeframe.")
 
-if timeframe.in_seconds() > timeframe.in_seconds(higherTimeframe)
-    runtime.error("The 'Timeframe' input is smaller than the chart's timeframe. Choose a higher timeframe.")
-
-//@variable The current `close` requested from the `higherTimeframe`. Fluctuates without confirmation on realtime bars.
-float repaintingClose = request.security(syminfo.tickerid, higherTimeframe, close)
-//@variable The last confirmed `close` requested from the `higherTimeframe`.
-// Behaves the same on historical and realtime bars.
-float nonRepaintingClose = request.security(
-     syminfo.tickerid, higherTimeframe, close[1], lookahead = barmerge.lookahead_on
+//@variable The current `close` requested from the `higherTimeframe`. Fluctuates without confirmation on realtime bars.
+float repaintingClose = request.security(syminfo.tickerid, higherTimeframe, close)
+//@variable The last confirmed `close` requested from the `higherTimeframe`.
+// Behaves the same on historical and realtime bars.
+float nonRepaintingClose = request.security(
+     syminfo.tickerid, higherTimeframe, close[1], lookahead = barmerge.lookahead_on
 )
 
-// Plot the values.
-plot(repaintingClose, "Repainting close", color.new(color.purple, 50), 8)
-plot(nonRepaintingClose, "Non-repainting close", color.teal, 3)
-// Plot a shape when a new `higherTimeframe` starts.
-plotshape(timeframe.change(higherTimeframe), "Timeframe change marker", shape.square, location.top, size = size.small)
-// Color the background on realtime bars.
-bgcolor(barstate.isrealtime ? color.new(color.orange, 60) : na, title = "Realtime bar highlight")
-``
+// Plot the values.
+plot(repaintingClose, "Repainting close", color.new(color.purple, 50), 8)
+plot(nonRepaintingClose, "Non-repainting close", color.teal, 3)
+// Plot a shape when a new `higherTimeframe` starts.
+plotshape(timeframe.change(higherTimeframe), "Timeframe change marker", shape.square, location.top, size = size.small)
+// Color the background on realtime bars.
+bgcolor(barstate.isrealtime ? color.new(color.orange, 60) : na, title = "Realtime bar highlight")
+```
 
 Note that:
 
-- The script uses the [plotshape()](https://www.tradingview.com/pine-script-reference/v6/#fun_plotshape) function to mark the chart when a new bar starts on the specified higher timeframe.
-- This script calls [runtime.error()](https://www.tradingview.com/pine-script-reference/v6/#fun_runtime.error) to raise a custom runtime error if the `higherTimeframe` value represents a timeframe that is _lower_ than the chart’s timeframe.
+- The script uses the [plotshape()](../../reference manual/functions/plotshape.md) function to mark the chart when a new bar starts on the specified higher timeframe.
+- This script calls [runtime.error()](../../reference manual/functions/runtime.error.md) to raise a custom runtime error if the `higherTimeframe` value represents a timeframe that is _lower_ than the chart’s timeframe.
 - On historical bars, the `repaintingClose` series has a new value at the
 _end_ of each timeframe, and the `nonRepaintingClose` has a new
 value at the _start_ of each timeframe.
@@ -371,23 +359,21 @@ For the sake of easy reusability, below is a simple a
 `noRepaintSecurity()` function that one can apply in their scripts to
 request non-repainting higher-timeframe values:
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
-
-``//@function Requests non-repainting `expression` values from the context of the `symbol` and `timeframe`.
-noRepaintSecurity(symbol, timeframe, expression) =>
-    request.security(symbol, timeframe, expression[1], lookahead = barmerge.lookahead_on)
-``
+```pine
+//@function Requests non-repainting `expression` values from the context of the `symbol` and `timeframe`.
+noRepaintSecurity(symbol, timeframe, expression) =>
+    request.security(symbol, timeframe, expression[1], lookahead = barmerge.lookahead_on)
+```
 
 Note that:
 
 - The `[1]` offset to the series and the use of `lookahead = barmerge.lookahead_on` are interdependent. _Neither_ can be removed without compromising the integrity of the function.
-- Unlike a plain [request.security()](https://www.tradingview.com/pine-script-reference/v6/#fun_request.security) call, a call to this wrapper function cannot use a tuple as the `expression` argument. For multi-element requests, programmers can pass the ID of an [object](https://www.tradingview.com/pine-script-docs/language/objects) of a [user-defined type](https://www.tradingview.com/pine-script-docs/language/type-system/#user-defined-types) whose _fields_ contain the desired elements.
+- Unlike a plain [request.security()](../../reference manual/functions/request.security.md) call, a call to this wrapper function cannot use a tuple as the `expression` argument. For multi-element requests, programmers can pass the ID of an [object](../3. Language/language_objects.md) of a [user-defined type](../3. Language/language_type-system.md#user-defined-types) whose _fields_ contain the desired elements.
 
-### [Using ​`request.security()`​ at lower timeframes](https://www.tradingview.com/pine-script-docs/concepts/repainting/\#using-requestsecurity-at-lower-timeframes)
+### [Using ​`request.security()`​ at lower timeframes](../1. Concepts/concepts_repainting.md#using-requestsecurity-at-lower-timeframes)
 
 Some scripts use
-[request.security()](https://www.tradingview.com/pine-script-reference/v6/#fun_request%7Bdot%7Dsecurity)
+[request.security()](../../reference manual/functions/request.security.md)
 to request data from a timeframe **lower** than the chart’s timeframe.
 This can be useful when functions specifically designed to handle
 intrabars at lower timeframes are sent down the timeframe. When this
@@ -401,28 +387,28 @@ elapsed realtime bars as historical bars.
 
 When used at lower timeframes than the chart’s without specialized
 functions able to distinguish between intrabars,
-[request.security()](https://www.tradingview.com/pine-script-reference/v6/#fun_request%7Bdot%7Dsecurity)
+[request.security()](../../reference manual/functions/request.security.md)
 will only return the value of the **last** intrabar in the dilation of
 the chart’s bar, which is usually not useful, and will also not
 reproduce in real time, so lead to repainting.
 
 For all these reasons, unless you understand the subtleties of using
-[request.security()](https://www.tradingview.com/pine-script-reference/v6/#fun_request%7Bdot%7Dsecurity)
+[request.security()](../../reference manual/functions/request.security.md)
 at lower timeframes than the chart’s, it is best to avoid using the
 function at those timeframes. Higher-quality scripts will have logic to
 detect such anomalies and prevent the display of results which would be
 invalid when a lower timeframe is used.
 
 For more reliable lower-timeframe data requests, use
-[request.security\_lower\_tf()](https://www.tradingview.com/pine-script-reference/v6/#fun_request.security_lower_tf),
+[request.security\_lower\_tf()](../../reference manual/functions/request.security_lower_tf.md),
 as explained in
-[this](https://www.tradingview.com/pine-script-docs/concepts/other-timeframes-and-data/#lower-timeframe-data) section of the
-[Other timeframes and data](https://www.tradingview.com/pine-script-docs/concepts/other-timeframes-and-data/) page.
+[this](../1. Concepts/concepts_other-timeframes-and-data.md#lower-timeframe-data) section of the
+[Other timeframes and data](../1. Concepts/concepts_other-timeframes-and-data.md) page.
 
-### [Future leak with ​`request.security()`​](https://www.tradingview.com/pine-script-docs/concepts/repainting/\#future-leak-with-requestsecurity)
+### [Future leak with ​`request.security()`​](../1. Concepts/concepts_repainting.md#future-leak-with-requestsecurity)
 
 When
-[request.security()](https://www.tradingview.com/pine-script-reference/v6/#fun_request%7Bdot%7Dsecurity)
+[request.security()](../../reference manual/functions/request.security.md)
 is used with `lookahead = barmerge.lookahead_on` to fetch prices without
 offsetting the series by `[1]`, it will return data from the future on
 historical bars, which is dangerously misleading.
@@ -433,79 +419,77 @@ there is unknown, as it should, so no future bars exist.
 
 This is an example:
 
-![image](https://www.tradingview.com/pine-script-docs/_astro/Repainting-FutureLeakWithRequestSecurity-01.B8DsNHGV_FXyhR.webp)
+![image](../images/Repainting-FutureLeakWithRequestSecurity-01.B8DsNHGV_FXyhR.webp)
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
-
-`// FUTURE LEAK! DO NOT USE!
+```pine
+// FUTURE LEAK! DO NOT USE!
 //@version=6
-indicator("Future leak", "", true)
-futureHigh = request.security(syminfo.tickerid, "1D", high, lookahead = barmerge.lookahead_on)
+indicator("Future leak", "", true)
+futureHigh = request.security(syminfo.tickerid, "1D", high, lookahead = barmerge.lookahead_on)
 plot(futureHigh)
-`
+```
 
 Note how the higher timeframe line is showing the timeframe’s
-[high](https://www.tradingview.com/pine-script-reference/v6/#var_high)
+[high](../../reference manual/variables/high.md)
 value before it occurs. The solution to avoid this effect is to use the
 function as demonstrated in
-[this previous section](https://www.tradingview.com/pine-script-docs/concepts/repainting/#repainting-requestsecurity-calls).
+[this previous section](../1. Concepts/concepts_repainting.md#repainting-requestsecurity-calls).
 
 Using lookahead to produce misleading results is not allowed in script
 publications, as explained in the
-[lookahead](https://www.tradingview.com/pine-script-docs/concepts/other-timeframes-and-data/#lookahead) section of the
-[Other timeframes and data](https://www.tradingview.com/pine-script-docs/concepts/other-timeframes-and-data/) page. Script publications that use this misleading technique
+[lookahead](../1. Concepts/concepts_other-timeframes-and-data.md#lookahead) section of the
+[Other timeframes and data](../1. Concepts/concepts_other-timeframes-and-data.md) page. Script publications that use this misleading technique
 **will be moderated**.
 
-### [​`varip`​](https://www.tradingview.com/pine-script-docs/concepts/repainting/\#varip)
+### [​`varip`​](../1. Concepts/concepts_repainting.md#varip)
 
 Scripts using the
-[varip](https://www.tradingview.com/pine-script-reference/v6/#kw_varip)
+[varip](../../reference manual/keywords/varip.md)
 declaration mode for variables (see our section on
-[varip](https://www.tradingview.com/pine-script-docs/language/variable-declarations/#varip)
+[varip](../3. Language/language_variable-declarations.md#varip)
 for more information) save information across realtime updates, which
 cannot be reproduced on historical bars where only OHLC information is
 available. Such scripts may be useful in realtime, including to generate
 alerts, but their logic cannot be backtested, nor can their plots on
 historical bars reflect calculations that will be done in realtime.
 
-### [Bar state built-ins](https://www.tradingview.com/pine-script-docs/concepts/repainting/\#bar-state-built-ins)
+### [Bar state built-ins](../1. Concepts/concepts_repainting.md#bar-state-built-ins)
 
-Scripts using [bar states](https://www.tradingview.com/pine-script-docs/concepts/bar-states/)
+Scripts using [bar states](../1. Concepts/concepts_bar-states.md)
 may or may not repaint. As we have seen in the previous section, using
-[barstate.isconfirmed](https://www.tradingview.com/pine-script-reference/v6/#var_barstate%7Bdot%7Disconfirmed)
+[barstate.isconfirmed](../../reference manual/variables/barstate.isconfirmed.md)
 is actually one way to **avoid** repainting that **will** reproduce on
 historical bars, which are always “confirmed”. Uses of other bar
 states such as
-[barstate.isnew](https://www.tradingview.com/pine-script-reference/v6/#var_barstate%7Bdot%7Disnew),
+[barstate.isnew](../../reference manual/variables/barstate.isnew.md),
 however, will lead to repainting. The reason is that on historical bars,
-[barstate.isnew](https://www.tradingview.com/pine-script-reference/v6/#var_barstate%7Bdot%7Disnew)
+[barstate.isnew](../../reference manual/variables/barstate.isnew.md)
 is `true` on the bar’s
-[close](https://www.tradingview.com/pine-script-reference/v6/#var_close),
+[close](../../reference manual/variables/close.md),
 yet in realtime, it is `true` on the bar’s
 [open](https://www.tradingview.com/pine-script-reference/v6/#open).
 Using the other bar state variables will usually cause some type of
 behavioral discrepancy between historical and realtime bars.
 
-### [​`timenow`​](https://www.tradingview.com/pine-script-docs/concepts/repainting/\#timenow)
+### [​`timenow`​](../1. Concepts/concepts_repainting.md#timenow)
 
 The
-[timenow](https://www.tradingview.com/pine-script-reference/v6/#var_timenow)
+[timenow](../../reference manual/variables/timenow.md)
 built-in returns the current time. Scripts using this variable cannot
 show consistent historical and realtime behavior, so they necessarily
 repaint.
 
-### [Strategies](https://www.tradingview.com/pine-script-docs/concepts/repainting/\#strategies)
+### [Strategies](../1. Concepts/concepts_repainting.md#strategies)
 
 Strategies using `calc_on_every_tick = true` execute on each realtime
 update, while strategies run on the
-[close](https://www.tradingview.com/pine-script-reference/v6/#var_close)
+[close](../../reference manual/variables/close.md)
 of historical bars. They will most probably not generate the same order
 executions, and so repaint. Note that when this happens, it also
 invalidates backtesting results, as they are not representative of the
 strategy’s behavior in realtime.
 
-## [Plotting in the past](https://www.tradingview.com/pine-script-docs/concepts/repainting/\#plotting-in-the-past)
+## [Plotting in the past](../1. Concepts/concepts_repainting.md#plotting-in-the-past)
 
 Scripts detecting pivots after 5 bars have elapsed will often go back in
 the past to plot pivot levels or values on the actual pivot, 5 bars in
@@ -517,17 +501,15 @@ it is detected.
 Let’s look at a script showing the price of high pivots by placing the
 price in the past, 5 bars after the pivot was detected:
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
+```pine
+//@version=6
+indicator("Plotting in the past", "", true)
+pHi = ta.pivothigh(5, 5)
+if not na(pHi)
+    label.new(bar_index[5], na, str.tostring(pHi, format.mintick) + "\n🠇", yloc = yloc.abovebar, style = label.style_none, textcolor = color.black, size = size.normal)
+```
 
-`//@version=6
-indicator("Plotting in the past", "", true)
-pHi = ta.pivothigh(5, 5)
-if not na(pHi)
-    label.new(bar_index[5], na, str.tostring(pHi, format.mintick) + "\n🠇", yloc = yloc.abovebar, style = label.style_none, textcolor = color.black, size = size.normal)
-`
-
-![image](https://www.tradingview.com/pine-script-docs/_astro/Repainting-PlottingInThePast-01.CdfEKXRh_Z1fldev.webp)
+![image](../images/Repainting-PlottingInThePast-01.CdfEKXRh_Z1fldev.webp)
 
 Note that:
 
@@ -541,25 +523,23 @@ to plot **without** an offset by default, but give the option for script
 users to turn on plotting in the past through inputs, so they are
 necessarily aware of what the script is doing, e.g.:
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
+```pine
+//@version=6
+indicator("Plotting in the past", "", true)
+plotInThePast = input(false, "Plot in the past")
+pHi = ta.pivothigh(5, 5)
+if not na(pHi)
+    label.new(bar_index[plotInThePast ? 5 : 0], na, str.tostring(pHi, format.mintick) + "\n🠇", yloc = yloc.abovebar, style = label.style_none, textcolor = color.black, size = size.normal)
+```
 
-`//@version=6
-indicator("Plotting in the past", "", true)
-plotInThePast = input(false, "Plot in the past")
-pHi = ta.pivothigh(5, 5)
-if not na(pHi)
-    label.new(bar_index[plotInThePast ? 5 : 0], na, str.tostring(pHi, format.mintick) + "\n🠇", yloc = yloc.abovebar, style = label.style_none, textcolor = color.black, size = size.normal)
-`
+## [Dataset variations](../1. Concepts/concepts_repainting.md#dataset-variations)
 
-## [Dataset variations](https://www.tradingview.com/pine-script-docs/concepts/repainting/\#dataset-variations)
-
-### [Starting points](https://www.tradingview.com/pine-script-docs/concepts/repainting/\#starting-points)
+### [Starting points](../1. Concepts/concepts_repainting.md#starting-points)
 
 Scripts begin executing on the chart’s first historical bar, and then
 execute on each bar sequentially, as is explained in this manual’s page
 on Pine Script’s
-[execution model](https://www.tradingview.com/pine-script-docs/language/execution-model/). If
+[execution model](../3. Language/language_execution-model.md). If
 the first bar changes, then the script will often not calculate the same
 way it did when the dataset began at a different point in time.
 
@@ -594,13 +574,13 @@ As time goes by, these factors cause your chart’s history to start at
 different points in time. This often has an impact on your scripts
 calculations, because changes in calculation results in early bars can
 ripple through all the other bars in the dataset. Using functions like
-[ta.valuewhen()](https://www.tradingview.com/pine-script-reference/v6/#fun_ta%7Bdot%7Dvaluewhen),
-[ta.barssince()](https://www.tradingview.com/pine-script-reference/v6/#fun_ta%7Bdot%7Dbarssince)
+[ta.valuewhen()](../../reference manual/functions/ta.valuewhen.md),
+[ta.barssince()](../../reference manual/functions/ta.barssince.md)
 or
-[ta.ema()](https://www.tradingview.com/pine-script-reference/v6/#fun_ta%7Bdot%7Dema),
+[ta.ema()](../../reference manual/functions/ta.ema.md),
 for example, will yield results that vary with early history.
 
-### [Revision of historical data](https://www.tradingview.com/pine-script-docs/concepts/repainting/\#revision-of-historical-data)
+### [Revision of historical data](../1. Concepts/concepts_repainting.md#revision-of-historical-data)
 
 Historical and realtime bars are built using two different data feeds
 supplied by exchanges/brokers: historical data, and realtime data. When
@@ -614,6 +594,6 @@ small price revisions, if any have been made.
 Historical data may also be revised for other reasons, e.g., for stock
 splits.
 
-[Previous\\
-**Other timeframes and data**](https://www.tradingview.com/pine-script-docs/concepts/other-timeframes-and-data) [Next\\
-**Sessions**](https://www.tradingview.com/pine-script-docs/concepts/sessions)
+[Previous 
+**Other timeframes and data**](../1. Concepts/concepts_other-timeframes-and-data.md) [Next 
+**Sessions**](../1. Concepts/concepts_sessions.md)

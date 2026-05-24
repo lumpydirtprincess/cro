@@ -1,8 +1,8 @@
-![](https://www.tradingview.com/pine-script-docs/concepts/bar-states/)
+![](../1. Concepts/concepts_bar-states.md)
 
-# [Bar states](https://www.tradingview.com/pine-script-docs/concepts/bar-states/\#bar-states)
+# [Bar states](../1. Concepts/concepts_bar-states.md#bar-states)
 
-## [Introduction](https://www.tradingview.com/pine-script-docs/concepts/bar-states/\#introduction)
+## [Introduction](../1. Concepts/concepts_bar-states.md#introduction)
 
 A set of built-in variables in the `barstate` namespace allow your
 script to detect different properties of the bar on which the script is
@@ -13,9 +13,9 @@ code to specific bars.
 
 Some built-ins return information on the trading session the current bar
 belongs to. They are explained in the
-[Session states](https://www.tradingview.com/pine-script-docs/concepts/sessions/#session-variables-reference) section.
+[Session states](../1. Concepts/concepts_sessions.md#session-variables-reference) section.
 
-## [Bar state built-in variables](https://www.tradingview.com/pine-script-docs/concepts/bar-states/\#bar-state-built-in-variables)
+## [Bar state built-in variables](../1. Concepts/concepts_bar-states.md#bar-state-built-in-variables)
 
 Note that while indicators and libraries run on all price or volume
 updates in real time, strategies not using `calc_on_every_tick` will
@@ -24,41 +24,37 @@ affect the detection of bar states in that type of script. On open
 markets, for example, this code will not display a background until the
 realtime closes because that is when the strategy runs:
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
-
-`//@version=6
+```pine
+//@version=6
 strategy("S")
-bgcolor(barstate.islast ? color.silver : na)
-`
+bgcolor(barstate.islast ? color.silver : na)
+```
 
-### [​`barstate.isfirst`​](https://www.tradingview.com/pine-script-docs/concepts/bar-states/\#barstateisfirst)
+### [​`barstate.isfirst`​](../1. Concepts/concepts_bar-states.md#barstateisfirst)
 
-[barstate.isfirst](https://www.tradingview.com/pine-script-reference/v6/#var_barstate%7Bdot%7Disfirst)
+[barstate.isfirst](../../reference manual/variables/barstate.isfirst.md)
 is only `true` on the dataset’s first bar, i.e., when
-[bar\_index](https://www.tradingview.com/pine-script-reference/v6/#var_bar_index)
+[bar\_index](../../reference manual/variables/bar_index.md)
 is zero.
 
 It can be useful to initialize variables on the first bar only, e.g.:
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
+```pine
+// Declare array and set its values on the first bar only.
+FILL_COLOR = color.green
+var fillColors = array.new<color>(0)
+if barstate.isfirst
+    // Initialize the array elements with progressively lighter shades of the fill color.
+    array.push(fillColors, color.new(FILL_COLOR, 70))
+    array.push(fillColors, color.new(FILL_COLOR, 75))
+    array.push(fillColors, color.new(FILL_COLOR, 80))
+    array.push(fillColors, color.new(FILL_COLOR, 85))
+    array.push(fillColors, color.new(FILL_COLOR, 90))
+```
 
-`// Declare array and set its values on the first bar only.
-FILL_COLOR = color.green
-var fillColors = array.new<color>(0)
-if barstate.isfirst
-    // Initialize the array elements with progressively lighter shades of the fill color.
-    array.push(fillColors, color.new(FILL_COLOR, 70))
-    array.push(fillColors, color.new(FILL_COLOR, 75))
-    array.push(fillColors, color.new(FILL_COLOR, 80))
-    array.push(fillColors, color.new(FILL_COLOR, 85))
-    array.push(fillColors, color.new(FILL_COLOR, 90))
-`
+### [​`barstate.islast`​](../1. Concepts/concepts_bar-states.md#barstateislast)
 
-### [​`barstate.islast`​](https://www.tradingview.com/pine-script-docs/concepts/bar-states/\#barstateislast)
-
-[barstate.islast](https://www.tradingview.com/pine-script-reference/v6/#var_barstate%7Bdot%7Dislast)
+[barstate.islast](../../reference manual/variables/barstate.islast.md)
 is `true` if the current bar is the last one on the chart, whether that
 bar is a realtime bar or not.
 
@@ -68,44 +64,42 @@ we use it to determine when to update a label which we want to appear
 only on the last bar. We create the label only once and then update its
 properties using `label.set_*()` functions because it is more efficient:
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
+```pine
+//@version=6
+indicator("", "", true)
+// Create label on the first bar only.
+var label hiLabel = label.new(na, na, "")
+// Update the label's position and text on the last bar,
+// including on all realtime bar updates.
+if barstate.islast
+    label.set_xy(hiLabel, bar_index, high)
+    label.set_text(hiLabel, str.tostring(high, format.mintick))
+```
 
-`//@version=6
-indicator("", "", true)
-// Create label on the first bar only.
-var label hiLabel = label.new(na, na, "")
-// Update the label's position and text on the last bar,
-// including on all realtime bar updates.
-if barstate.islast
-    label.set_xy(hiLabel, bar_index, high)
-    label.set_text(hiLabel, str.tostring(high, format.mintick))
-`
+### [​`barstate.ishistory`​](../1. Concepts/concepts_bar-states.md#barstateishistory)
 
-### [​`barstate.ishistory`​](https://www.tradingview.com/pine-script-docs/concepts/bar-states/\#barstateishistory)
-
-[barstate.ishistory](https://www.tradingview.com/pine-script-reference/v6/#var_barstate%7Bdot%7Dishistory)
+[barstate.ishistory](../../reference manual/variables/barstate.ishistory.md)
 is `true` on all historical bars. It can never be `true` on a bar when
-[barstate.isrealtime](https://www.tradingview.com/pine-script-reference/v6/#var_barstate%7Bdot%7Disrealtime)
+[barstate.isrealtime](../../reference manual/variables/barstate.isrealtime.md)
 is also `true`, and it does not become `true` on a realtime bar’s
 closing update, when
-[barstate.isconfirmed](https://www.tradingview.com/pine-script-reference/v6/#var_barstate%7Bdot%7Disconfirmed)
+[barstate.isconfirmed](../../reference manual/variables/barstate.isconfirmed.md)
 becomes `true`. On closed markets, it can be `true` on the same bar
 where
-[barstate.islast](https://www.tradingview.com/pine-script-reference/v6/#var_barstate%7Bdot%7Dislast)
+[barstate.islast](../../reference manual/variables/barstate.islast.md)
 is also `true`.
 
-### [​`barstate.isrealtime`​](https://www.tradingview.com/pine-script-docs/concepts/bar-states/\#barstateisrealtime)
+### [​`barstate.isrealtime`​](../1. Concepts/concepts_bar-states.md#barstateisrealtime)
 
-[barstate.isrealtime](https://www.tradingview.com/pine-script-reference/v6/#var_barstate%7Bdot%7Disrealtime)
+[barstate.isrealtime](../../reference manual/variables/barstate.isrealtime.md)
 is `true` if the current data update is a real-time bar update, `false`
 otherwise (thus it is historical). Note that
-[barstate.islast](https://www.tradingview.com/pine-script-reference/v6/#var_barstate%7Bdot%7Dislast)
+[barstate.islast](../../reference manual/variables/barstate.islast.md)
 is also `true` on all realtime bars.
 
-### [​`barstate.isnew`​](https://www.tradingview.com/pine-script-docs/concepts/bar-states/\#barstateisnew)
+### [​`barstate.isnew`​](../1. Concepts/concepts_bar-states.md#barstateisnew)
 
-[barstate.isnew](https://www.tradingview.com/pine-script-reference/v6/#var_barstate%7Bdot%7Disnew)
+[barstate.isnew](../../reference manual/variables/barstate.isnew.md)
 is `true` on all historical bars and on the realtime bar’s first
 (opening) update.
 
@@ -114,31 +108,29 @@ runtime executes your script on each bar sequentially, from the chart’s
 first bar in time, to the last. Each historical bar is thus _discovered_
 by your script as it executes, bar to bar.
 
-[barstate.isnew](https://www.tradingview.com/pine-script-reference/v6/#var_barstate%7Bdot%7Disnew)
+[barstate.isnew](../../reference manual/variables/barstate.isnew.md)
 can be useful to reset
-[varip](https://www.tradingview.com/pine-script-reference/v6/#kw_varip)
+[varip](../../reference manual/keywords/varip.md)
 variables when a new realtime bar comes in. The following code will
 reset `updateNo` to 1 on all historical bars and at the beginning of
 each realtime bar. It calculates the number of realtime updates during
 each realtime bar:
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
-
-`//@version=6
+```pine
+//@version=6
 indicator("")
-updateNo() =>
-    varip int updateNo = na
-    if barstate.isnew
-        updateNo := 1
-    else
-        updateNo += 1
+updateNo() =>
+    varip int updateNo = na
+    if barstate.isnew
+        updateNo := 1
+    else
+        updateNo += 1
 plot(updateNo())
-`
+```
 
-### [​`barstate.isconfirmed`​](https://www.tradingview.com/pine-script-docs/concepts/bar-states/\#barstateisconfirmed)
+### [​`barstate.isconfirmed`​](../1. Concepts/concepts_bar-states.md#barstateisconfirmed)
 
-[barstate.isconfirmed](https://www.tradingview.com/pine-script-reference/v6/#var_barstate%7Bdot%7Disconfirmed)
+[barstate.isconfirmed](../../reference manual/variables/barstate.isconfirmed.md)
 is `true` on all historical bars and on the last (closing) update of a
 realtime bar.
 
@@ -146,26 +138,24 @@ It can be useful to avoid repainting by requiring the realtime bar to be
 closed before a condition can become `true`. We use it here to hold
 plotting of our RSI until the realtime bar closes and becomes an elapsed
 realtime bar. It will plot on historical bars because
-[barstate.isconfirmed](https://www.tradingview.com/pine-script-reference/v6/#var_barstate%7Bdot%7Disconfirmed)
+[barstate.isconfirmed](../../reference manual/variables/barstate.isconfirmed.md)
 is always `true` on them:
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
-
-`//@version=6
+```pine
+//@version=6
 indicator("")
-myRSI = ta.rsi(close, 20)
-plot(barstate.isconfirmed ? myRSI : na)
-`
+myRSI = ta.rsi(close, 20)
+plot(barstate.isconfirmed ? myRSI : na)
+```
 
-[barstate.isconfirmed](https://www.tradingview.com/pine-script-reference/v6/#var_barstate%7Bdot%7Disconfirmed)
+[barstate.isconfirmed](../../reference manual/variables/barstate.isconfirmed.md)
 will not work when used in a
-[request.security()](https://www.tradingview.com/pine-script-reference/v6/#fun_request%7Bdot%7Dsecurity)
+[request.security()](../../reference manual/functions/request.security.md)
 call.
 
-### [​`barstate.islastconfirmedhistory`​](https://www.tradingview.com/pine-script-docs/concepts/bar-states/\#barstateislastconfirmedhistory)
+### [​`barstate.islastconfirmedhistory`​](../1. Concepts/concepts_bar-states.md#barstateislastconfirmedhistory)
 
-[barstate.islastconfirmedhistory](https://www.tradingview.com/pine-script-reference/v6/#var_barstate%7Bdot%7Dislastconfirmedhistory)
+[barstate.islastconfirmedhistory](../../reference manual/variables/barstate.islastconfirmedhistory.md)
 is `true` if the script is executing on the dataset’s last bar when the
 market is closed, or on the bar immediately preceding the realtime bar
 if the market is open.
@@ -175,36 +165,34 @@ It can be used to detect the first realtime bar with
 calculations until the last historical bar, which would otherwise be
 undetectable on open markets.
 
-## [Example](https://www.tradingview.com/pine-script-docs/concepts/bar-states/\#example)
+## [Example](../1. Concepts/concepts_bar-states.md#example)
 
 Here is an example of a script using `barstate.*` variables:
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
+```pine
+//@version=6
+indicator("Bar States", overlay = true, max_labels_count = 500)
 
-`//@version=6
-indicator("Bar States", overlay = true, max_labels_count = 500)
+stateText() =>
+    string txt = ""
+    txt += barstate.isfirst     ? "isfirst\n"     : ""
+    txt += barstate.islast      ? "islast\n"      : ""
+    txt += barstate.ishistory   ? "ishistory\n"   : ""
+    txt += barstate.isrealtime  ? "isrealtime\n"  : ""
+    txt += barstate.isnew       ? "isnew\n"       : ""
+    txt += barstate.isconfirmed ? "isconfirmed\n" : ""
+    txt += barstate.islastconfirmedhistory ? "islastconfirmedhistory\n" : ""
 
-stateText() =>
-    string txt = ""
-    txt += barstate.isfirst     ? "isfirst\n"     : ""
-    txt += barstate.islast      ? "islast\n"      : ""
-    txt += barstate.ishistory   ? "ishistory\n"   : ""
-    txt += barstate.isrealtime  ? "isrealtime\n"  : ""
-    txt += barstate.isnew       ? "isnew\n"       : ""
-    txt += barstate.isconfirmed ? "isconfirmed\n" : ""
-    txt += barstate.islastconfirmedhistory ? "islastconfirmedhistory\n" : ""
+labelColor = switch
+    barstate.isfirst                => color.fuchsia
+    barstate.islastconfirmedhistory => color.gray
+    barstate.ishistory              => color.silver
+    barstate.isconfirmed            => color.orange
+    barstate.isnew                  => color.red
+    => color.yellow
 
-labelColor = switch
-    barstate.isfirst                => color.fuchsia
-    barstate.islastconfirmedhistory => color.gray
-    barstate.ishistory              => color.silver
-    barstate.isconfirmed            => color.orange
-    barstate.isnew                  => color.red
-    => color.yellow
-
-label.new(bar_index, na, stateText(), yloc = yloc.abovebar, color = labelColor)
-`
+label.new(bar_index, na, stateText(), yloc = yloc.abovebar, color = labelColor)
+```
 
 Note that:
 
@@ -225,18 +213,18 @@ history bar is identified in #1, and how the last bar is identified as
 the last one, but is still considered a historical bar because no
 realtime updates have been received.
 
-![image](https://www.tradingview.com/pine-script-docs/_astro/BarStates-Example-01.C2adOFU8_ZCLAwc.webp)
+![image](../images/BarStates-Example-01.C2adOFU8_ZCLAwc.webp)
 
 Let’s look at what happens when realtime updates start coming in:
 
-![image](https://www.tradingview.com/pine-script-docs/_astro/BarStates-Example-02.B_WDB0Io_n6xOY.webp)
+![image](../images/BarStates-Example-02.B_WDB0Io_n6xOY.webp)
 
 Note that:
 
 - The realtime bar is red because it is its first execution, because
 `barstate.isnew` is `true` and `barstate.ishistory` is no longer
 `true`, so our
-[switch](https://www.tradingview.com/pine-script-reference/v6/#kw_switch)
+[switch](../../reference manual/keywords/switch.md)
 structure determing our color uses the `barstate.isnew => color.red`
 branch. This will usually not last long because on the next update
 `barstate.isnew` will no longer be `true` so the label’s color will
@@ -244,7 +232,7 @@ turn yellow.
 - The label of elapsed realtime bars is orange because those bars were
 not historical bars when they closed. Accordingly, the
 `barstate.ishistory => color.silver` branch in the
-[switch](https://www.tradingview.com/pine-script-reference/v6/#kw_switch)
+[switch](../../reference manual/keywords/switch.md)
 structure was not executed, but the next one,
 `barstate.isconfirmed => color.orange` was.
 
@@ -252,8 +240,8 @@ This last example shows how the realtime bar’s label will turn yellow
 after the first execution on the bar. This is the way the label will
 usually appear on realtime bars:
 
-![image](https://www.tradingview.com/pine-script-docs/_astro/BarStates-Example-03.DTQntSqN_t5GBf.webp)
+![image](../images/BarStates-Example-03.DTQntSqN_t5GBf.webp)
 
-[Previous\\
-**Alerts**](https://www.tradingview.com/pine-script-docs/concepts/alerts) [Next\\
-**Chart information**](https://www.tradingview.com/pine-script-docs/concepts/chart-information)
+[Previous 
+**Alerts**](../1. Concepts/concepts_alerts.md) [Next 
+**Chart information**](../1. Concepts/concepts_chart-information.md)

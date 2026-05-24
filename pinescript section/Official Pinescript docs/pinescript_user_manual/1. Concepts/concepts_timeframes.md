@@ -1,8 +1,8 @@
-![](https://www.tradingview.com/pine-script-docs/concepts/timeframes/)
+![](../1. Concepts/concepts_timeframes.md)
 
-# [Timeframes](https://www.tradingview.com/pine-script-docs/concepts/timeframes/\#timeframes)
+# [Timeframes](../1. Concepts/concepts_timeframes.md#timeframes)
 
-## [Introduction](https://www.tradingview.com/pine-script-docs/concepts/timeframes/\#introduction)
+## [Introduction](../1. Concepts/concepts_timeframes.md#introduction)
 
 The _timeframe_ of a chart is sometimes also referred to as its
 _interval_ or _resolution_. It is the unit of time represented by one
@@ -17,40 +17,40 @@ Script®, and how to use them.
 **Timeframe strings** come into play in different contexts:
 
 - They must be used in
-[request.security()](https://www.tradingview.com/pine-script-reference/v6/#fun_request.security)
+[request.security()](../../reference manual/functions/request.security.md)
 when requesting data from another symbol and/or timeframe. See the
 page on
-[Other timeframes and data](https://www.tradingview.com/pine-script-docs/concepts/other-timeframes-and-data/) to explore the use of
-[request.security()](https://www.tradingview.com/pine-script-reference/v6/#fun_request.security).
+[Other timeframes and data](../1. Concepts/concepts_other-timeframes-and-data.md) to explore the use of
+[request.security()](../../reference manual/functions/request.security.md).
 - They can be used as an argument to
-[time()](https://www.tradingview.com/pine-script-reference/v6/#fun_time)
+[time()](../../reference manual/functions/time.md)
 and
-[time\_close()](https://www.tradingview.com/pine-script-reference/v6/#fun_time_close)
+[time\_close()](../../reference manual/functions/time_close.md)
 functions, to return the time of a higher timeframe bar. This, in
 turn, can be used to detect changes in higher timeframes from the
 chart’s timeframe without using
-[request.security()](https://www.tradingview.com/pine-script-reference/v6/#fun_request.security).
+[request.security()](../../reference manual/functions/request.security.md).
 See the
-[Testing for changes in higher timeframes](https://www.tradingview.com/pine-script-docs/concepts/time/#testing-for-changes-in-higher-timeframes) section to see how to do this.
+[Testing for changes in higher timeframes](../1. Concepts/concepts_time.md#testing-for-changes-in-higher-timeframes) section to see how to do this.
 - The
-[input.timeframe()](https://www.tradingview.com/pine-script-reference/v6/#fun_input.timeframe)
+[input.timeframe()](../../reference manual/functions/input.timeframe.md)
 function provides a way to allow script users to define a timeframe
 through a script’s “Inputs” tab (see the
-[Timeframe input](https://www.tradingview.com/pine-script-docs/concepts/inputs/#timeframe-input) section for more information).
+[Timeframe input](../1. Concepts/concepts_inputs.md#timeframe-input) section for more information).
 - The
-[indicator()](https://www.tradingview.com/pine-script-reference/v6/#fun_indicator)
+[indicator()](../../reference manual/functions/indicator.md)
 declaration statement has an optional `timeframe` parameter that can
 be used to provide multi-timeframe capabilities to simple scripts
 without using
-[request.security()](https://www.tradingview.com/pine-script-reference/v6/#fun_request.security).
+[request.security()](../../reference manual/functions/request.security.md).
 - Many built-in variables provide information on the timeframe used by
 the chart the script is running on. See the
-[Chart timeframe](https://www.tradingview.com/pine-script-docs/concepts/chart-information/#chart-timeframe) section for more information on them, including
-[timeframe.period](https://www.tradingview.com/pine-script-reference/v6/#var_timeframe.period)
+[Chart timeframe](../1. Concepts/concepts_chart-information.md#chart-timeframe) section for more information on them, including
+[timeframe.period](../../reference manual/variables/timeframe.period.md)
 which returns a string in Pine Script’s timeframe specification
 format.
 
-## [Timeframe string specifications](https://www.tradingview.com/pine-script-docs/concepts/timeframes/\#timeframe-string-specifications)
+## [Timeframe string specifications](../1. Concepts/concepts_timeframes.md#timeframe-string-specifications)
 
 Timeframe strings follow these rules:
 
@@ -78,7 +78,7 @@ for minutes).
   - For weeks, 1 to 52.
   - For months, 1 to 12.
 
-## [Comparing timeframes](https://www.tradingview.com/pine-script-docs/concepts/timeframes/\#comparing-timeframes)
+## [Comparing timeframes](../1. Concepts/concepts_timeframes.md#comparing-timeframes)
 
 It can be useful to compare different timeframe strings to determine,
 for example, if the timeframe used on the chart is lower than the higher
@@ -87,47 +87,45 @@ timeframes used in the script.
 Converting timeframe strings to a representation in fractional minutes
 provides a way to compare them using a universal unit. This script uses
 the
-[timeframe.in\_seconds()](https://www.tradingview.com/pine-script-reference/v6/#fun_timeframe.in_seconds)
+[timeframe.in\_seconds()](../../reference manual/functions/timeframe.in_seconds.md)
 function to convert a timeframe into float seconds and then converts the
 result into minutes:
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
+```pine
+//@version=6
+indicator("Timeframe in minutes example", "", true)
+string tfInput = input.timeframe(defval = "", title = "Input TF")
 
-`//@version=6
-indicator("Timeframe in minutes example", "", true)
-string tfInput = input.timeframe(defval = "", title = "Input TF")
+float chartTFInMinutes = timeframe.in_seconds() / 60
+float inputTFInMinutes = timeframe.in_seconds(tfInput) / 60
 
-float chartTFInMinutes = timeframe.in_seconds() / 60
-float inputTFInMinutes = timeframe.in_seconds(tfInput) / 60
+var table t = table.new(position.top_right, 1, 1)
+string txt = "Chart TF: "    + str.tostring(chartTFInMinutes, "#.##### minutes") +
+"\nInput TF: " + str.tostring(inputTFInMinutes, "#.##### minutes")
+if barstate.isfirst
+    table.cell(t, 0, 0, txt, bgcolor = color.yellow)
+else if barstate.islast
+    table.cell_set_text(t, 0, 0, txt)
 
-var table t = table.new(position.top_right, 1, 1)
-string txt = "Chart TF: "    + str.tostring(chartTFInMinutes, "#.##### minutes") +
-"\nInput TF: " + str.tostring(inputTFInMinutes, "#.##### minutes")
-if barstate.isfirst
-    table.cell(t, 0, 0, txt, bgcolor = color.yellow)
-else if barstate.islast
-    table.cell_set_text(t, 0, 0, txt)
-
-if chartTFInMinutes > inputTFInMinutes
-    runtime.error("The chart's timeframe must not be higher than the input's timeframe.")
-`
+if chartTFInMinutes > inputTFInMinutes
+    runtime.error("The chart's timeframe must not be higher than the input's timeframe.")
+```
 
 Note that:
 
-- We use the built-in [timeframe.in\_seconds()](https://www.tradingview.com/pine-script-reference/v6/#fun_timeframe.in_seconds) function to convert the chart timeframe and the timeframe selected by the user into seconds, then divide by 60 to convert into minutes.
+- We use the built-in [timeframe.in\_seconds()](../../reference manual/functions/timeframe.in_seconds.md) function to convert the chart timeframe and the timeframe selected by the user into seconds, then divide by 60 to convert into minutes.
 - We use two calls to the
-[timeframe.in\_seconds()](https://www.tradingview.com/pine-script-reference/v6/#fun_timeframe.in_seconds)
+[timeframe.in\_seconds()](../../reference manual/functions/timeframe.in_seconds.md)
 function in the initialization of the `chartTFInMinutes` and
 `inputTFInMinutes` variables. In the first instance, we do not
 supply an argument for its `timeframe` parameter, so the function
 returns the chart’s timeframe in seconds. In the second call, we
 supply the timeframe selected in the
-[timeframe input](https://www.tradingview.com/pine-script-docs/concepts/inputs/#timeframe-input).
+[timeframe input](../1. Concepts/concepts_inputs.md#timeframe-input).
 - Next, we validate the timeframes to ensure that the input timeframe
 is equal to or higher than the chart’s timeframe. If it is not, the script
 generates a custom runtime error.
 - We finally print the two timeframe values converted to minutes.
 
-[Previous\\
-**Time**](https://www.tradingview.com/pine-script-docs/concepts/time)
+[Previous 
+**Time**](../1. Concepts/concepts_time.md)

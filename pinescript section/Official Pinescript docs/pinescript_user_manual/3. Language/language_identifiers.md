@@ -1,6 +1,6 @@
-![](https://www.tradingview.com/pine-script-docs/language/identifiers/)
+![](../3. Language/language_identifiers.md)
 
-# [Identifiers](https://www.tradingview.com/pine-script-docs/language/identifiers/\#identifiers)
+# [Identifiers](../3. Language/language_identifiers.md#identifiers)
 
 Identifiers are names used for user-defined variables and functions:
 
@@ -11,32 +11,28 @@ letter, or an underscore (`_`).
 
 Here are some examples:
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
-
-`myVar
+```pine
+myVar
 _myVar
 my123Var
 functionName
 MAX_LEN
 max_len
 maxLen
-3barsDown  // NOT VALID!
-`
+3barsDown  // NOT VALID!
+```
 
-The Pine Script® [Style Guide](https://www.tradingview.com/pine-script-docs/writing/style-guide/) recommends using uppercase SNAKE\_CASE for constants, and
+The Pine Script® [Style Guide](../4. Writing_Scripts/writing_style-guide.md) recommends using uppercase SNAKE\_CASE for constants, and
 camelCase for other identifiers:
 
-[Pine Script®](https://tradingview.com/pine-script-docs)
-Copied
+```pine
+GREEN_COLOR = #4CAF50
+MAX_LOOKBACK = 100
+int fastLength = 7
+// Returns 1 if the argument is `true`, 0 if it is `false` or `na`.
+zeroOne(boolValue) => boolValue ? 1 : 0
+```
 
-``GREEN_COLOR = #4CAF50
-MAX_LOOKBACK = 100
-int fastLength = 7
-// Returns 1 if the argument is `true`, 0 if it is `false` or `na`.
-zeroOne(boolValue) => boolValue ? 1 : 0
-``
-
-[Previous\\
-**Script structure**](https://www.tradingview.com/pine-script-docs/language/script-structure) [Next\\
-**Declaration statements**](https://www.tradingview.com/pine-script-docs/language/declaration-statements)
+[Previous 
+**Script structure**](../3. Language/language_script-structure.md) [Next 
+**Declaration statements**](../3. Language/language_declaration-statements.md)

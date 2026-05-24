@@ -3,7 +3,7 @@
 // Combines FIR and IIR moving average functions from mihakralj's Pine Script library
 // The MIT License (MIT) - Original functions by mihakralj
 
-indicator("Moving Averages, Trends and Filters", "MA-TF", overlay=true)
+library('fir',true)
 
 //===========================================
 // FIR (Finite Impulse Response) Functions
@@ -684,6 +684,22 @@ wma(series float source, simple int period) =>
     head := (head + 1) % period
 
     weighted_sum / norm
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 //===========================================
@@ -1712,6 +1728,19 @@ zltema(series float source, simple int period=0, simple float alpha=0) =>
         3 * ema1 - 3 * ema2 + ema3
     else
         na
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 //===========================================
