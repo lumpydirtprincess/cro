@@ -119,7 +119,7 @@ UltimateSmoother(float src, int period) =>
         us := (1.0 - c1) * src + (2.0 * c1 - c2) * src[1] - (c1 + c3) * src[2] + c2 * nz(us[1]) + c3 * nz(us[2])
         us
     us
-
+THMA = thma(_source,_length) =>
 ma(_type, _source, _length) =>
     switch _type
         'SMA' => ta.sma(_source, _length)
@@ -128,6 +128,7 @@ ma(_type, _source, _length) =>
         'D_WMA' => ta.wma(ta.wma(_source, _length), _length) // Double Weighted Moving Average
         'D_EMA' => ta.ema(ta.ema(_source, _length), _length)
         'D_SMA' => ta.sma(ta.sma(_source, _length), _length)
+        'D_HMA' => ta.hma(ta.hma(_source, _length), _length)
         'VWMA' => enhanced_vwma(_source, _length)
         'D_VWMA' => enhanced_vwma(enhanced_vwma(_source, _length), _length)
         'ALMA' => enhanced_alma(_source, _length, 0.85, 6)
