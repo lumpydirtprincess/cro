@@ -383,7 +383,7 @@ hma(series float source, simple int period) =>
 //@param alpha Level smoothing factor
 //@param beta Velocity smoothing factor
 //@param gamma Acceleration smoothing factor
-//@param period When used, calculate alpha/beta/gamma from period
+//@param period Whnen used, calculate alpha/beta/gamma from period
 //@returns HWMA value from first bar with proper compensation
 
 //@function Calculates LSMA by fitting a linear regression line to price data

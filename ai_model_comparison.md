@@ -1,3 +1,7 @@
+> [!RAMBUNCTIOUS POO]
+> 
+
+
 # Detailed Comparative Analysis of Next-Generation AI Models
 
 This report provides a comprehensive, head-to-head comparison of five state-of-the-art AI models released between March and May 2026. These models represent diverse architectural strategies—from dense-like Mixture-of-Experts (MoE) and hybrid Transformer-Mamba layers to reasoning-focused "thinking" architectures.
