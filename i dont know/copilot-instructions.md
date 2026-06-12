@@ -87,3 +87,34 @@ When tuning parameters, change one at a time — small changes have large behavi
 - **Footprint data**: `request.footprint()` requires a paid TradingView plan; always implement a graceful fallback
 - **Color objects in loops**: `color.new()` inside loops is expensive; pre-compute theme color objects once
 - **External injection**: `inject()` adds evidence additively — never call it more than once per bar per signal source or you will double-count
+
+---
+
+## 🤖 PineScript v6 Specialist Agent
+
+When working on PineScript tasks, the **pinescript-v6-specialist** skill is available at:
+`C:\Users\primative\.agents\skills\pinescript-v6-specialist\`
+
+### How to Invoke
+Reference the skill's SKILL.md for the agent's operating rules:
+```
+Read: C:\Users\primative\.agents\skills\pinescript-v6-specialist\SKILL.md
+```
+
+### Agent Behavior
+- **Exclusive knowledge**: Only uses docs from your local folders (no prior training data)
+- **1,420 documents**: 66 user manual + 941 reference + 413 training scripts
+- **RAG-powered**: Uses TF-IDF search engine at `D:\Cro\pinescript-agent-skill\rag_engine.py`
+- **Always cites sources**: Every response references specific documentation files
+- **v6 only**: All code uses `//@version=6`
+
+### Documentation Locations
+- User Manual: `D:\Cro\pinescript section\Official Pinescript docs\pinescript_user_manual\`
+- Reference: `D:\Cro\pinescript section\Official Pinescript docs\reference manual\`
+- Training: `D:\Cro\pinescript section\scripts for training\quantitative\indicators\`
+
+### RAG Search Usage
+```bash
+cd D:\Cro\pinescript-agent-skill
+python rag_engine.py  # Builds index, then use search()
+```

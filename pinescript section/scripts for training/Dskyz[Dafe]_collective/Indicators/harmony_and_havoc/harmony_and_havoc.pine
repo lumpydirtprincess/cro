@@ -1,0 +1,374 @@
+//@version=6
+indicator("Dskyz (DAFE) Harmony in Havoc - Entropy of VoVix", shorttitle="HiH:EoV", overlay=false, max_bars_back=500, max_labels_count=500, max_lines_count=500, max_boxes_count=500)
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+//    ██╗  ██╗ █████╗ ██████╗ ███╗   ███╗ ██████╗ ███╗   ██╗██╗   ██╗
+//    ██║  ██║██╔══██╗██╔══██╗████╗ ████║██╔═══██╗████╗  ██║╚██╗ ██╔╝
+//    ███████║███████║██████╔╝██╔████╔██║██║   ██║██╔██╗ ██║ ╚████╔╝
+//    ██╔══██║██╔══██║██╔══██╗██║╚██╔╝██║██║   ██║██║╚██╗██║  ╚██╔╝
+//    ██║  ██║██║  ██║██║  ██║██║ ╚═╝ ██║╚██████╔╝██║ ╚████║   ██║
+//    ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝
+//
+//    ██╗███╗   ██╗    ██╗  ██╗ █████╗ ██╗   ██╗ ██████╗  ██████╗
+//    ██║████╗  ██║    ██║  ██║██╔══██╗██║   ██║██╔═══██╗██╔════╝
+//    ██║██╔██╗ ██║    ███████║███████║██║   ██║██║   ██║██║
+//    ██║██║╚██╗██║    ██╔══██║██╔══██║╚██╗ ██╔╝██║   ██║██║
+//    ██║██║ ╚████║    ██║  ██║██║  ██║ ╚████╔╝ ╚██████╔╝╚██████╗
+//    ╚═╝╚═╝  ╚═══╝    ╚═╝  ╚═╝╚═╝  ╚═╝  ╚═══╝   ╚═════╝  ╚═════╝
+//
+//    THE ENTROPY OF VOVIX
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+//  PHILOSOPHY:
+//  Markets oscillate between Order (trending, low entropy) and Chaos (ranging,
+//  high entropy). VoVix measures the Volatility-of-Volatility — how violently
+//  the market's energy is shifting. Entropy quantifies the disorder in that
+//  energy. Together they create a Chaos Gauge: when volatility spikes emerge
+//  from ordered markets, the probability of a major move is highest.
+//
+//  ARCHITECTURE:
+//  • VoVix Engine: Fast/Slow ATR differential normalized by volatility stdev
+//  • Shannon Entropy: Proper information-theoretic disorder measurement
+//  • Chaos Gauge: VoVix magnitude / Entropy ratio — the action signal
+//  • Regime Classifier: Order/Transition/Chaos state detection
+//  • Directional Bias: Delta-weighted VoVix for bull/bear lean
+//  • Visual Modes: Quantum Plasma, Spectral Flow, Neural Storm, Void Pulse
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+import DskyzInvestments/DafeVisLib/1 as viz
+// ═══════════════════════════════════════════════════════════════════════════════
+// INPUTS
+// ═══════════════════════════════════════════════════════════════════════════════
+grp_vovix = "⚡ VoVix Engine"
+fastLen         = input.int(5, "Fast ATR Length", minval=2, maxval=50, group=grp_vovix, tooltip="Fast ATR for VoVix. Lower = more sensitive to volatility spikes.")
+slowLen         = input.int(33, "Slow ATR Length", minval=10, maxval=200, group=grp_vovix, tooltip="Slow ATR baseline. Higher = more selective, filters noise.")
+stdevLen        = input.int(21, "ATR Stdev Window", minval=5, maxval=100, group=grp_vovix, tooltip="Normalization window. Controls how 'rare' a spike must be.")
+spikeThresh     = input.float(2.0, "Spike Threshold", step=0.1, minval=0.5, maxval=5.0, group=grp_vovix, tooltip="Minimum absolute VoVix to flag a directional spike. 2.0+ catches only significant events.")
+i_vovixSmooth   = input.int(3, "VoVix Smoothing", minval=1, maxval=10, group=grp_vovix, tooltip="EMA smoothing on VoVix to reduce noise.")
+grp_entropy = "🧮 Entropy Engine"
+entropyWin      = input.int(50, "Entropy Window", minval=10, maxval=200, group=grp_entropy, tooltip="Lookback for Shannon entropy calculation.")
+bins            = input.int(10, "Entropy Bins", minval=3, maxval=30, group=grp_entropy, tooltip="Number of histogram bins. More = finer detail.")
+grp_gauge = "🎯 Chaos Gauge"
+i_gaugeAction   = input.float(0.6, "Action Threshold", step=0.05, minval=0.3, maxval=0.95, group=grp_gauge, tooltip="Gauge level above which 'Take Action' fires. Lower = more signals.")
+i_gaugeReady    = input.float(0.6, "Ready Threshold", step=0.05, minval=0.2, maxval=0.8, group=grp_gauge, tooltip="Gauge level for 'Get Ready' state.")
+i_gaugeCooldown = input.int(10, "Signal Cooldown (Bars)", minval=1, maxval=100, group=grp_gauge, tooltip="Minimum bars between Take Action signals.")
+grp_visual = "🎨 Visual Mode"
+string VIS_QUANTUM  = "Quantum Plasma"
+string VIS_SPECTRAL = "Spectral Flow"
+string VIS_NEURAL   = "Neural Storm"
+string VIS_VOID     = "Void Pulse"
+string VIS_CLASSIC  = "Classic"
+i_visualMode    = input.string(VIS_QUANTUM, "Visual Theme", options=[VIS_QUANTUM, VIS_SPECTRAL, VIS_NEURAL, VIS_VOID, VIS_CLASSIC], group=grp_visual)
+i_glowEnable    = input.bool(true, "Enable Glow Effects", group=grp_visual)
+i_fillEnable    = input.bool(true, "Enable Zone Fills", group=grp_visual)
+i_bgZones       = input.bool(true, "Show Background Zones", group=grp_visual)
+i_showGauge     = input.bool(true, "Show Gauge Histogram", group=grp_visual)
+i_barColor      = input.bool(false, "Color Price Bars", group=grp_visual)
+grp_dash = "📋 Dashboard"
+i_dashEnable    = input.bool(true, "Show Dashboard", group=grp_dash)
+string DASH_FULL    = "Full"
+string DASH_COMPACT = "Compact"
+string DASH_MINI    = "Mini"
+i_dashSize      = input.string(DASH_FULL, "Dashboard Size", options=[DASH_FULL, DASH_COMPACT, DASH_MINI], group=grp_dash)
+i_dashPos       = input.string("Bottom Right", "Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=grp_dash)
+string DASH_OVERLAY = "Main Chart Overlay"
+string DASH_PANEL   = "Indicator Panel"
+i_dashMode      = input.string(DASH_OVERLAY, "Dashboard Location", options=[DASH_OVERLAY, DASH_PANEL], group=grp_dash, tooltip="Display dashboard on main chart or within indicator panel.")
+grp_alert = "🔔 Alerts"
+i_alertAction   = input.bool(true, "Alert on Take Action", group=grp_alert)
+i_alertSpike    = input.bool(true, "Alert on VoVix Spike", group=grp_alert)
+// ═══════════════════════════════════════════════════════════════════════════════
+// COLOR PALETTE
+// ═══════════════════════════════════════════════════════════════════════════════
+color C_CYAN      = #00FFFF
+color C_MAGENTA   = #FF00FF
+color C_GOLD      = #FFD700
+color C_PURPLE    = #9D00FF
+color C_GREEN     = #00FF88
+color C_RED       = #FF0055
+color C_ORANGE    = #FF6600
+color C_ELECTRIC  = #7DF9FF
+color C_PLASMA    = #FF1493
+color C_VOID      = #0D0D1A
+color C_PANEL     = #0A0A14
+color C_BORDER    = #1E1E32
+color C_NEON_BLUE = #00BFFF
+// ═══════════════════════════════════════════════════════════════════════════════
+// VOVIX CALCULATION 
+// ═══════════════════════════════════════════════════════════════════════════════
+float atr_fast = ta.atr(fastLen)
+float atr_slow = ta.atr(slowLen)
+float atr_vol  = ta.stdev(atr_fast, stdevLen)
+float vo_spike_raw = (atr_fast - atr_slow) / (atr_vol + 1e-10)
+float vo_spike = ta.ema(vo_spike_raw, i_vovixSmooth)
+float priceDir = close > close[1] ? 1.0 : close < close[1] ? -1.0 : 0.0
+float dirBias = ta.ema(priceDir, fastLen)
+// ═══════════════════════════════════════════════════════════════════════════════
+// SHANNON ENTROPY
+// ═══════════════════════════════════════════════════════════════════════════════
+var array<float> entropyArr = array.new_float()
+var float entropy = na
+if bar_index >= entropyWin
+    float vo_binned = math.round(vo_spike * bins)
+    if array.size(entropyArr) >= entropyWin
+        array.shift(entropyArr)
+    array.push(entropyArr, vo_binned)
+    int arrSize = array.size(entropyArr)
+    if arrSize >= 10
+        array<float> uniqueVals = array.new_float()
+        array<int> counts = array.new_int()
+        for i = 0 to arrSize - 1
+            float val = array.get(entropyArr, i)
+            bool found = false
+            int uSize = array.size(uniqueVals)
+            if uSize > 0
+                for j = 0 to uSize - 1
+                    if array.get(uniqueVals, j) == val
+                        array.set(counts, j, array.get(counts, j) + 1)
+                        found := true
+                        break
+            if not found
+                array.push(uniqueVals, val)
+                array.push(counts, 1)
+        float H = 0.0
+        float n = float(arrSize)
+        int cSize = array.size(counts)
+        if cSize > 0
+            for i = 0 to cSize - 1
+                float p = float(array.get(counts, i)) / n
+                if p > 0
+                    H -= p * (math.log(p) / math.log(2.0))
+        float maxH = math.log(float(math.min(arrSize, entropyWin))) / math.log(2.0)
+        entropy := maxH > 0 ? math.min(H / maxH, 1.0) : 0.5
+    else
+        entropy := na
+else
+    entropy := na
+// ═══════════════════════════════════════════════════════════════════════════════
+// CHAOS GAUGE
+// ═══════════════════════════════════════════════════════════════════════════════
+float orderFactor = not na(entropy) ? 1.0 - entropy : 0.5 
+float vovixAbs = math.abs(vo_spike)
+float vovixHi = ta.highest(vovixAbs, entropyWin)
+float vovixNorm = vovixHi > 0 ? math.min(vovixAbs / vovixHi, 1.0) : 0.0
+float gaugePct = math.min(vovixNorm * (0.5 + orderFactor * 0.5), 1.0)
+string regime = gaugePct > i_gaugeAction ? "CHAOS" : gaugePct > i_gaugeReady ? "TRANSITION" : "ORDER"
+int regimeId = gaugePct > i_gaugeAction ? 2 : gaugePct > i_gaugeReady ? 1 : 0
+var int lastActionBar = -9999
+bool cooldownClear = (bar_index - lastActionBar) >= i_gaugeCooldown
+bool takeAction = gaugePct > i_gaugeAction and cooldownClear
+bool getReady = gaugePct > i_gaugeReady and not takeAction
+bool divAbove = vo_spike > spikeThresh and gaugePct > i_gaugeReady
+bool divBelow = vo_spike < -spikeThresh and gaugePct > i_gaugeReady
+if takeAction
+    lastActionBar := bar_index
+// ═══════════════════════════════════════════════════════════════════════════════
+// THEME ENGINE
+// ═══════════════════════════════════════════════════════════════════════════════
+f_getThemeColors(string theme, float vovix, float ent, float gauge) =>
+    color vovixCol = C_PURPLE
+    color entCol = C_GOLD
+    color gaugeCol = C_CYAN
+    color glowCol = C_PURPLE
+    color bgBull = C_GREEN
+    color bgBear = C_RED
+    if theme == VIS_QUANTUM
+        vovixCol := color.from_gradient(math.abs(vovix), 0, 3, C_PURPLE, C_PLASMA)
+        entCol := color.from_gradient(nz(ent, 0.5), 0, 1, C_NEON_BLUE, C_GOLD)
+        gaugeCol := color.from_gradient(gauge, 0, 1, C_CYAN, C_MAGENTA)
+        glowCol := color.from_gradient(gauge, 0, 1, color.new(C_PURPLE, 70), color.new(C_PLASMA, 40))
+    else if theme == VIS_SPECTRAL
+        float absV = math.abs(vovix)
+        vovixCol := absV > 2 ? C_RED : absV > 1 ? C_ORANGE : absV > 0.5 ? C_GOLD : C_CYAN
+        entCol := color.from_gradient(nz(ent, 0.5), 0, 1, C_GREEN, C_RED)
+        gaugeCol := color.from_gradient(gauge, 0, 1, C_NEON_BLUE, C_RED)
+        glowCol := color.new(vovixCol, 60)
+    else if theme == VIS_NEURAL
+        vovixCol := vovix > 0 ? color.from_gradient(vovix, 0, 3, C_CYAN, C_GREEN) :
+             color.from_gradient(math.abs(vovix), 0, 3, C_MAGENTA, C_RED)
+        entCol := color.from_gradient(nz(ent, 0.5), 0, 1, C_PURPLE, C_ELECTRIC)
+        gaugeCol := color.from_gradient(gauge, 0, 1, color.gray, C_GOLD)
+        glowCol := color.new(vovixCol, 55)
+    else if theme == VIS_VOID
+        vovixCol := color.from_gradient(math.abs(vovix), 0, 3, color.new(C_PURPLE, 30), C_CYAN)
+        entCol := color.new(C_GOLD, int(80 - gauge * 60))
+        gaugeCol := gauge > 0.9 ? C_GOLD : gauge > 0.6 ? C_PURPLE : color.new(color.gray, 50)
+        glowCol := color.new(C_PURPLE, 80)
+    else
+        vovixCol := C_PURPLE
+        entCol := C_ORANGE
+        gaugeCol := gauge > 0.9 ? color.lime : gauge > 0.6 ? color.yellow : color.teal
+        glowCol := color.new(C_PURPLE, 70)
+    [vovixCol, entCol, gaugeCol, glowCol, bgBull, bgBear]
+[vovixColor, entropyColor, gaugeColor, glowColor, bgBullCol, bgBearCol] = f_getThemeColors(i_visualMode, vo_spike, entropy, gaugePct)
+// ═══════════════════════════════════════════════════════════════════════════════
+// REFERENCE LINES
+// ═══════════════════════════════════════════════════════════════════════════════
+h_zero = hline(0, "Zero Line", color=color.new(color.gray, 70), linestyle=hline.style_solid)
+h_spike_up = hline(spikeThresh, "Spike +", color=color.new(C_RED, 80), linestyle=hline.style_dotted)
+h_spike_dn = hline(-spikeThresh, "Spike -", color=color.new(C_GREEN, 80), linestyle=hline.style_dotted)
+fill(h_spike_up, h_spike_dn, color=color.new(C_PURPLE, 95), title="Neutral Zone")
+// ═══════════════════════════════════════════════════════════════════════════════
+// BACKGROUND ZONES
+// ═══════════════════════════════════════════════════════════════════════════════
+color bgColor = na
+if i_bgZones
+    if takeAction
+        bgColor := color.new(C_GOLD, 88)
+    else if divAbove
+        bgColor := color.new(C_RED, 93)
+    else if divBelow
+        bgColor := color.new(C_GREEN, 93)
+bgcolor(bgColor, title="Regime Background")
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAIN PLOTS — VOVIX & ENTROPY
+// ═══════════════════════════════════════════════════════════════════════════════
+plot(i_glowEnable ? vo_spike : na, "VoVix Glow 3", color=color.new(glowColor, 90), linewidth=8)
+plot(i_glowEnable ? vo_spike : na, "VoVix Glow 2", color=color.new(glowColor, 75), linewidth=5)
+plot(i_glowEnable ? vo_spike : na, "VoVix Glow 1", color=color.new(glowColor, 55), linewidth=3)
+float entPlot = not na(entropy) ? entropy : na
+plot(i_glowEnable and not na(entPlot) ? entPlot : na, "Entropy Glow", color=color.new(entropyColor, 75), linewidth=5)
+p_vovix = plot(vo_spike, "VoVix Spike", color=vovixColor, linewidth=2)
+p_entropy = plot(entPlot, "Entropy", color=entropyColor, linewidth=2)
+p_zero = plot(0.0, "Zero Ref", color=color.new(color.white, 100), display=display.none)
+color vovixFill = vo_spike > 0 ? color.new(bgBullCol, 85) : color.new(bgBearCol, 85)
+fill(p_vovix, p_zero, color=i_fillEnable ? vovixFill : na, title="VoVix Direction Fill")
+// ═══════════════════════════════════════════════════════════════════════════════
+// GAUGE HISTOGRAM
+// ═══════════════════════════════════════════════════════════════════════════════
+float gaugeHist = i_showGauge ? -gaugePct * 2 : na
+color gaugeHistCol = takeAction ? C_GOLD :
+     getReady ? color.new(C_PURPLE, 30) :
+     color.new(color.gray, 70)
+plot(gaugeHist, "Chaos Gauge", color=gaugeHistCol, style=plot.style_columns, histbase=0, linewidth=3)
+// ═══════════════════════════════════════════════════════════════════════════════
+// SIGNAL MARKERS
+// ═══════════════════════════════════════════════════════════════════════════════
+plotshape(takeAction, title="Take Action Marker", style=shape.diamond, location=location.top, color=C_GOLD, size=size.tiny)
+plotshape(divAbove and cooldownClear, title="Bullish Vol Spike", style=shape.triangleup, location=location.belowbar, color=C_GREEN, size=size.tiny, force_overlay=true)
+plotshape(divBelow and cooldownClear, title="Bearish Vol Spike", style=shape.triangledown, location=location.abovebar, color=C_RED, size=size.tiny, force_overlay=true)
+// ═══════════════════════════════════════════════════════════════════════════════
+// BAR COLORING
+// ═══════════════════════════════════════════════════════════════════════════════
+color barCol = na
+if i_barColor
+    if takeAction
+        barCol := C_GOLD
+    else if divAbove
+        barCol := C_RED
+    else if divBelow
+        barCol := C_GREEN
+    else
+        barCol := color.from_gradient(gaugePct, 0, 1, color.new(color.gray, 50), C_PURPLE)
+barcolor(barCol)
+// ═══════════════════════════════════════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════════════════════════════════════
+f_dashPos(string p) =>
+    switch p
+        "Top Right"    => position.top_right
+        "Top Left"     => position.top_left
+        "Bottom Right" => position.bottom_right
+        => position.bottom_left
+int barLength = 20
+int fullBars = math.round(gaugePct * barLength)
+int emptyBars = barLength - fullBars
+string gaugeStr = str.repeat("█", fullBars) + str.repeat("░", emptyBars)
+string statusText = takeAction ? "🚨 TAKE ACTION" : getReady ? "⚡ GET READY" : "○ WAITING"
+color statusCol = takeAction ? C_GOLD : getReady ? C_PURPLE : color.gray
+string dirText = dirBias > 0.3 ? "▲ BULL" : dirBias < -0.3 ? "▼ BEAR" : "■ NEUTRAL"
+color dirCol = dirBias > 0.3 ? C_GREEN : dirBias < -0.3 ? C_RED : color.gray
+string regimeText = regime == "CHAOS" ? "🔴 CHAOS" : regime == "TRANSITION" ? "🟡 TRANSITION" : "🟢 ORDER"
+color regimeCol = regime == "CHAOS" ? C_RED : regime == "TRANSITION" ? C_ORANGE : C_GREEN
+var table dashOverlay = table.new(f_dashPos(i_dashPos), 4, 12, bgcolor=color.new(C_VOID, 10), border_width=1, border_color=C_BORDER, frame_width=2, frame_color=C_PURPLE, force_overlay=true)
+var table dashPanel = table.new(f_dashPos(i_dashPos), 4, 12, bgcolor=color.new(C_VOID, 10), border_width=1, border_color=C_BORDER, frame_width=2, frame_color=C_PURPLE, force_overlay=false)
+table dash = i_dashMode == DASH_OVERLAY ? dashOverlay : dashPanel
+if barstate.islast and i_dashEnable
+    if i_dashMode == DASH_OVERLAY
+        table.clear(dashPanel, 0, 0, 3, 11)
+    else
+        table.clear(dashOverlay, 0, 0, 3, 11)
+    if i_dashSize == DASH_FULL
+        int r = 0
+        table.cell(dash, 0, r, "☯ HARMONY IN HAVOC", text_color=C_CYAN, bgcolor=color.new(C_PURPLE, 70), text_size=size.small, text_halign=text.align_center)
+        table.merge_cells(dash, 0, r, 3, r)
+        r += 1
+        table.cell(dash, 0, r, "─ VoVix Engine ─", text_color=C_PURPLE, bgcolor=color.new(#1A1A1A, 40), text_size=size.tiny, text_halign=text.align_center)
+        table.merge_cells(dash, 0, r, 3, r)
+        r += 1
+        table.cell(dash, 0, r, "VoVix", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 1, r, str.tostring(vo_spike, "#.##"), text_color=vovixColor, bgcolor=C_PANEL, text_size=size.normal)
+        table.cell(dash, 2, r, "Direction", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 3, r, dirText, text_color=dirCol, bgcolor=C_PANEL, text_size=size.tiny)
+        r += 1
+        table.cell(dash, 0, r, "Entropy", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 1, r, not na(entropy) ? str.tostring(entropy, "#.###") : "—", text_color=entropyColor, bgcolor=C_PANEL, text_size=size.normal)
+        table.cell(dash, 2, r, "Regime", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 3, r, regimeText, text_color=regimeCol, bgcolor=C_PANEL, text_size=size.tiny)
+        r += 1
+        table.cell(dash, 0, r, "─ Chaos Gauge ─", text_color=C_GOLD, bgcolor=color.new(#1A1A1A, 40), text_size=size.tiny, text_halign=text.align_center)
+        table.merge_cells(dash, 0, r, 3, r)
+        r += 1
+        table.cell(dash, 0, r, "Gauge", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 1, r, str.tostring(gaugePct * 100, "#.#") + "%", text_color=gaugeColor, bgcolor=C_PANEL, text_size=size.normal)
+        table.cell(dash, 2, r, "Status", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 3, r, statusText, text_color=statusCol, bgcolor=C_PANEL, text_size=size.tiny)
+        r += 1
+        table.cell(dash, 0, r, gaugeStr, text_color=gaugeColor, bgcolor=color.new(C_VOID, 0), text_size=size.tiny, text_halign=text.align_center)
+        table.merge_cells(dash, 0, r, 3, r)
+        r += 1
+        table.cell(dash, 0, r, "─ Context ─", text_color=C_CYAN, bgcolor=color.new(#1A1A1A, 40), text_size=size.tiny, text_halign=text.align_center)
+        table.merge_cells(dash, 0, r, 3, r)
+        r += 1
+        float atrRatio = atr_slow > 0 ? atr_fast / atr_slow : 1.0
+        string volState = atrRatio > 1.5 ? "🔴 EXPANDING" : atrRatio > 1.0 ? "🟡 RISING" : "🟢 CONTRACTING"
+        color volStateCol = atrRatio > 1.5 ? C_RED : atrRatio > 1.0 ? C_ORANGE : C_GREEN
+        table.cell(dash, 0, r, "ATR Fast", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 1, r, str.tostring(atr_fast, "#.##"), text_color=color.white, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 2, r, "Volatility", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 3, r, volState, text_color=volStateCol, bgcolor=C_PANEL, text_size=size.tiny)
+        r += 1
+        string spikeState = divAbove ? "▲ BULL SPIKE" : divBelow ? "▼ BEAR SPIKE" : "─ None"
+        color spikeCol = divAbove ? C_GREEN : divBelow ? C_RED : color.gray
+        table.cell(dash, 0, r, "Spike", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 1, r, spikeState, text_color=spikeCol, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 2, r, "Bias", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 3, r, str.tostring(dirBias, "#.##"), text_color=dirCol, bgcolor=C_PANEL, text_size=size.tiny)
+        r += 1
+        table.cell(dash, 0, r, "⚡ Dskyz (DAFE) Trading Systems", text_color=color.new(C_CYAN, 40), bgcolor=color.new(C_VOID, 0), text_size=size.tiny, text_halign=text.align_center)
+        table.merge_cells(dash, 0, r, 3, r)
+    else if i_dashSize == DASH_COMPACT
+        table.cell(dash, 0, 0, "☯ ENTROPY", text_color=C_CYAN, bgcolor=color.new(C_PURPLE, 70), text_size=size.tiny)
+        table.merge_cells(dash, 0, 0, 1, 0)
+        table.cell(dash, 0, 1, "VoVix", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 1, 1, str.tostring(vo_spike, "#.##"), text_color=vovixColor, bgcolor=C_PANEL, text_size=size.small)
+        table.cell(dash, 0, 2, "Entropy", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 1, 2, not na(entropy) ? str.tostring(entropy, "#.##") : "—", text_color=entropyColor, bgcolor=C_PANEL, text_size=size.small)
+        table.cell(dash, 0, 3, "Gauge", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 1, 3, str.tostring(gaugePct * 100, "#.#") + "%", text_color=gaugeColor, bgcolor=C_PANEL, text_size=size.small)
+        table.cell(dash, 0, 4, statusText, text_color=statusCol, bgcolor=color.new(C_VOID, 0), text_size=size.tiny)
+        table.merge_cells(dash, 0, 4, 1, 4)
+    else 
+        table.cell(dash, 0, 0, str.tostring(gaugePct * 100, "#") + "%", text_color=gaugeColor, bgcolor=color.new(C_VOID, 30), text_size=size.normal)
+        table.cell(dash, 0, 1, statusText, text_color=statusCol, bgcolor=color.new(C_VOID, 30), text_size=size.tiny)
+// ═══════════════════════════════════════════════════════════════════════════════
+// WATERMARK
+// ═══════════════════════════════════════════════════════════════════════════════
+var table watermark = table.new(position.bottom_right, 1, 1, bgcolor=color.new(C_VOID, 80), border_color=color.new(C_PURPLE, 50), border_width=1)
+if barstate.islast
+    table.cell(watermark, 0, 0, "⚡ Dskyz (DAFE) Trading Systems ⚡", text_color=color.new(C_PURPLE, 40), text_size=size.normal)
+// ═══════════════════════════════════════════════════════════════════════════════
+// 15. ALERTS
+// ═══════════════════════════════════════════════════════════════════════════════
+alertcondition(takeAction, title="Chaos Gauge: Take Action", message="Harmony in Havoc: TAKE ACTION - Chaos Gauge exceeded action threshold")
+alertcondition(divAbove, title="VoVix Bullish Spike", message="VoVix: Bullish Volatility Spike Detected")
+alertcondition(divBelow, title="VoVix Bearish Spike", message="VoVix: Bearish Volatility Spike Detected")
+alertcondition(getReady, title="Chaos Gauge: Get Ready", message="Harmony in Havoc: GET READY - Chaos Gauge entering transition zone")
+if takeAction
+    alert("☯ CHAOS GAUGE ACTION | " + syminfo.ticker +
+         " | VoVix: " + str.tostring(vo_spike, "#.##") +
+         " | Entropy: " + str.tostring(nz(entropy, 0), "#.##") +
+         " | Gauge: " + str.tostring(gaugePct * 100, "#.#") + "%" +
+         " | Dir: " + dirText,
+         alert.freq_once_per_bar_close)

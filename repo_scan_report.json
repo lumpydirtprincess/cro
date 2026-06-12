@@ -1,0 +1,812 @@
+[
+  {
+    "repo": "code-yeongyu/oh-my-openagent",
+    "description": "omo; the one and only agent harness for complex codebases; the pickaxe for complex software engineering",
+    "stars": 60724,
+    "language": "TypeScript",
+    "top_dirs": [
+      ".agents",
+      ".github",
+      ".omo",
+      ".opencode",
+      "assets",
+      "bin",
+      "docs",
+      "packages",
+      "script",
+      "signatures",
+      "src",
+      "test-support",
+      "tests"
+    ],
+    "keyword_hits": {
+      "plugins": [
+        "src/shared/load-opencode-plugins.test.ts",
+        "src/shared/load-opencode-plugins.ts"
+      ],
+      "superpowers": [
+        "docs/superpowers/plans/2026-03-17-model-settings-compatibility-resolver.md",
+        "docs/superpowers/plans/2026-04-27-background-task-retry-timeline.md",
+        "docs/superpowers/plans/2026-05-08-log-rotation-design.md",
+        "docs/superpowers/specs/2026-03-17-model-settings-compatibility-design.md",
+        "docs/superpowers/specs/2026-04-27-background-task-retry-timeline-design.md"
+      ],
+      "identity": [
+        "packages/omo-codex/plugin/components/telemetry/src/product-identity.ts",
+        "packages/omo-codex/src/telemetry/product-identity.test.ts",
+        "packages/omo-codex/src/telemetry/product-identity.ts",
+        "src/agents/agent-identity.test.ts",
+        "src/shared/plugin-identity.test.ts",
+        "src/shared/plugin-identity.ts"
+      ],
+      "skill": [
+        ".agents/skills/.npmignore",
+        ".agents/skills/get-unpublished-changes/SKILL.md",
+        ".agents/skills/github-triage/SKILL.md",
+        ".agents/skills/github-triage/scripts/gh_fetch.py",
+        ".agents/skills/hyperplan/SKILL.md",
+        ".agents/skills/omomomo/SKILL.md",
+        ".agents/skills/opencode-qa/SKILL.md",
+        ".agents/skills/opencode-qa/references/cli-commands.md",
+        ".agents/skills/opencode-qa/references/db-investigation.md",
+        ".agents/skills/opencode-qa/references/events-hooks.md",
+        ".agents/skills/opencode-qa/references/sdk.md",
+        ".agents/skills/opencode-qa/references/server-api.md",
+        ".agents/skills/opencode-qa/references/testing-harness.md",
+        ".agents/skills/opencode-qa/references/tui-tmux.md",
+        ".agents/skills/opencode-qa/scripts/db-session-by-id.sh",
+        ".agents/skills/opencode-qa/scripts/db-session-by-name.sh",
+        ".agents/skills/opencode-qa/scripts/db-session-by-text.sh",
+        ".agents/skills/opencode-qa/scripts/export-roundtrip.sh",
+        ".agents/skills/opencode-qa/scripts/lib/common.sh",
+        ".agents/skills/opencode-qa/scripts/server-smoke.sh"
+      ],
+      "agent": [
+        ".agents/AGENTS.md",
+        ".agents/background-tasks.json",
+        ".agents/command/.npmignore",
+        ".agents/command/get-unpublished-changes.md",
+        ".agents/command/omomomo.md",
+        ".agents/command/publish.md",
+        ".agents/command/remove-deadcode.md",
+        ".agents/command/security-research.md",
+        ".agents/skills/.npmignore",
+        ".agents/skills/get-unpublished-changes/SKILL.md",
+        ".agents/skills/github-triage/SKILL.md",
+        ".agents/skills/github-triage/scripts/gh_fetch.py",
+        ".agents/skills/hyperplan/SKILL.md",
+        ".agents/skills/omomomo/SKILL.md",
+        ".agents/skills/opencode-qa/SKILL.md",
+        ".agents/skills/opencode-qa/references/cli-commands.md",
+        ".agents/skills/opencode-qa/references/db-investigation.md",
+        ".agents/skills/opencode-qa/references/events-hooks.md",
+        ".agents/skills/opencode-qa/references/sdk.md",
+        ".agents/skills/opencode-qa/references/server-api.md"
+      ],
+      "config": [
+        ".github/ISSUE_TEMPLATE/config.yml",
+        "docs/reference/configuration.md",
+        "packages/agents-md-core/tsconfig.json",
+        "packages/ast-grep-core/tsconfig.json",
+        "packages/ast-grep-mcp/tsconfig.json",
+        "packages/boulder-state/tsconfig.json",
+        "packages/comment-checker-core/tsconfig.json",
+        "packages/git-bash-mcp/tsconfig.json",
+        "packages/hashline-core/tsconfig.json",
+        "packages/model-core/tsconfig.json",
+        "packages/omo-codex/plugin/components/comment-checker/tsconfig.build.json",
+        "packages/omo-codex/plugin/components/comment-checker/tsconfig.json",
+        "packages/omo-codex/plugin/components/comment-checker/vitest.config.ts",
+        "packages/omo-codex/plugin/components/git-bash/tsconfig.build.json",
+        "packages/omo-codex/plugin/components/git-bash/tsconfig.json",
+        "packages/omo-codex/plugin/components/lsp/tsconfig.build.json",
+        "packages/omo-codex/plugin/components/lsp/tsconfig.json",
+        "packages/omo-codex/plugin/components/lsp/vitest.config.ts",
+        "packages/omo-codex/plugin/components/rules/src/config.ts",
+        "packages/omo-codex/plugin/components/rules/tsconfig.build.json"
+      ]
+    },
+    "readme_snippet": "> [!NOTE]\n> **\ud83d\ude80 First Codex Release: omo is now available for Codex CLI**\n>\n> No more complex JSON configurations. Just run:\n> ```bash\n> npx lazycodex-ai install\n> ```\n> Your Codex will code clearly and complete tasks using built-in computer-use QA.\n> Learn more at [lazycodex.ai](https://lazycodex.ai).\n\n> [!NOTE]\n> **Multi-Harness Agent OS Refactor in Progress**\n>\n> We are restructuring the codebase to support multiple agent harnesses (OpenCode, Codex, Pi, and others). If you are interested in contributing, please read the [ROADMAP](./ROADMAP.md) first. PRs related to roadmap work should use the `ROADMAP` label.\n\n> [!TIP]\n> **Building in Public**\n>\n> The maintainer builds and maintains oh-my-openagent in real-time with Jobdori, an AI assistant running on a heavily customized fork of OpenClaw.\n> Every feature, every fix, every issue triage \u2014 live in our Discord.\n>\n> [![Building in Public](./.github/assets/building-in-public.png)](https://discord.gg/PUwSMR9XNk)\n>\n> [**\u2192 Watch it happen in #building-in-public**](https://discord.gg/PUwSMR9XNk)\n\n> [!NOTE]\n>\n> [![Sisyphus Labs - Meet Dori. Not a demo. Subscribes to everything.](./.github/assets/sisyphuslabs.png?v=4)](https://sisyphuslabs.ai)\n> > **OmO is maintained by Jobdori, the AI assistant shown above. Meet your own Jobdori \u2014 Dori. <br />Join the waitlist [here](https://sisyphuslabs.ai).**\n\n> [!TIP]\n> Be with us!\n>\n> | [<img alt=\"Discord link\" src=\"https://img.shields.io/discord/1452487457085063218?color=5865F2&label=discord&labelColor=black&logo=discord&logoColor=white&style=flat-square\" width=\"156px\" />](https://discord.gg/PUwSMR9XNk) | Join our [Discord community](https://discord.gg/PUwSMR9XNk) to connect with contributors and fellow `oh-my-openagent` users. |\n> | :-----| :----- |\n> | [<img alt=\"X link\" src=\"https://img.shields.io/badge/Follow-%40justsisyphus-00CED1?style=flat-square&logo=x&labelColor=black\" width=\"156px\" />](https://x.com/justsisyphus) | Updates for `oh-my-openagent` used to be posted on my X acco",
+    "file_count": 3497
+  },
+  {
+    "repo": "0xNyk/awesome-hermes-agent",
+    "description": "A curated list of awesome skills, tools, integrations, and resources for Hermes Agent by Nous Research",
+    "stars": 3661,
+    "language": null,
+    "top_dirs": [],
+    "keyword_hits": {},
+    "readme_snippet": "<p align=\"center\">\n  <picture>\n    <img src=\"https://raw.githubusercontent.com/NousResearch/hermes-agent/main/assets/banner.png\" alt=\"Awesome Hermes Agent\" width=\"600\">\n  </picture>\n</p>\n\n# Awesome Hermes Agent\n\n[![Awesome](https://awesome.re/badge.svg)](https://awesome.re)\n\n> A curated list of skills, tools, integrations, and resources for enhancing your [Hermes Agent](https://github.com/NousResearch/hermes-agent) workflow \u2014 the self-improving AI agent built by [Nous Research](https://nousresearch.com).\n\nHermes Agent is the only agent with a built-in learning loop \u2014 it creates skills from experience, improves them during use, and as of v0.12.0 maintains its own skill library through an autonomous Curator that grades, consolidates, and prunes on a 7-day cycle. It searches its own past conversations and builds a deepening model of who you are across sessions. Run it on a $5 VPS, a GPU cluster, or serverless infrastructure (seven terminal backends including Vercel Sandbox, Daytona, and Modal). Talk to it from any of 18 built-in messaging platforms \u2014 Telegram, Discord, Slack, WhatsApp, Signal, Feishu/Lark, WeCom, QQBot, Yuanbao, and more \u2014 plus Microsoft Teams via plugin.\n\nThis list tracks the growing ecosystem around it.\n\n> Ecosystem status (last reviewed: 2026-05-06)\n> - Hermes Agent: [v0.12.0 (v2026.4.30) \u2014 \"The Curator release\"](https://github.com/NousResearch/hermes-agent/releases/tag/v2026.4.30)\n> - Core repo: [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) (134k+ stars)\n> - Latest release notes: [Hermes releases](https://github.com/NousResearch/hermes-agent/releases)\n\n---\n\n## Where Do I Start?\n\nNew to Hermes? Don't try to install everything at once. Here's the three-step path from zero to productive:\n\n1. **Get running** \u2014 Follow the [Official Docs quickstart](https://hermes-agent.nousresearch.com/docs/). It covers installation, CLI, configuration, and your first conversation.\n2. **Add your first skills** \u2014 Install [wondelai/skills](http",
+    "file_count": 5
+  },
+  {
+    "repo": "darrenhinde/OpenAgentsControl",
+    "description": "AI agent framework for plan-first development workflows with approval-based execution. Multi-language support (TypeScript, Python, Go, Rust) with automatic testing, code review, and validation built for OpenCode",
+    "stars": 4217,
+    "language": "TypeScript",
+    "top_dirs": [
+      ".claude-plugin",
+      ".github",
+      ".opencode",
+      ".tmp",
+      "bin",
+      "context-findings",
+      "dev",
+      "docs",
+      "evals",
+      "integrations",
+      "packages",
+      "plugins",
+      "scripts"
+    ],
+    "keyword_hits": {
+      "plugins": [
+        ".opencode/context/openagents-repo/plugins/context/architecture/lifecycle.md",
+        ".opencode/context/openagents-repo/plugins/context/architecture/navigation.md",
+        ".opencode/context/openagents-repo/plugins/context/architecture/overview.md",
+        ".opencode/context/openagents-repo/plugins/context/capabilities/agents.md",
+        ".opencode/context/openagents-repo/plugins/context/capabilities/events.md",
+        ".opencode/context/openagents-repo/plugins/context/capabilities/events_skills.md",
+        ".opencode/context/openagents-repo/plugins/context/capabilities/navigation.md",
+        ".opencode/context/openagents-repo/plugins/context/capabilities/tools.md",
+        ".opencode/context/openagents-repo/plugins/context/concepts/navigation.md",
+        ".opencode/context/openagents-repo/plugins/context/concepts/plugin-architecture.md",
+        ".opencode/context/openagents-repo/plugins/context/context-overview.md",
+        ".opencode/context/openagents-repo/plugins/context/guides/creating-plugins.md",
+        ".opencode/context/openagents-repo/plugins/context/guides/migrating-to-plugins.md",
+        ".opencode/context/openagents-repo/plugins/context/guides/navigation.md",
+        ".opencode/context/openagents-repo/plugins/context/lookup/navigation.md",
+        ".opencode/context/openagents-repo/plugins/context/lookup/plugin-structure.md",
+        ".opencode/context/openagents-repo/plugins/context/navigation.md",
+        ".opencode/context/openagents-repo/plugins/context/reference/best-practices.md",
+        ".opencode/context/openagents-repo/plugins/context/reference/navigation.md",
+        ".opencode/context/openagents-repo/plugins/navigation.md"
+      ],
+      "skill": [
+        ".opencode/context/openagents-repo/concepts/agent-skills.md",
+        ".opencode/context/openagents-repo/errors/skills-errors.md",
+        ".opencode/context/openagents-repo/examples/skills/multi-file-skill.md",
+        ".opencode/context/openagents-repo/examples/skills/navigation.md",
+        ".opencode/context/openagents-repo/guides/adding-skill-basics.md",
+        ".opencode/context/openagents-repo/guides/adding-skill-example.md",
+        ".opencode/context/openagents-repo/guides/adding-skill-implementation.md",
+        ".opencode/context/openagents-repo/guides/creating-skills.md",
+        ".opencode/context/openagents-repo/lookup/skill-metadata.md",
+        ".opencode/context/openagents-repo/lookup/skills-comparison.md",
+        ".opencode/context/openagents-repo/plugins/context/capabilities/events_skills.md",
+        ".opencode/skill/project-orchestration/SKILL.md",
+        ".opencode/skill/project-orchestration/router.sh",
+        ".opencode/skill/project-orchestration/scripts/context-index.ts",
+        ".opencode/skill/project-orchestration/scripts/session-context-manager.ts",
+        ".opencode/skill/project-orchestration/scripts/stage-cli.ts",
+        ".opencode/skill/project-orchestration/workflows/8-stage-delivery.md",
+        ".opencode/skill/project-orchestration/workflows/context-handoff.md",
+        ".opencode/skill/project-orchestration/workflows/planning-agents.md",
+        ".opencode/skill/task-management/tests/enhanced-schema.test.ts"
+      ],
+      "agent": [
+        ".opencode/agent/content/0-category.json",
+        ".opencode/agent/content/copywriter.md",
+        ".opencode/agent/content/technical-writer.md",
+        ".opencode/agent/core/0-category.json",
+        ".opencode/agent/core/openagent.md",
+        ".opencode/agent/core/opencoder.md",
+        ".opencode/agent/data/0-category.json",
+        ".opencode/agent/data/data-analyst.md",
+        ".opencode/agent/eval-runner.md",
+        ".opencode/agent/meta/0-category.json",
+        ".opencode/agent/meta/repo-manager.md",
+        ".opencode/agent/meta/system-builder.md",
+        ".opencode/agent/subagents/code/build-agent.md",
+        ".opencode/agent/subagents/code/coder-agent.md",
+        ".opencode/agent/subagents/code/reviewer.md",
+        ".opencode/agent/subagents/code/test-engineer.md",
+        ".opencode/agent/subagents/core/batch-executor.md",
+        ".opencode/agent/subagents/core/context-manager.md",
+        ".opencode/agent/subagents/core/context-retriever.md",
+        ".opencode/agent/subagents/core/contextscout.md"
+      ],
+      "config": [
+        ".opencode/command/openagents/new-agents/templates/test-config-template.yaml",
+        ".opencode/config.json",
+        ".opencode/config/agent-metadata.json",
+        ".opencode/context/core/config/navigation.md",
+        ".opencode/context/core/config/paths.json",
+        ".opencode/context/development/ai/mastra-ai/lookup/mastra-config.md",
+        ".opencode/plugin/tsconfig.json",
+        ".opencode/skills/smart-router-skill/config/personality-config.json",
+        ".opencode/tool/tsconfig.json",
+        "docs/model-providers/oss/lmstudio-config-example.json",
+        "docs/planning/11-json-config-system-SUMMARY.md",
+        "docs/planning/11-json-config-system.md",
+        "evals/agents/content/copywriter/config/config.yaml",
+        "evals/agents/core/openagent/config/config.yaml",
+        "evals/agents/core/openagent/config/core-suite.json",
+        "evals/agents/core/opencoder/config/config.yaml",
+        "evals/agents/development/backend-specialist/config/config.yaml",
+        "evals/agents/development/frontend-specialist/config/config.yaml",
+        "evals/agents/meta/repo-manager/config/eval-config.yaml",
+        "evals/agents/meta/system-builder/config/config.yaml"
+      ],
+      "personality": [
+        ".opencode/skills/smart-router-skill/config/personality-config.json"
+      ]
+    },
+    "readme_snippet": "<div align=\"center\">\n\n![OpenAgents Control Hero](docs/images/hero-image.png)\n\n# OpenAgents Control (OAC)\n\n### Control your AI patterns. Get repeatable results.\n\n**AI agents that learn YOUR coding patterns and generate matching code every time.**\n\n\ud83c\udfaf **Pattern Control** - Define your patterns once, AI uses them forever  \n\u270b **Approval Gates** - Review and approve before execution  \n\ud83d\udd01 **Repeatable Results** - Same patterns = Same quality code  \n\ud83d\udcdd **Editable Agents** - Full control over AI behavior  \n\ud83d\udc65 **Team-Ready** - Everyone uses the same patterns\n\n**Multi-language:** TypeScript \u2022 Python \u2022 Go \u2022 Rust  \u2022 C# \u2022 Any language*  \n**Model Agnostic:** Claude \u2022 GPT \u2022 Gemini \u2022 MiniMax \u2022 Local models\n\n\n[![GitHub stars](https://img.shields.io/github/stars/darrenhinde/OpenAgentsControl?style=flat-square&logo=github&labelColor=black&color=ffcb47)](https://github.com/darrenhinde/OpenAgentsControl/stargazers)\n[![X Follow](https://img.shields.io/twitter/follow/DarrenBuildsAI?style=flat-square&logo=x&labelColor=black&color=1DA1F2)](https://x.com/DarrenBuildsAI)\n[![License: MIT](https://img.shields.io/badge/License-MIT-3fb950?style=flat-square&labelColor=black)](https://opensource.org/licenses/MIT)\n[![Last Commit](https://img.shields.io/github/last-commit/darrenhinde/OpenAgentsControl?style=flat-square&labelColor=black&color=8957e5)](https://github.com/darrenhinde/OpenAgentsControl/commits/main)\n\n[\ud83d\ude80 Quick Start](#-quick-start) \u2022 [\ud83d\udcbb Show Me Code](#-example-workflow) \u2022 [\ud83d\uddfa\ufe0f Roadmap](https://github.com/darrenhinde/OpenAgentsControl/projects) \u2022 [\ud83d\udcac Community](https://nextsystems.ai)\n\n</div>\n\n---\n\n> **Built on [OpenCode](https://opencode.ai)** - An open-source AI coding framework. OAC extends OpenCode with specialized agents, context management, and team workflows.\n\n---\n\n## The Problem\n\nMost AI agents are like hiring a developer who doesn't know your codebase. They write generic code. You spend hours rewriting, refactoring, and fixing inconsistencies. Tokens burned. Time wasted. No actual work ",
+    "file_count": 1222
+  },
+  {
+    "repo": "anomalyco/opencode",
+    "description": "The open source coding agent.",
+    "stars": 168859,
+    "language": "TypeScript",
+    "top_dirs": [
+      ".github",
+      ".husky",
+      ".opencode",
+      ".vscode",
+      ".zed",
+      "github",
+      "infra",
+      "nix",
+      "packages",
+      "patches",
+      "perf",
+      "script",
+      "sdks",
+      "specs"
+    ],
+    "keyword_hits": {
+      "plugins": [
+        ".opencode/plugins/smoke-theme.json",
+        ".opencode/plugins/tui-smoke.tsx",
+        "packages/opencode/specs/tui-plugins.md",
+        "packages/opencode/src/cli/cmd/tui/feature-plugins/home/footer.tsx",
+        "packages/opencode/src/cli/cmd/tui/feature-plugins/home/tips-view.tsx",
+        "packages/opencode/src/cli/cmd/tui/feature-plugins/home/tips.tsx",
+        "packages/opencode/src/cli/cmd/tui/feature-plugins/session/dialog.tsx",
+        "packages/opencode/src/cli/cmd/tui/feature-plugins/session/index.tsx",
+        "packages/opencode/src/cli/cmd/tui/feature-plugins/session/preview-pane.tsx",
+        "packages/opencode/src/cli/cmd/tui/feature-plugins/session/util.tsx",
+        "packages/opencode/src/cli/cmd/tui/feature-plugins/sidebar/context.tsx",
+        "packages/opencode/src/cli/cmd/tui/feature-plugins/sidebar/files.tsx",
+        "packages/opencode/src/cli/cmd/tui/feature-plugins/sidebar/footer.tsx",
+        "packages/opencode/src/cli/cmd/tui/feature-plugins/sidebar/lsp.tsx",
+        "packages/opencode/src/cli/cmd/tui/feature-plugins/sidebar/mcp.tsx",
+        "packages/opencode/src/cli/cmd/tui/feature-plugins/sidebar/todo.tsx",
+        "packages/opencode/src/cli/cmd/tui/feature-plugins/system/diff-viewer-file-tree-utils.ts",
+        "packages/opencode/src/cli/cmd/tui/feature-plugins/system/diff-viewer-file-tree.tsx",
+        "packages/opencode/src/cli/cmd/tui/feature-plugins/system/diff-viewer-ui.tsx",
+        "packages/opencode/src/cli/cmd/tui/feature-plugins/system/diff-viewer.tsx"
+      ],
+      "bundles": [
+        "packages/desktop/scripts/copy-bundles.ts"
+      ],
+      "identity": [
+        "packages/identity/mark-192x192.png",
+        "packages/identity/mark-512x512-light.png",
+        "packages/identity/mark-512x512.png",
+        "packages/identity/mark-96x96.png",
+        "packages/identity/mark-light.svg",
+        "packages/identity/mark.svg"
+      ],
+      "skill": [
+        ".opencode/skills/effect/SKILL.md",
+        "packages/opencode/src/cli/cmd/debug/skill.ts",
+        "packages/opencode/src/cli/cmd/tui/component/dialog-skill.tsx",
+        "packages/opencode/src/config/skills.ts",
+        "packages/opencode/src/skill/discovery.ts",
+        "packages/opencode/src/skill/index.ts",
+        "packages/opencode/src/skill/prompt/customize-opencode.md",
+        "packages/opencode/src/tool/skill.ts",
+        "packages/opencode/src/tool/skill.txt",
+        "packages/opencode/test/cli/acp/skills.test.ts",
+        "packages/opencode/test/fake/skill.ts",
+        "packages/opencode/test/fixture/skills/agents-sdk/SKILL.md",
+        "packages/opencode/test/fixture/skills/agents-sdk/references/callable.md",
+        "packages/opencode/test/fixture/skills/cloudflare/SKILL.md",
+        "packages/opencode/test/fixture/skills/index.json",
+        "packages/opencode/test/skill/discovery.test.ts",
+        "packages/opencode/test/skill/skill.test.ts",
+        "packages/opencode/test/tool/skill.test.ts",
+        "packages/web/src/content/docs/ar/skills.mdx",
+        "packages/web/src/content/docs/bs/skills.mdx"
+      ],
+      "agent": [
+        ".opencode/agent/duplicate-pr.md",
+        ".opencode/agent/triage.md",
+        "AGENTS.md",
+        "packages/app/AGENTS.md",
+        "packages/app/src/utils/agent.ts",
+        "packages/cli/src/debug/agents.ts",
+        "packages/console/app/.opencode/agent/css.md",
+        "packages/console/core/migrations/20260113223840_aromatic_agent_zero/migration.sql",
+        "packages/console/core/migrations/20260113223840_aromatic_agent_zero/snapshot.json",
+        "packages/core/src/agent.ts",
+        "packages/core/src/config/agent.ts",
+        "packages/core/src/config/plugin/agent.ts",
+        "packages/core/src/plugin/agent.ts",
+        "packages/core/test/agent.test.ts",
+        "packages/core/test/config/agent.test.ts",
+        "packages/desktop/AGENTS.md",
+        "packages/effect-drizzle-sqlite/AGENTS.md",
+        "packages/llm/AGENTS.md",
+        "packages/opencode/AGENTS.md",
+        "packages/opencode/src/acp/agent.ts"
+      ],
+      "config": [
+        ".editorconfig",
+        ".github/ISSUE_TEMPLATE/config.yml",
+        "github/tsconfig.json",
+        "packages/app/e2e/tsconfig.json",
+        "packages/app/playwright.config.ts",
+        "packages/app/tsconfig.json",
+        "packages/app/vite.config.ts",
+        "packages/cli/tsconfig.json",
+        "packages/console/app/src/config.ts",
+        "packages/console/app/tsconfig.json",
+        "packages/console/app/vite.config.ts",
+        "packages/console/core/drizzle.config.ts",
+        "packages/console/core/tsconfig.json",
+        "packages/console/function/tsconfig.json",
+        "packages/console/resource/tsconfig.json",
+        "packages/console/support/tsconfig.json",
+        "packages/console/support/vite.config.ts",
+        "packages/containers/tsconfig.json",
+        "packages/core/drizzle.config.ts",
+        "packages/core/src/config.ts"
+      ]
+    },
+    "readme_snippet": "<p align=\"center\">\n  <a href=\"https://opencode.ai\">\n    <picture>\n      <source srcset=\"packages/console/app/src/asset/logo-ornate-dark.svg\" media=\"(prefers-color-scheme: dark)\">\n      <source srcset=\"packages/console/app/src/asset/logo-ornate-light.svg\" media=\"(prefers-color-scheme: light)\">\n      <img src=\"packages/console/app/src/asset/logo-ornate-light.svg\" alt=\"OpenCode logo\">\n    </picture>\n  </a>\n</p>\n<p align=\"center\">The open source AI coding agent.</p>\n<p align=\"center\">\n  <a href=\"https://opencode.ai/discord\"><img alt=\"Discord\" src=\"https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord\" /></a>\n  <a href=\"https://www.npmjs.com/package/opencode-ai\"><img alt=\"npm\" src=\"https://img.shields.io/npm/v/opencode-ai?style=flat-square\" /></a>\n  <a href=\"https://github.com/anomalyco/opencode/actions/workflows/publish.yml\"><img alt=\"Build status\" src=\"https://img.shields.io/github/actions/workflow/status/anomalyco/opencode/publish.yml?style=flat-square&branch=dev\" /></a>\n</p>\n\n<p align=\"center\">\n  <a href=\"README.md\">English</a> |\n  <a href=\"README.zh.md\">\u7b80\u4f53\u4e2d\u6587</a> |\n  <a href=\"README.zht.md\">\u7e41\u9ad4\u4e2d\u6587</a> |\n  <a href=\"README.ko.md\">\ud55c\uad6d\uc5b4</a> |\n  <a href=\"README.de.md\">Deutsch</a> |\n  <a href=\"README.es.md\">Espa\u00f1ol</a> |\n  <a href=\"README.fr.md\">Fran\u00e7ais</a> |\n  <a href=\"README.it.md\">Italiano</a> |\n  <a href=\"README.da.md\">Dansk</a> |\n  <a href=\"README.ja.md\">\u65e5\u672c\u8a9e</a> |\n  <a href=\"README.pl.md\">Polski</a> |\n  <a href=\"README.ru.md\">\u0420\u0443\u0441\u0441\u043a\u0438\u0439</a> |\n  <a href=\"README.bs.md\">Bosanski</a> |\n  <a href=\"README.ar.md\">\u0627\u0644\u0639\u0631\u0628\u064a\u0629</a> |\n  <a href=\"README.no.md\">Norsk</a> |\n  <a href=\"README.br.md\">Portugu\u00eas (Brasil)</a> |\n  <a href=\"README.th.md\">\u0e44\u0e17\u0e22</a> |\n  <a href=\"README.tr.md\">T\u00fcrk\u00e7e</a> |\n  <a href=\"README.uk.md\">\u0423\u043a\u0440\u0430\u0457\u043d\u0441\u044c\u043a\u0430</a> |\n  <a href=\"README.bn.md\">\u09ac\u09be\u0982\u09b2\u09be</a> |\n  <a href=\"README.gr.md\">\u0395\u03bb\u03bb\u03b7\u03bd\u03b9\u03ba\u03ac</a> |\n  <a href=\"README.vi.md\">Ti\u1ebfng Vi\u1ec7t</a>\n</p>\n\n[![OpenCode Terminal UI](packages/web/src/assets/lander/screenshot.png)](https://opencode.ai)\n\n---\n\n### Ins",
+    "file_count": 5385
+  },
+  {
+    "repo": "gotgenes/opencode-agent-identity",
+    "description": "OpenCode plugins that help AI agents understand their identity across multi-agent sessions",
+    "stars": 20,
+    "language": "TypeScript",
+    "top_dirs": [
+      ".github",
+      "src"
+    ],
+    "keyword_hits": {
+      "identity": [
+        "src/agent-self-identity.test.ts",
+        "src/agent-self-identity.ts"
+      ],
+      "agent": [
+        "AGENTS.md",
+        "src/agent-attribution-tool.test.ts",
+        "src/agent-attribution-tool.ts",
+        "src/agent-self-identity.test.ts",
+        "src/agent-self-identity.ts"
+      ],
+      "config": [
+        ".editorconfig",
+        "release-please-config.json",
+        "tsconfig.build.json",
+        "tsconfig.json"
+      ]
+    },
+    "readme_snippet": "# @gotgenes/opencode-agent-identity\n\n[![npm version](https://img.shields.io/npm/v/@gotgenes/opencode-agent-identity?style=flat&logo=npm&logoColor=white)](https://www.npmjs.com/package/@gotgenes/opencode-agent-identity)\n[![CI](https://img.shields.io/github/actions/workflow/status/gotgenes/opencode-agent-identity/ci.yml?style=flat&logo=github&label=CI)](https://github.com/gotgenes/opencode-agent-identity/actions/workflows/ci.yml)\n[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat)](https://opensource.org/licenses/MIT)\n[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)\n[![Bun](https://img.shields.io/badge/Bun-%3E%3D1.0-f9f1e1?style=flat&logo=bun&logoColor=black)](https://bun.sh/)\n[![OpenCode Plugin](https://img.shields.io/badge/OpenCode-Plugin-8B5CF6?style=flat)](https://opencode.ai/)\n\nOpenCode plugins for agent self-identity and per-message agent attribution.\n\n## What it does\n\nThis package provides two plugins that improve agent identity awareness in [OpenCode](https://opencode.ai/) sessions:\n\n- **AgentSelfIdentityPlugin** \u2014 Injects a one-liner identity statement (e.g., `You are currently operating as the \"build\" agent.`) into the system prompt so the model knows which agent it's operating as.\n  Addresses [OpenCode #7492](https://github.com/anomalyco/opencode/issues/7492).\n\n- **AgentAttributionToolPlugin** \u2014 Exposes an `agent_attribution` tool that any agent can call to get per-message attribution for the current session. Returns which agent produced each assistant response and which model was used. Useful for agents that review multi-agent sessions, like a Retrospective agent.\n  Addresses [OpenCode #14930](https://github.com/anomalyco/opencode/issues/14930).\n\n## Installation\n\nAdd the plugin to your `opencode.json`:\n\n```json\n{\n  \"plugin\": [\"@gotgenes/opencode-agent-identity\"]\n}\n```\n\nBoth plugins are loaded automatically when the package is installed.",
+    "file_count": 24
+  },
+  {
+    "repo": "joshuadavidthomas/opencode-agent-memory",
+    "description": "Memory blocks for OpenCode, inspired by Letta.",
+    "stars": 277,
+    "language": "TypeScript",
+    "top_dirs": [
+      ".github",
+      "src"
+    ],
+    "keyword_hits": {
+      "memory": [
+        "src/memory.test.ts",
+        "src/memory.ts"
+      ],
+      "config": [
+        "tsconfig.json"
+      ]
+    },
+    "readme_snippet": "# opencode-agent-memory\n\n[Letta](https://letta.com)-style editable [memory blocks](https://docs.letta.com/guides/agents/memory-blocks/) for [OpenCode](https://opencode.ai).\n\n## Experimental\n\nThis plugin is experimental. The core idea - giving the agent persistent, self-editable memory blocks - is adapted from [Letta](https://github.com/letta-ai/letta). Specifially, the plugin follows Letta's [shared memory blocks](https://docs.letta.com/tutorials/shared-memory-blocks) pattern - the markdown files on disk are shared state that every OpenCode session can read and write.\n\nThink of it as AGENTS.md with a harness. OpenCode supports [rules](https://opencode.ai/docs/rules/) via `AGENTS.md` and custom instruction files - this plugin is similar in spirit, but adds structure (scoped blocks with metadata and size limits), dedicated tools for memory operations, and prompting that encourages the agent to actively maintain its own memory. The content is similar; the scaffolding around it is what's different.\n\nFor background on the memory concept, see Letta's docs on [memory](https://docs.letta.com/guides/agents/memory/) and [memory blocks](https://docs.letta.com/guides/agents/memory-blocks/).\n\n## Features\n\n- **Persistent memory** - Information survives across sessions and context compaction\n- **Shared across sessions** - Global blocks shared across all projects, project blocks shared across sessions in that codebase\n- **Self-editing** - The agent can read and modify its own memory with dedicated tools\n- **System prompt injection** - Memory blocks appear in the system prompt, always in-context\n- **Journal** - Append-only entries with semantic search for capturing insights, decisions, and discoveries across sessions\n\n## Requirements\n\n- [OpenCode](https://opencode.ai/) v1.0.115 or later\n\n## Installation\n\nAdd to your OpenCode config (`~/.config/opencode/opencode.json`):\n\n```json\n{\n  \"plugin\": [\"opencode-agent-memory\"]\n}\n```\n\nRestart OpenCode and you're ready to go.\n\nOptionally, pin t",
+    "file_count": 21
+  },
+  {
+    "repo": "joshuadavidthomas/opencode-agent-skills",
+    "description": "An OpenCode plugin that provides tools for using agent skills",
+    "stars": 222,
+    "language": "TypeScript",
+    "top_dirs": [
+      ".beads",
+      ".github",
+      ".opencode",
+      "src"
+    ],
+    "keyword_hits": {
+      "superpowers": [
+        "src/superpowers.ts"
+      ],
+      "skill": [
+        ".opencode/command/test-find-skills.md",
+        ".opencode/command/test-read-skill-file.md",
+        ".opencode/command/test-run-skill-script.md",
+        ".opencode/command/test-skills.md",
+        ".opencode/command/test-use-skill.md",
+        ".opencode/skills/git-helper/SKILL.md",
+        ".opencode/skills/test-skill/SKILL.md",
+        ".opencode/skills/test-skill/example-config.json",
+        ".opencode/skills/test-skill/helper-docs.md",
+        ".opencode/skills/test-skill/scripts/echo-args",
+        ".opencode/skills/test-skill/scripts/greet",
+        "src/skills.ts"
+      ],
+      "agent": [
+        "AGENTS.md"
+      ],
+      "config": [
+        ".beads/config.yaml",
+        ".opencode/skills/test-skill/example-config.json",
+        "tsconfig.json"
+      ]
+    },
+    "readme_snippet": "# opencode-agent-skills\n\nA dynamic skills plugin for OpenCode that provides tools for loading and using reusable AI agent skills.\n\n> [!NOTE]\n> OpenCode now includes first-party support for agent skills, including native skill discovery and a built-in `skill` tool. For most users, this plugin is no longer necessary. It remains available in maintenance mode for users who depend on its extra behavior, such as automatic semantic skill matching, synthetic context injection, compaction reinjection, Superpowers bootstrapping, and helper tools for reading skill files or running skill scripts.\n\n## Features\n\n- **Dynamic skill discovery** - Automatically finds skills from project, user, and plugin directories\n- **Context injection** - Loads skill content directly into the conversation context\n- **Compaction resilient** - Skills survive context compaction in long sessions\n- **Claude Code compatible** - Works with existing Claude Code skills and plugins\n- **Optional Superpowers integration** - Drop-in support for the [Superpowers](https://github.com/obra/superpowers) workflow\n\n## Requirements\n\n- [OpenCode](https://opencode.ai/) v1.0.110 or later\n\n## Installation\n\nIf you only need standard skill loading, prefer OpenCode's built-in skills support. Install this plugin only if you need one of its additional behaviors.\n\nAdd to your OpenCode config (`~/.config/opencode/opencode.json`):\n\n```json\n{\n  \"plugin\": [\"opencode-agent-skills\"]\n}\n```\n\nRestart OpenCode and you're ready to go.\n\nOptionally, pin to a specific version for stability:\n\n```json\n{\n  \"plugin\": [\"opencode-agent-skills@0.7.0\"]\n}\n```\n\nOpenCode fetches unpinned plugins from npm on each startup; pinned versions are cached and require a manual version bump to update.\n\n### Local Development\n\nIf you want to customize or contribute:\n\n```bash\ngit clone https://github.com/joshuadavidthomas/opencode-agent-skills ~/.config/opencode/opencode-agent-skills\nmkdir -p ~/.config/opencode/plugin\nln -sf ~/.config/opencode/opencode-agent-skills",
+    "file_count": 43
+  },
+  {
+    "repo": "theblazehen/opencode-antigravity-multi-auth",
+    "description": null,
+    "stars": 17,
+    "language": "TypeScript",
+    "top_dirs": [
+      ".github",
+      "src"
+    ],
+    "keyword_hits": {
+      "agent": [
+        "AGENTS.MD"
+      ],
+      "config": [
+        ".github/ISSUE_TEMPLATE/config.yml",
+        "tsconfig.build.json",
+        "tsconfig.json",
+        "vitest.config.ts"
+      ]
+    },
+    "readme_snippet": "# Antigravity multi-account OAuth Plugin for Opencode\n\n[![npm version](https://img.shields.io/npm/v/opencode-antigravity-auth.svg)](https://www.npmjs.com/package/opencode-antigravity-auth)\n\nEnable Opencode to authenticate against **Antigravity** (Google's IDE) via OAuth so you can use Antigravity rate limits and access models like `gemini-3-pro-high` and `claude-opus-4-5-thinking` with your Google credentials.\n\n## What you get\n\n- **Google OAuth sign-in** with automatic token refresh\n- **Antigravity API compatibility** for OpenAI-style requests\n- **Debug logging** for requests and responses\n- **Drop-in setup**\u2014Opencode auto-installs the plugin from config\n\n## Quick start\n\n1) **Add the plugin to config** (`~/.config/opencode/opencode.json` or project `.opencode.json`):\n\n```json\n{\n  \"plugin\": [\"opencode-antigravity-multi-auth@latest\"]\n}\n```\n\n2) **Authenticate**\n\n- Run `opencode auth login`.\n- Choose Google \u2192 **OAuth with Google (Antigravity)**.\n- Sign in via the browser and return to Opencode. If the browser doesn\u2019t open, use the printed link.\n\n3) **Declare the models you want**\n\nAdd Antigravity models under the `provider.google.models` section of your config:\n```json\n{\n  \"plugin\": [\"opencode-antigravity-multi-auth\"],\n  \"provider\": {\n    \"google\": {\n      \"models\": {\n        \"gemini-3-pro-high\": {\n          \"name\": \"Gemini 3 Pro High (Antigravity)\",\n          \"limit\": {\n            \"context\": 1048576,\n            \"output\": 65535\n          }\n        },\n        \"gemini-3-pro-low\": {\n          \"name\": \"Gemini 3 Pro Low (Antigravity)\",\n          \"limit\": {\n            \"context\": 1048576,\n            \"output\": 65535\n          }\n        },\n        \"claude-sonnet-4-5\": {\n          \"name\": \"Claude Sonnet 4.5 (Antigravity)\",\n          \"limit\": {\n            \"context\": 200000,\n            \"output\": 64000\n          }\n        },\n        \"claude-sonnet-4-5-thinking\": {\n          \"name\": \"Claude Sonnet 4.5 Thinking (Antigravity)\",\n          \"limit\": {\n            \"context\": 200000,\n",
+    "file_count": 34
+  },
+  {
+    "repo": "malhashemi/opencode-skills",
+    "description": null,
+    "stars": 488,
+    "language": "TypeScript",
+    "top_dirs": [
+      ".github"
+    ],
+    "keyword_hits": {
+      "config": [
+        "release-please-config.json",
+        "tsconfig.json"
+      ]
+    },
+    "readme_snippet": "# OpenCode Skills Plugin\n\n> ## \ud83c\udf93 This Plugin Has Graduated to Native OpenCode Support!\n>\n> **Great news!** The skills functionality first brought to OpenCode by this plugin is now **built into OpenCode** as of v1.0.190.\n>\n> This plugin served as the proof-of-concept that led to native skills support in OpenCode:\n>\n> - [PR #5930](https://github.com/sst/opencode/pull/5930) - Native `skill` tool with pattern-based permissions\n> - [PR #6000](https://github.com/sst/opencode/pull/6000) - Per-agent skill filtering (v1.0.191)\n>\n> **[Jump to Migration Guide](#migration)** | **[See What's Next](#whats-next)**\n\n---\n\n[![DEPRECATED](https://img.shields.io/badge/STATUS-DEPRECATED-red.svg)](#migration)\n[![Graduated to Native](https://img.shields.io/badge/Native%20Support-OpenCode%20v1.0.190+-success.svg)](https://github.com/sst/opencode/pull/5930)\n[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)\n\n---\n\n## Migration\n\n### 1. Remove the Plugin\n\n```diff\n// opencode.json\n{\n-  \"plugin\": [\"opencode-skills\"]\n}\n```\n\n### 2. Move Your Skills Directory\n\n```bash\n# Native uses skill/ (singular) at project root instead of .opencode/skills/\nmv .opencode/skills skill\n\n# For global skills\nmv ~/.opencode/skills ~/.config/opencode/skill\n```\n\n### 3. Update Your Config (Optional)\n\nNative skills use pattern-based permissions instead of tool-level config:\n\n```diff\n// opencode.json\n{\n-  \"tools\": {\n-    \"skills*\": false,\n-    \"skills_my_skill\": true\n-  }\n+  \"permission\": {\n+    \"skill\": {\n+      \"my-skill\": \"allow\",\n+      \"*\": \"deny\"\n+    }\n+  }\n}\n```\n\n### Key Differences\n\n| Aspect      | This Plugin            | Native (v1.0.190+)          |\n| ----------- | ---------------------- | --------------------------- |\n| Tool name   | `skills_my_skill`      | `skill` (single tool)       |\n| Directory   | `.opencode/skills/`    | `skill/`                    |\n| Loading     | Eager (all at startup) | **Lazy** (on-demand)        |\n| Permissions | `tools` con",
+    "file_count": 21
+  },
+  {
+    "repo": "awesome-opencode/awesome-opencode",
+    "description": "A curated list of awesome plugins, themes, agents, projects, and resources for https://opencode.ai",
+    "stars": 7537,
+    "language": "JavaScript",
+    "top_dirs": [
+      ".github",
+      "data",
+      "dist",
+      "docs",
+      "scripts",
+      "templates"
+    ],
+    "keyword_hits": {
+      "plugins": [
+        "data/plugins/agent-memory.yaml",
+        "data/plugins/agent-skills-jdt.yaml",
+        "data/plugins/antigravity-auth.yaml",
+        "data/plugins/antigravity-multi-auth.yaml",
+        "data/plugins/background-agents.yaml",
+        "data/plugins/background.yaml",
+        "data/plugins/beads-plugin.yaml",
+        "data/plugins/cc-safety-net.yaml",
+        "data/plugins/context-analysis.yaml",
+        "data/plugins/devcontainers.yaml",
+        "data/plugins/direnv.yaml",
+        "data/plugins/dynamic-context-pruning.yaml",
+        "data/plugins/envsitter-guard.yaml",
+        "data/plugins/froggy.yaml",
+        "data/plugins/gemini-auth.yaml",
+        "data/plugins/google-ai-search.yaml",
+        "data/plugins/handoff.yaml",
+        "data/plugins/kilo-auth.yaml",
+        "data/plugins/micode.yaml",
+        "data/plugins/model-announcer.yaml"
+      ],
+      "identity": [
+        "data/plugins/opencode-agent-identity.yaml"
+      ],
+      "memory": [
+        "data/plugins/agent-memory.yaml",
+        "data/plugins/simple-memory.yaml"
+      ],
+      "skill": [
+        "data/plugins/agent-skills-jdt.yaml",
+        "data/plugins/opencode-skills.yaml",
+        "data/plugins/openskills.yaml",
+        "data/projects/opencode-skills.yaml"
+      ],
+      "agent": [
+        "data/agents/agentic.yaml",
+        "data/agents/claude-subagents.yaml",
+        "data/agents/opencode-agents.yaml",
+        "data/agents/opencode-redstone.yaml",
+        "data/examples/agent.yaml",
+        "data/plugins/agent-memory.yaml",
+        "data/plugins/agent-skills-jdt.yaml",
+        "data/plugins/background-agents.yaml",
+        "data/plugins/opencode-agent-identity.yaml",
+        "data/plugins/opencode-agent-tmux.yaml",
+        "data/projects/agent-of-empires.yaml",
+        "data/projects/open-agent.yaml"
+      ],
+      "config": [
+        "data/resources/opencode-config-starter.yaml"
+      ]
+    },
+    "readme_snippet": "<!-- HEADER -->\n<div align=\"center\">\n\n<br>\n<!-- LOGO -->\n<img src=\"https://github.com/user-attachments/assets/aced1e8e-e6be-485a-9015-b822d01ab064\" alt=\"Awesome Opencode\" />\n<br><br>\n\n<!-- TITLE -->\n<h1>Awesome Opencode</h1>\n\n<!-- BADGES -->\n<p>\n<a href=\"https://github.com/sindresorhus/awesome\"><img src=\"https://cdn.rawgit.com/sindresorhus/awesome/d7305f38d29fed78fa85652e3a63e154dd8e8829/media/badge.svg\" height=\"28\" alt=\"Awesome\" /></a>\n&nbsp;&nbsp;\n<a href=\"https://github.com/anomalyco/opencode\"><img src=\"https://img.shields.io/github/stars/anomalyco/opencode?style=social\" height=\"28\" alt=\"Opencode Stars\" /></a>\n</p>\n\n<br>\n\n<!-- DESCRIPTION -->\n<h3>A curated list of plugins, themes, agents, and resources for <a href=\"https://opencode.ai/\">Opencode</a>.</h3>\n<h3>The AI coding agent for the terminal, built by the team at <a href=\"https://github.com/anomalyco\">Anomaly</a>.</h3>\n\n<br>\n\n[**OFFICIAL**](#official) \u2022 [**PLUGINS**](#plugins) \u2022 [**THEMES**](#themes) \u2022 [**AGENTS**](#agents) \u2022 [**PROJECTS**](#projects) \u2022 [**RESOURCES**](#resources)\n\n<br>\n<hr>\n\n</div>\n\n<!-- CONTENT -->\n\n<div id=\"official\"></div>\n\n<h3>\u2b50\ufe0f Official Repositories</h3>\n\n| Project | Stars | Description |\n| :--- | :--- | :--- |\n| **[opencode](https://github.com/anomalyco/opencode)** | ![Stars](https://badgen.net/github/stars/anomalyco/opencode) | The official opencode AI coding agent. |\n| **[opencode-sdk-js](https://github.com/anomalyco/opencode-sdk-js)** | ![Stars](https://badgen.net/github/stars/anomalyco/opencode-sdk-js) | Official JavaScript/TypeScript SDK for opencode. |\n| **[opencode-sdk-go](https://github.com/anomalyco/opencode-sdk-go)** | ![Stars](https://badgen.net/github/stars/anomalyco/opencode-sdk-go) | Official Go SDK for opencode. |\n| **[opencode-sdk-python](https://github.com/anomalyco/opencode-sdk-python)** | ![Stars](https://badgen.net/github/stars/anomalyco/opencode-sdk-python) | Official Python SDK for opencode. |\n\n<br>\n\n<div id=\"plugins\"></div>\n\n<details open>\n<summary><strong>\ud83e\udde9 PLU",
+    "file_count": 138
+  },
+  {
+    "repo": "wondelai/skills",
+    "description": "Agent skills for Claude Code and other agentskills.io-compatible agents. See https://developertoolkit.ai for more information about skills in general.",
+    "stars": 1180,
+    "language": "Shell",
+    "top_dirs": [
+      ".claude",
+      ".claude-plugin",
+      ".cursor",
+      ".github",
+      ".pi",
+      ".windsurf",
+      "37signals-way",
+      "blue-ocean-strategy",
+      "clean-architecture",
+      "clean-code",
+      "contagious",
+      "continuous-discovery",
+      "cro-methodology",
+      "crossing-the-chasm",
+      "ddia-systems",
+      "design-everyday-things",
+      "design-sprint",
+      "domain-driven-design",
+      "drive-motivation",
+      "high-perf-browser",
+      "hooked-ux",
+      "hundred-million-offers",
+      "improve-retention",
+      "influence-psychology",
+      "inspired-product",
+      "ios-hig-design",
+      "jobs-to-be-done",
+      "lean-startup",
+      "lean-ux",
+      "made-to-stick",
+      "microinteractions",
+      "mom-test",
+      "negotiation",
+      "obviously-awesome",
+      "one-page-marketing",
+      "pragmatic-programmer",
+      "predictable-revenue",
+      "refactoring-patterns",
+      "refactoring-ui",
+      "release-it",
+      "scorecard-marketing",
+      "scripts",
+      "software-design-philosophy",
+      "storybrand-messaging",
+      "system-design",
+      "top-design",
+      "traction-eos",
+      "ux-heuristics",
+      "web-typography"
+    ],
+    "keyword_hits": {
+      "skill": [
+        ".claude/skills/37signals-way",
+        ".claude/skills/blue-ocean-strategy",
+        ".claude/skills/clean-architecture",
+        ".claude/skills/clean-code",
+        ".claude/skills/contagious",
+        ".claude/skills/continuous-discovery",
+        ".claude/skills/cro-methodology",
+        ".claude/skills/crossing-the-chasm",
+        ".claude/skills/ddia-systems",
+        ".claude/skills/design-everyday-things",
+        ".claude/skills/design-sprint",
+        ".claude/skills/domain-driven-design",
+        ".claude/skills/drive-motivation",
+        ".claude/skills/high-perf-browser",
+        ".claude/skills/hooked-ux",
+        ".claude/skills/hundred-million-offers",
+        ".claude/skills/improve-retention",
+        ".claude/skills/influence-psychology",
+        ".claude/skills/inspired-product",
+        ".claude/skills/ios-hig-design"
+      ]
+    },
+    "readme_snippet": "# Wondel.ai Skills\n\nAgent skills for Claude Code and agentskills.io-compatible agents. Browse all skills at [skills.wondel.ai](https://skills.wondel.ai/).\n\n## Installation\n\n### Via Claude Code Plugin Marketplace\n\n```bash\n# Add the marketplace\n/plugin marketplace add wondelai/skills\n\n# Install plugin collections\n/plugin install product-strategy@wondelai-skills      # Jobs to Be Done, Negotiation, Mom Test\n/plugin install ux-design@wondelai-skills             # Refactoring UI, iOS HIG, UX Heuristics, Hooked, Improve Retention, Web Typography, Top Design, Design of Everyday Things, Lean UX, Microinteractions\n/plugin install marketing-cro@wondelai-skills         # CRO Methodology, StoryBrand, Scorecard Marketing, Contagious, 1-Page Marketing\n/plugin install sales-influence@wondelai-skills       # Influence Psychology, Predictable Revenue, Made to Stick, $100M Offers\n/plugin install product-innovation@wondelai-skills    # Lean Startup, Design Sprint, Design of Everyday Things, Inspired, Continuous Discovery, 37signals Way\n/plugin install strategy-growth@wondelai-skills       # Crossing the Chasm, Blue Ocean Strategy, Traction/EOS, Obviously Awesome\n/plugin install team-motivation@wondelai-skills       # Drive (Autonomy, Mastery, Purpose)\n/plugin install code-craftsmanship@wondelai-skills    # Clean Code, Refactoring Patterns, Software Design Philosophy, Pragmatic Programmer, DDD\n/plugin install systems-architecture@wondelai-skills  # DDIA, System Design, Clean Architecture, Release It!, High Performance Browser Networking\n```\n\n### Via skills.sh\n\nInstall via [skills.sh](https://skills.sh):\n\n```bash\n# Install all skills\nnpx skills add wondelai/skills\n\n# Or install individual skills\nnpx skills add wondelai/skills/jobs-to-be-done\nnpx skills add wondelai/skills/cro-methodology\nnpx skills add wondelai/skills/refactoring-ui\nnpx skills add wondelai/skills/ios-hig-design\nnpx skills add wondelai/skills/scorecard-marketing\nnpx skills add wondelai/skills/storybrand-messaging\nnpx ski",
+    "file_count": 513
+  },
+  {
+    "repo": "imphillip/SoulTavern",
+    "description": "Import SillyTavern V2 character cards as SOUL.md personas for SOUL-aware agent runtimes (Hermes-Agent, OpenClaw, \u2026).",
+    "stars": 5,
+    "language": "Python",
+    "top_dirs": [
+      ".github",
+      "skills",
+      "tests"
+    ],
+    "keyword_hits": {
+      "soul": [
+        "skills/soultavern/SKILL.md",
+        "skills/soultavern/assets/aldous_v2.json",
+        "skills/soultavern/references/field-mapping.md",
+        "skills/soultavern/references/library-layout.md",
+        "skills/soultavern/references/openclaw-identity-directive.md",
+        "skills/soultavern/references/openclaw-target.md",
+        "skills/soultavern/references/oversized-cards.md",
+        "skills/soultavern/references/security.md",
+        "skills/soultavern/references/usage-recipes.md",
+        "skills/soultavern/references/v2-spec-summary.md",
+        "skills/soultavern/scripts/current.py",
+        "skills/soultavern/scripts/delete.py",
+        "skills/soultavern/scripts/finalize.py",
+        "skills/soultavern/scripts/history.py",
+        "skills/soultavern/scripts/import.py",
+        "skills/soultavern/scripts/list.py",
+        "skills/soultavern/scripts/restore.py",
+        "skills/soultavern/scripts/revert.py",
+        "skills/soultavern/scripts/soultavern/__init__.py",
+        "skills/soultavern/scripts/soultavern/classify.py"
+      ],
+      "identity": [
+        "skills/soultavern/references/openclaw-identity-directive.md"
+      ],
+      "skill": [
+        "skills/soultavern/SKILL.md",
+        "skills/soultavern/assets/aldous_v2.json",
+        "skills/soultavern/references/field-mapping.md",
+        "skills/soultavern/references/library-layout.md",
+        "skills/soultavern/references/openclaw-identity-directive.md",
+        "skills/soultavern/references/openclaw-target.md",
+        "skills/soultavern/references/oversized-cards.md",
+        "skills/soultavern/references/security.md",
+        "skills/soultavern/references/usage-recipes.md",
+        "skills/soultavern/references/v2-spec-summary.md",
+        "skills/soultavern/scripts/current.py",
+        "skills/soultavern/scripts/delete.py",
+        "skills/soultavern/scripts/finalize.py",
+        "skills/soultavern/scripts/history.py",
+        "skills/soultavern/scripts/import.py",
+        "skills/soultavern/scripts/list.py",
+        "skills/soultavern/scripts/restore.py",
+        "skills/soultavern/scripts/revert.py",
+        "skills/soultavern/scripts/soultavern/__init__.py",
+        "skills/soultavern/scripts/soultavern/classify.py"
+      ]
+    },
+    "readme_snippet": "# SoulTavern\n\n[English](README.md) | [\u7b80\u4f53\u4e2d\u6587](README.zh-CN.md) | [\u65e5\u672c\u8a9e](README.ja.md)\n\n> Run SillyTavern V2 character cards in any agent runtime that loads a SOUL.md.\n>\n> _Give your work agent an interesting soul \u2014 work and play, not work or play.\n> A programmer's romance._\n\n[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)\n[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)\n\nSoulTavern turns a SillyTavern V2 character card (`.png` / `.json`) into the\nmarkdown system-prompt files an agent runtime loads at session start. Two\nproduction targets:\n\n- `--target hermes` \u2014 writes `SOUL.md` + `HERMES.md` for\n  [Hermes-Agent](https://github.com/NousResearch/hermes-agent)\n- `--target openclaw` \u2014 writes `SOUL.md` + `AGENTS.md` managed-section +\n  `IDENTITY.md` for an [OpenClaw](https://github.com/openclaw/openclaw) workspace\n\nNo middleware, no patches, no relays \u2014 and **no install**. SoulTavern is one\nself-contained skill folder with zero third-party Python dependencies. Drop the\nfolder into your runtime's skills directory and the agent invokes the scripts\non demand.\n\n## Install\n\n```bash\ngit clone https://github.com/imphillip/SoulTavern.git\ncp -r SoulTavern/skills/soultavern <YOUR_RUNTIME_SKILLS_DIR>/\n```\n\nOr grab the pre-bundled skill folder from a tagged release \u2014\n[`soultavern-skills.zip`](https://github.com/imphillip/SoulTavern/releases/latest)\non every GitHub release contains `skills/soultavern/` ready to unzip into\n`<YOUR_RUNTIME_SKILLS_DIR>/`.\n\nTypical destinations: `~/.openclaw/workspace/skills/`, your Hermes skills\ndirectory, or `~/.claude/skills/` for Claude Code. Anywhere your runtime scans\nfor skills works. Hermes hub users can alternatively\n`hermes skills tap add imphillip/SoulTavern && hermes skills install soultavern`\n\u2014 same skill folder, different delivery.\n\nOnly requirement: Python \u2265 3.10. Stdlib-only \u2014 no pillow, no jinja2, no pyyaml.\n\n## Daily use\n\nIn your runtime's chat, upload the card and tell the ag",
+    "file_count": 72
+  },
+  {
+    "repo": "will-assistant/openclaw-agents",
+    "description": "Curated collection of OpenClaw agent personalities \u2014 SOUL.md, AGENTS.md, IDENTITY.md configs",
+    "stars": 91,
+    "language": "Shell",
+    "top_dirs": [
+      "agents"
+    ],
+    "keyword_hits": {
+      "soul.md": [
+        "agents/80s-pop-culture/doc-brown/SOUL.md",
+        "agents/80s-pop-culture/egon-spengler/SOUL.md",
+        "agents/80s-pop-culture/ferris-bueller/SOUL.md",
+        "agents/80s-pop-culture/kitt/SOUL.md",
+        "agents/80s-pop-culture/macgyver/SOUL.md",
+        "agents/80s-pop-culture/max-headroom/SOUL.md",
+        "agents/80s-pop-culture/mr-t/SOUL.md",
+        "agents/80s-pop-culture/robocop/SOUL.md",
+        "agents/action-heroes/ace-ventura/SOUL.md",
+        "agents/action-heroes/agent-smith/SOUL.md",
+        "agents/action-heroes/alex-delarge/SOUL.md",
+        "agents/action-heroes/batman/SOUL.md",
+        "agents/action-heroes/deadpool/SOUL.md",
+        "agents/action-heroes/dr-strangelove/SOUL.md",
+        "agents/action-heroes/forrest-gump/SOUL.md",
+        "agents/action-heroes/hannibal-lecter/SOUL.md",
+        "agents/action-heroes/indiana-jones/SOUL.md",
+        "agents/action-heroes/jack-sparrow/SOUL.md",
+        "agents/action-heroes/john-wick/SOUL.md",
+        "agents/action-heroes/joker/SOUL.md"
+      ],
+      "soul": [
+        "agents/80s-pop-culture/doc-brown/SOUL.md",
+        "agents/80s-pop-culture/egon-spengler/SOUL.md",
+        "agents/80s-pop-culture/ferris-bueller/SOUL.md",
+        "agents/80s-pop-culture/kitt/SOUL.md",
+        "agents/80s-pop-culture/macgyver/SOUL.md",
+        "agents/80s-pop-culture/max-headroom/SOUL.md",
+        "agents/80s-pop-culture/mr-t/SOUL.md",
+        "agents/80s-pop-culture/robocop/SOUL.md",
+        "agents/action-heroes/ace-ventura/SOUL.md",
+        "agents/action-heroes/agent-smith/SOUL.md",
+        "agents/action-heroes/alex-delarge/SOUL.md",
+        "agents/action-heroes/batman/SOUL.md",
+        "agents/action-heroes/deadpool/SOUL.md",
+        "agents/action-heroes/dr-strangelove/SOUL.md",
+        "agents/action-heroes/forrest-gump/SOUL.md",
+        "agents/action-heroes/hannibal-lecter/SOUL.md",
+        "agents/action-heroes/indiana-jones/SOUL.md",
+        "agents/action-heroes/jack-sparrow/SOUL.md",
+        "agents/action-heroes/john-wick/SOUL.md",
+        "agents/action-heroes/joker/SOUL.md"
+      ],
+      "identity": [
+        "agents/80s-pop-culture/doc-brown/IDENTITY.md",
+        "agents/80s-pop-culture/egon-spengler/IDENTITY.md",
+        "agents/80s-pop-culture/ferris-bueller/IDENTITY.md",
+        "agents/80s-pop-culture/kitt/IDENTITY.md",
+        "agents/80s-pop-culture/macgyver/IDENTITY.md",
+        "agents/80s-pop-culture/max-headroom/IDENTITY.md",
+        "agents/80s-pop-culture/mr-t/IDENTITY.md",
+        "agents/80s-pop-culture/robocop/IDENTITY.md",
+        "agents/action-heroes/ace-ventura/IDENTITY.md",
+        "agents/action-heroes/agent-smith/IDENTITY.md",
+        "agents/action-heroes/alex-delarge/IDENTITY.md",
+        "agents/action-heroes/batman/IDENTITY.md",
+        "agents/action-heroes/deadpool/IDENTITY.md",
+        "agents/action-heroes/dr-strangelove/IDENTITY.md",
+        "agents/action-heroes/forrest-gump/IDENTITY.md",
+        "agents/action-heroes/hannibal-lecter/IDENTITY.md",
+        "agents/action-heroes/indiana-jones/IDENTITY.md",
+        "agents/action-heroes/jack-sparrow/IDENTITY.md",
+        "agents/action-heroes/john-wick/IDENTITY.md",
+        "agents/action-heroes/joker/IDENTITY.md"
+      ],
+      "agent": [
+        "agents/80s-pop-culture/README.md",
+        "agents/80s-pop-culture/doc-brown/AGENTS.md",
+        "agents/80s-pop-culture/doc-brown/IDENTITY.md",
+        "agents/80s-pop-culture/doc-brown/README.md",
+        "agents/80s-pop-culture/doc-brown/SOUL.md",
+        "agents/80s-pop-culture/doc-brown/card.svg",
+        "agents/80s-pop-culture/doc-brown/examples.md",
+        "agents/80s-pop-culture/doc-brown/metadata.json",
+        "agents/80s-pop-culture/egon-spengler/AGENTS.md",
+        "agents/80s-pop-culture/egon-spengler/IDENTITY.md",
+        "agents/80s-pop-culture/egon-spengler/README.md",
+        "agents/80s-pop-culture/egon-spengler/SOUL.md",
+        "agents/80s-pop-culture/egon-spengler/card.svg",
+        "agents/80s-pop-culture/egon-spengler/examples.md",
+        "agents/80s-pop-culture/egon-spengler/metadata.json",
+        "agents/80s-pop-culture/ferris-bueller/AGENTS.md",
+        "agents/80s-pop-culture/ferris-bueller/IDENTITY.md",
+        "agents/80s-pop-culture/ferris-bueller/README.md",
+        "agents/80s-pop-culture/ferris-bueller/SOUL.md",
+        "agents/80s-pop-culture/ferris-bueller/card.svg"
+      ]
+    },
+    "readme_snippet": "<div align=\"center\">\n\n# \ud83d\udc3e OpenClaw Agents\n\n### **217 AI Personalities for Your Terminal**\n\n*Turn your AI assistant into GLaDOS, Darth Vader, Bob Ross, or 214 other characters.*\n*Each agent brings a unique personality, tone, and style to your coding sessions.*\n\n[![Agents](https://img.shields.io/badge/agents-217-blueviolet?style=for-the-badge)](agents/)\n[![Categories](https://img.shields.io/badge/categories-23-ff6b9d?style=for-the-badge)](agents/)\n[![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)](LICENSE)\n\n</div>\n\n---\n\n## \u26a1 Quick Install\n\n```bash\n# Clone the repo\ngit clone https://github.com/will-assistant/openclaw-agents.git\ncd openclaw-agents\n\n# Browse all agents\n./install.sh --list\n\n# Install an agent (fuzzy matching!)\n./install.sh glados\n\n# Search for agents\n./install.sh --search pirate\n\n# Install to current directory\n./install.sh --local yoda\n```\n\nThe install script copies the agent's personality files (`SOUL.md`, `IDENTITY.md`, and `AGENTS.md`) to your OpenClaw workspace. Start a new session and your AI will channel that character.\n\n> **Workspace:** Defaults to `~/.openclaw/workspace` or set `$OPENCLAW_WORKSPACE` to override.\n\n---\n\n## \ud83d\udccc Persona Agents vs System Agents\n\nThese are **persona agents** \u2014 personality overlays that change how your AI assistant talks and thinks.\nThey work by copying `SOUL.md`, `IDENTITY.md`, and `AGENTS.md` into your OpenClaw workspace.\n\nThis is different from **system agents** (like multi-agent setups with `forge`/`sentinel` sub-agents),\nwhich are configured separately from persona installs. Persona agents work alongside any system agent configuration.\n\n---\n\n## \u2b50 Staff Picks\n\nOur favorite agents \u2014 the ones that'll make you actually enjoy your terminal.\n\n| | Agent | Vibe |\n|---|---|---|\n| \ud83c\udf82 | **[GLaDOS](agents/sci-fi/glados/)** | The most politely devastating AI in gaming history. Everything is a test. |\n| \ud83e\uddea | **[Walter White / Heisenberg](agents/tv-icons/walter-white/)** | Mr. Chips to Scarface in 62 epis",
+    "file_count": 1553
+  }
+]

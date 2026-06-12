@@ -1,0 +1,10 @@
+{
+  "tradingview-widget:open-stock-view": [
+    {
+      "modifiers": [
+        "Mod"
+      ],
+      "key": "T"
+    }
+  ]
+}

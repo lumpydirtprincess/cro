@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "functions/alertcondition.md",
+                "file": "annotations/returns.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "alertcondition"
+              "title": "returns"
             }
           }
         ]
@@ -185,7 +185,8 @@
   },
   "active": "cd2effa446e129a8",
   "lastOpenFiles": [
-    "functions/alert.md",
-    "functions/alertcondition.md"
+    "annotations/strategy_alert_message.md",
+    "functions/alertcondition.md",
+    "functions/alert.md"
   ]
 }
