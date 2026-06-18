@@ -1,0 +1,479 @@
+    //@version=6
+//this isn an examples  rread through of whaw i wnat oy ou toparticulawtlry     t
+
+
+indicator("Information Asymmetry Gradient ⟡ [DAFE]", shorttitle="IAG ⟡", overlay=false,
+     max_bars_back=500, max_labels_count=500, max_lines_count=500, max_boxes_count=500, precision=3)
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+//    INFORMATION ASYMMETRY GRADIENT ⟡ — THE FLOW INTELLIGENCE ENGINE
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+//  PHILOSOPHY:
+//  Markets move on information asymmetry. When one side — buyers or sellers —
+//  suddenly gains an information advantage, the volume-weighted directional
+//  pressure shifts BEFORE price fully reacts. The gradient of this shift
+//  (fast EMA − slow EMA of directional pressure, z-scored) creates a leading
+//  oscillator that catches peaks and valleys early.
+//
+//  WHAT v2 ADDS:
+//  1. Footprint tick delta — REAL buy/sell volume replaces estimation
+//  2. Multi-TF estimation fallback (10s/30s/1m) for non-premium
+//  3. RCM structural brain — regime context + directional permissions
+//  4. WPK delta physics — volume confirmation layer
+//  5. VoVix adaptive thresholds — extreme levels scale with vol regime
+//  6. 3 visual modes: Flow Canvas, Pressure Wave, Asymmetry Terrain
+//  7. 7 unique artistic themes with gradient glow rendering
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+import DskyzInvestments/DafeRCMLib/1 as rcm
+import DskyzInvestments/DafeVisLib/1 as viz
+// ═══════════════════════════════════════════════════════════════════════════════
+// INPUTS
+// ═══════════════════════════════════════════════════════════════════════════════
+grp_core = "⟡ Core Asymmetry"
+i_fastLen   = input.int(8, "Fast Information Period", minval=2, maxval=30, group=grp_core, tooltip="EMA period for detecting immediate information flow changes. Shorter = more responsive to sudden asymmetries.")
+i_slowLen   = input.int(34, "Slow Information Period", minval=10, maxval=100, group=grp_core, tooltip="Baseline EMA period. Should be 3-5x the fast period. 34 (Fibonacci) is proven.")
+i_gradSmooth = input.int(3, "Gradient Smoothing", minval=1, maxval=10, group=grp_core, tooltip="EMA smoothing on the raw gradient. 1-2 raw, 3-5 balanced, 6+ smooth but laggy.")
+i_calcMode  = input.string("Weighted", "Calculation Mode", options=["Simple", "Weighted", "Logarithmic"], group=grp_core, tooltip="Simple: basic volume split. Weighted: volume × price movement + wick influence. Logarithmic: log-scaled for large moves.")
+i_useRatio  = input.bool(false, "Use Ratio (vs Difference)", group=grp_core, tooltip="Ratio: UpInfo/DownInfo (multiplicative, better across vol regimes). Difference: UpInfo-DownInfo (additive, more intuitive).")
+grp_fp = "📐 Data Source"
+i_fpTicks   = input.int(100, "Footprint Ticks/Row", minval=1, maxval=500, group=grp_fp, tooltip="Tick resolution for footprint data (Premium).")
+i_estTF1    = input.timeframe("10S", "Micro TF", group=grp_fp, tooltip="Fastest estimation TF. 10S ≈ tick-level resolution.")
+i_estTF2    = input.timeframe("30S", "Short TF", group=grp_fp)
+i_estTF3    = input.timeframe("1", "Base TF", group=grp_fp)
+i_estW1     = input.float(0.50, "Micro TF Weight", minval=0.1, maxval=0.8, step=0.05, group=grp_fp)
+grp_vol = "🌊 Volatility"
+i_stdevLen  = input.int(21, "Volatility Window", minval=5, maxval=100, group=grp_vol, tooltip="Period for measuring asymmetry volatility. Spikes = information shock.")
+i_volTh     = input.float(1.5, "Vol Alert Level (σ)", minval=0.5, maxval=4.0, step=0.1, group=grp_vol, tooltip="Z-score threshold for volatility alerts.")
+i_exTh      = input.float(2.0, "Extreme Threshold (σ)", minval=1.0, maxval=4.0, step=0.1, group=grp_vol, tooltip="Z-score level for extreme asymmetry signals.")
+grp_rcm = "🧠 RCM Brain"
+i_rcmEnable = input.bool(true, "Enable RCM", group=grp_rcm)
+i_rcmPreset = input.string("Default", "RCM Preset", options=["Default", "Scalp", "Swing"], group=grp_rcm)
+i_rcmGate   = input.bool(true, "Gate Signals via RCM", group=grp_rcm, tooltip="Block extreme signals during RCM Transition state.")
+grp_sig = "🎯 Signals"
+i_cooldown  = input.int(5, "Signal Cooldown", minval=1, maxval=30, group=grp_sig)
+i_showOverlay = input.bool(true, "Overlay Signals on Chart", group=grp_sig, tooltip="Show ⟡ BULL/BEAR labels on the price chart via force_overlay.")
+grp_vis = "🎨 Visuals"
+i_visMode   = input.string("Flow Canvas", "Visual Mode", options=["Flow Canvas", "Pressure Wave", "Asymmetry Terrain"], group=grp_vis, tooltip="Flow Canvas: gradient glow with artistic layering. Pressure Wave: dual-line composite oscillator. Asymmetry Terrain: filled histogram with directional coloring.")
+i_theme     = input.string("Starry Void", "Theme", options=["Starry Void", "Aurora Drift", "Ember Tide", "Deep Sapphire", "Jade Mist", "Crimson Dusk", "Silver Phantom"], group=grp_vis, tooltip="7 unique artistic palettes with gradient rendering.")
+i_barColor  = input.bool(false, "Color Price Bars", group=grp_vis)
+grp_dash = "📋 Dashboard"
+i_dashEnable = input.bool(true, "Show Dashboard", group=grp_dash)
+i_dashSize  = input.string("Full", "Size", options=["Full", "Compact", "Mini"], group=grp_dash)
+i_dashPos   = input.string("Top Right", "Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=grp_dash)
+i_dashMode  = input.string("Main Chart Overlay", "Location", options=["Main Chart Overlay", "Indicator Panel"], group=grp_dash)
+// ═══════════════════════════════════════════════════════════════════════════════
+// THEME ENGINE 
+// ═══════════════════════════════════════════════════════════════════════════════
+color th_bullLo = switch i_theme
+    "Starry Void"    => #4169E1 
+    "Aurora Drift"   => #228B22 
+    "Ember Tide"     => #FF8C00
+    "Deep Sapphire"  => #1E90FF 
+    "Jade Mist"      => #2E8B57 
+    "Crimson Dusk"   => #FF6347
+    "Silver Phantom" => #708090 
+    => #4169E1
+color th_bullHi = switch i_theme
+    "Starry Void"    => #FFD700 
+    "Aurora Drift"   => #00FF88 
+    "Ember Tide"     => #FFD700
+    "Deep Sapphire"  => #00BFFF 
+    "Jade Mist"      => #39FF14 
+    "Crimson Dusk"   => #FF4500
+    "Silver Phantom" => #E0E0E0 
+    => #FFD700
+color th_bearLo = switch i_theme
+    "Starry Void"    => #191970 
+    "Aurora Drift"   => #4B0082 
+    "Ember Tide"     => #8B0000
+    "Deep Sapphire"  => #000080 
+    "Jade Mist"      => #006400 
+    "Crimson Dusk"   => #800020
+    "Silver Phantom" => #2F4F4F 
+    => #191970
+color th_bearHi = switch i_theme
+    "Starry Void"    => #87CEEB 
+    "Aurora Drift"   => #9370DB 
+    "Ember Tide"     => #FF4444
+    "Deep Sapphire"  => #4682B4 
+    "Jade Mist"      => #66CDAA 
+    "Crimson Dusk"   => #DC143C
+    "Silver Phantom" => #A9A9A9
+    => #87CEEB
+color th_bull = switch i_theme
+    "Starry Void"    => #FFD700 
+    "Aurora Drift"   => #00FF88 
+    "Ember Tide"     => #FFD700
+    "Deep Sapphire"  => #00BFFF 
+    "Jade Mist"      => #39FF14 
+    "Crimson Dusk"   => #FF6347
+    "Silver Phantom" => #E0E0E0 
+    => #FFD700
+color th_bear = switch i_theme
+    "Starry Void"    => #4169E1 
+    "Aurora Drift"   => #9370DB 
+    "Ember Tide"     => #FF2222
+    "Deep Sapphire"  => #4682B4 
+    "Jade Mist"      => #20B2AA 
+    "Crimson Dusk"   => #DC143C
+    "Silver Phantom" => #778899 
+    => #4169E1
+color th_neutral = switch i_theme
+    "Starry Void"    => #555577 
+    "Aurora Drift"   => #445566 
+    "Ember Tide"     => #665544
+    "Deep Sapphire"  => #445566 
+    "Jade Mist"      => #446655 
+    "Crimson Dusk"   => #664444
+    "Silver Phantom" => #555555 
+    => #555577
+color th_hot = switch i_theme
+    "Starry Void"    => #FFFFFF 
+    "Aurora Drift"   => #FFFFFF 
+    "Ember Tide"     => #FFFF00
+    "Deep Sapphire"  => #FFFFFF 
+    "Jade Mist"      => #FFFFFF 
+    "Crimson Dusk"   => #FFFF00
+    "Silver Phantom" => #FFFFFF 
+    => #FFFFFF
+color th_frame = switch i_theme
+    "Starry Void"    => #FFD700 
+    "Aurora Drift"   => #00FF88 
+    "Ember Tide"     => #FF8C00
+    "Deep Sapphire"  => #1E90FF 
+    "Jade Mist"      => #39FF14 
+    "Crimson Dusk"   => #FF6347
+    "Silver Phantom" => #A0A0A0 
+    => #FFD700
+color th_bg = switch i_theme
+    "Starry Void"    => #0A0A1A 
+    "Aurora Drift"   => #0A1A0A 
+    "Ember Tide"     => #1A0A05
+    "Deep Sapphire"  => #050A18 
+    "Jade Mist"      => #081810 
+    "Crimson Dusk"   => #1A0808
+    "Silver Phantom" => #0D0D0D 
+    => #0A0A1A
+color th_border = switch i_theme
+    "Starry Void"    => #1A1A33 
+    "Aurora Drift"   => #1A331A 
+    "Ember Tide"     => #331A0A
+    "Deep Sapphire"  => #0A1A33 
+    "Jade Mist"      => #1A2A1A 
+    "Crimson Dusk"   => #331A1A
+    "Silver Phantom" => #1A1A1A 
+    => #1A1A33
+f_gradColor(float gz, int dir) =>
+    float intensity = math.min(100.0, math.abs(gz) * 40.0)
+    dir > 0 ? color.from_gradient(intensity, 0.0, 100.0, color.new(th_bullLo, 20), color.new(th_bullHi, 0)) : color.from_gradient(intensity, 0.0, 100.0, color.new(th_bearLo, 20), color.new(th_bearHi, 0))
+// ═══════════════════════════════════════════════════════════════════════════════
+// FOOTPRINT + MULTI-TF ESTIMATION
+// ═══════════════════════════════════════════════════════════════════════════════
+footprint reqFP = request.footprint(i_fpTicks, 70)
+bool   hasFP   = not na(reqFP)
+float  fpBuyV  = hasFP ? reqFP.buy_volume() : na
+float  fpSellV = hasFP ? reqFP.sell_volume() : na
+float  fpDelta = hasFP ? reqFP.delta() : na
+f_est_info() =>
+    float bp = (close - low) / (high - low + 1e-6)
+    float bv = volume * bp
+    float sv = volume * (1.0 - bp)
+    [bv, sv]
+[eb1, es1] = request.security(syminfo.tickerid, i_estTF1, f_est_info(), lookahead=barmerge.lookahead_off)
+[eb2, es2] = request.security(syminfo.tickerid, i_estTF2, f_est_info(), lookahead=barmerge.lookahead_off)
+[eb3, es3] = request.security(syminfo.tickerid, i_estTF3, f_est_info(), lookahead=barmerge.lookahead_off)
+float w2 = (1.0 - i_estW1) * 0.6
+float w3 = (1.0 - i_estW1) * 0.4
+float estBuyV  = nz(eb1) * i_estW1 + nz(eb2) * w2 + nz(eb3) * w3
+float estSellV = nz(es1) * i_estW1 + nz(es2) * w2 + nz(es3) * w3
+string srcText = hasFP ? "TICK" : "EST"
+// ═══════════════════════════════════════════════════════════════════════════════
+// IAG CORE 
+// ═══════════════════════════════════════════════════════════════════════════════
+int slowAdj = math.max(i_slowLen, i_fastLen + 1)
+float buyVol  = hasFP ? nz(fpBuyV) : estBuyV
+float sellVol = hasFP ? nz(fpSellV) : estSellV
+float barRange = high - low
+float bodySize = math.abs(close - open)
+float upperWick = high - math.max(close, open)
+float lowerWick = math.min(close, open) - low
+bool  isBull = close > open
+float UpInfo = 0.0
+float DownInfo = 0.0
+if hasFP
+    float wickBullBonus = lowerWick > upperWick ? (lowerWick - upperWick) / (barRange + 1e-6) * buyVol * 0.3 : 0.0
+    float wickBearBonus = upperWick > lowerWick ? (upperWick - lowerWick) / (barRange + 1e-6) * sellVol * 0.3 : 0.0
+    UpInfo := buyVol + wickBullBonus
+    DownInfo := sellVol + wickBearBonus
+else
+    if i_calcMode == "Simple"
+        float bodyUp = isBull ? bodySize : 0.0
+        float bodyDn = isBull ? 0.0 : bodySize
+        UpInfo := buyVol * (bodyUp / (barRange + 1e-6))
+        DownInfo := sellVol * (bodyDn / (barRange + 1e-6))
+    else if i_calcMode == "Weighted"
+        float bodyUp = isBull ? bodySize : 0.0
+        float bodyDn = isBull ? 0.0 : bodySize
+        float upW = bodyUp + upperWick * 0.3 + lowerWick * 0.7  
+        float dnW = bodyDn + lowerWick * 0.3 + upperWick * 0.7  
+        UpInfo := buyVol * (upW / (barRange + 1e-6))
+        DownInfo := sellVol * (dnW / (barRange + 1e-6))
+    else  
+        float bodyUp = isBull ? bodySize : 0.0
+        float bodyDn = isBull ? 0.0 : bodySize
+        UpInfo := buyVol * math.log(1.0 + bodyUp / (barRange + 1e-6))
+        DownInfo := sellVol * math.log(1.0 + bodyDn / (barRange + 1e-6))
+float rawAsym = i_useRatio ? UpInfo / (DownInfo + 1e-6) : UpInfo - DownInfo
+float asymFast = ta.ema(rawAsym, i_fastLen)
+float asymSlow = ta.ema(rawAsym, slowAdj)
+float gradRaw  = asymFast - asymSlow
+float gradient = ta.ema(gradRaw, i_gradSmooth)
+float gradMean = ta.sma(gradient, slowAdj)
+float gradStd  = ta.stdev(gradient, slowAdj)
+float gradZ    = gradStd > 0 ? (gradient - gradMean) / gradStd : 0.0
+float asymVol    = ta.stdev(rawAsym, i_stdevLen)
+float volMean    = ta.sma(asymVol, i_stdevLen)
+float volStd     = ta.stdev(asymVol, i_stdevLen)
+float volZ       = volStd > 0 ? (asymVol - volMean) / volStd : 0.0
+float flowStr = math.min(100.0, math.abs(gradZ) * 33.33)
+int   flowDir = gradZ > 0 ? 1 : -1
+// ═══════════════════════════════════════════════════════════════════════════════
+// VoVix — Adaptive extreme thresholds
+// ═══════════════════════════════════════════════════════════════════════════════
+float atrFast  = ta.atr(5)
+float atrSlow  = ta.atr(34)
+float atrStd   = ta.stdev(atrFast, 21)
+float vovix    = atrStd > 0 ? (atrFast - atrSlow) / atrStd : 0.0
+float vovixAdj = math.max(0.7, 1.0 + vovix * 0.12)
+float adjExTh  = i_exTh * vovixAdj  
+float adjVolTh = i_volTh * vovixAdj
+bool isExtreme  = math.abs(gradZ) > adjExTh
+bool isHighVol  = volZ > adjVolTh
+bool isBuilding = math.abs(gradZ) > adjExTh * 0.5 and not isExtreme
+// ═══════════════════════════════════════════════════════════════════════════════
+// WPK DELTA PHYSICS — Direction confirmation
+// ═══════════════════════════════════════════════════════════════════════════════
+float wpkDelta  = hasFP ? fpDelta : (barRange > 0 ? volume * ((close - low) - (high - close)) / barRange : 0.0)
+float wpkAvg    = ta.sma(math.abs(wpkDelta), 20)
+float wpkRatio  = wpkAvg > 0 ? math.abs(wpkDelta) / wpkAvg : 1.0
+bool  wpkBull   = wpkDelta > 0 and wpkRatio > 1.1
+bool  wpkBear   = wpkDelta < 0 and wpkRatio > 1.1
+// ═══════════════════════════════════════════════════════════════════════════════
+// RCM INTEGRATION
+// ═══════════════════════════════════════════════════════════════════════════════
+var rcm.RCMState  rcmSt  = rcm.RCMState.new()
+var rcm.RCMConfig rcmCfg = switch i_rcmPreset
+    "Scalp" => rcm.scalp_config()
+    "Swing" => rcm.swing_config()
+    => rcm.default_config()
+if i_rcmEnable
+    rcm.ExternalEvidence ev = rcm.ExternalEvidence.new()
+    ev.source := "iag"
+    if isExtreme
+        ev.bullEvidence := flowDir > 0 ? 4.0 : 0.0
+        ev.bearEvidence := flowDir < 0 ? 4.0 : 0.0
+    else if isBuilding
+        ev.bullEvidence := flowDir > 0 ? 1.5 : 0.0
+        ev.bearEvidence := flowDir < 0 ? 1.5 : 0.0
+    if isHighVol
+        ev.integrityMod := -0.2
+    rcmSt := rcm.inject(rcmSt, ev)
+    rcmSt := rcm.update(rcmSt, rcmCfg)
+rcm.RCMPermissions perms = i_rcmEnable ? rcm.get_permissions(rcmSt) : rcm.RCMPermissions.new()
+bool rcmPass = not i_rcmEnable or not i_rcmGate or rcmSt.state != 0 or rcmSt.bullDamaged or rcmSt.bearDamaged
+color rcmCol = i_rcmEnable ? rcm.state_color(rcmSt, th_bull, th_bear, th_neutral) : th_neutral
+// ═══════════════════════════════════════════════════════════════════════════════
+// SIGNAL GENERATION
+// ═══════════════════════════════════════════════════════════════════════════════
+var int lastSigBar = -9999
+bool cdOk = (bar_index - lastSigBar) >= i_cooldown
+bool rawBullSig = isExtreme and flowDir > 0 and not (isExtreme[1] and gradZ[1] > 0) and cdOk
+bool rawBearSig = isExtreme and flowDir < 0 and not (isExtreme[1] and gradZ[1] < 0) and cdOk
+bool bullSig = rawBullSig and (wpkBull or not hasFP) and rcmPass and (not i_rcmEnable or perms.allowLong)
+bool bearSig = rawBearSig and (wpkBear or not hasFP) and rcmPass and (not i_rcmEnable or perms.allowShort)
+if bullSig or bearSig
+    lastSigBar := bar_index
+int sigTier = 0
+if bullSig or bearSig
+    sigTier := 1
+    if math.abs(gradZ) > adjExTh * 1.5
+        sigTier += 1
+    if wpkRatio > 1.5
+        sigTier += 1
+    if i_rcmEnable and rcmSt.state != 0 and rcmSt.integrity > 0.6
+        sigTier += 1
+    sigTier := math.min(sigTier, 4)
+string statusText = isExtreme ? (flowDir > 0 ? "⟡ EXTREME BULL" : "⟡ EXTREME BEAR") : isBuilding ? (flowDir > 0 ? "Building Bull" : "Building Bear") : isHighVol ? "⚡ High Vol" : "Scanning"
+color  statusCol  = isExtreme ? (flowDir > 0 ? th_bull : th_bear) : isBuilding ? th_frame : isHighVol ? th_hot : th_neutral
+// ═══════════════════════════════════════════════════════════════════════════════
+// DYNAMIC COLOR
+// ═══════════════════════════════════════════════════════════════════════════════
+color flowColor = f_gradColor(gradZ, flowDir)
+// ═══════════════════════════════════════════════════════════════════════════════
+// PLOTS — MODE-DEPENDENT
+// ═══════════════════════════════════════════════════════════════════════════════
+bool isCanvas  = i_visMode == "Flow Canvas"
+bool isWave    = i_visMode == "Pressure Wave"
+bool isTerrain = i_visMode == "Asymmetry Terrain"
+hline(0, "Zero", color=color.new(th_neutral, 70), linestyle=hline.style_dotted)
+h_exUp = hline(i_exTh, "", color=color.new(th_bull, 90), linestyle=hline.style_dotted)
+h_exDn = hline(-i_exTh, "", color=color.new(th_bear, 90), linestyle=hline.style_dotted)
+h_bUp  = hline(i_exTh * 0.5, "", color=color.new(th_neutral, 95))
+h_bDn  = hline(-i_exTh * 0.5, "", color=color.new(th_neutral, 95))
+fill(h_exUp, h_bUp, color=color.new(th_bull, 97), title="Upper Zone")
+fill(h_bDn, h_exDn, color=color.new(th_bear, 97), title="Lower Zone")
+plot(isCanvas ? gradZ : na, "Gradient Core", color=flowColor, linewidth=3)
+plot(isCanvas ? gradZ : na, "Gradient Glow", color=color.new(flowColor, 40), linewidth=6)
+plot(isCanvas ? gradZ : na, "Gradient Aura", color=color.new(flowColor, 72), linewidth=10)
+plot(isCanvas ? volZ : na, "Vol Ribbon", color=color.new(th_hot, 70), linewidth=1, style=plot.style_area)
+float waveComp = gradZ * 0.7 + volZ * 0.3
+float waveSlow = ta.ema(waveComp, 8)
+color waveCol  = waveComp > waveSlow ? th_bull : th_bear
+color waveFill = waveComp > waveSlow ? color.new(th_bull, 80) : color.new(th_bear, 80)
+pW1 = plot(isWave ? waveComp : na, "Wave Fast", color=waveCol, linewidth=2)
+pW2 = plot(isWave ? waveSlow : na, "Wave Slow", color=color.new(th_neutral, 40), linewidth=1)
+fill(pW1, pW2, color=isWave ? waveFill : na, title="Wave Fill")
+plot(isWave ? gradZ : na, "Wave Gradient", color=color.new(flowColor, 30), linewidth=1, style=plot.style_stepline)
+plot(isTerrain ? gradZ : na, "Terrain Gradient", color=flowColor, linewidth=1, style=plot.style_columns)
+plot(isTerrain ? gradZ : na, "Terrain Edge", color=color.new(flowColor, 40), linewidth=3)
+plotshape(i_showOverlay and bullSig and sigTier >= 3, "OvrBull", shape.triangleup, location.belowbar, th_bull, size=size.small, text="⟡ BULL", textcolor=th_bull, force_overlay=true)
+plotshape(i_showOverlay and bullSig and sigTier < 3, "OvrBullSm", shape.triangleup, location.belowbar, color.new(th_bull, 30), size=size.tiny, force_overlay=true)
+plotshape(i_showOverlay and bearSig and sigTier >= 3, "OvrBear", shape.triangledown, location.abovebar, th_bear, size=size.small, text="⟡ BEAR", textcolor=th_bear, force_overlay=true)
+plotshape(i_showOverlay and bearSig and sigTier < 3, "OvrBearSm", shape.triangledown, location.abovebar, color.new(th_bear, 30), size=size.tiny, force_overlay=true)
+bgcolor(isExtreme ? color.new(flowColor, 88) : isHighVol ? color.new(th_hot, 93) : na, title="State BG")
+barcolor(i_barColor ? flowColor : na)
+// ═══════════════════════════════════════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════════════════════════════════════
+f_dPos(string p) =>
+    switch p
+        "Top Right" => position.top_right 
+        "Top Left" => position.top_left
+        "Bottom Right" => position.bottom_right 
+        => position.bottom_left
+f_bar(float val, float mx, int len) =>
+    int f = math.round(math.max(0.0, math.min(1.0, val / mx)) * len)
+    str.repeat("█", f) + str.repeat("░", len - f)
+bool forceOvr = i_dashMode == "Main Chart Overlay"
+int tRows = i_dashSize == "Full" ? 18 : i_dashSize == "Compact" ? 9 : 4
+var table dO = table.new(f_dPos(i_dashPos), 4, tRows, bgcolor=color.new(th_bg, 5), border_width=1, border_color=th_border, frame_width=2, frame_color=color.new(th_frame, 40), force_overlay=true)
+var table dP = table.new(f_dPos(i_dashPos), 4, tRows, bgcolor=color.new(th_bg, 5), border_width=1, border_color=th_border, frame_width=2, frame_color=color.new(th_frame, 40), force_overlay=false)
+table d = forceOvr ? dO : dP
+if barstate.islast and i_dashEnable
+    if forceOvr
+        table.clear(dP, 0, 0, 3, tRows - 1)
+    else
+        table.clear(dO, 0, 0, 3, tRows - 1)
+    color C = color.new(th_bg, 0)
+    if i_dashSize == "Full"
+        int r = 0
+        table.cell(d, 0, r, "⟡ INFORMATION ASYMMETRY GRADIENT", text_color=th_frame, bgcolor=color.new(th_frame, 75), text_size=size.small, text_halign=text.align_center)
+        table.merge_cells(d, 0, r, 3, r)
+        r += 1
+        table.cell(d, 0, r, "─── Asymmetry Engine ───", text_color=th_frame, bgcolor=color.new(th_bg, 40), text_size=size.tiny, text_halign=text.align_center)
+        table.merge_cells(d, 0, r, 3, r)
+        r += 1
+        table.cell(d, 0, r, "Status", text_color=th_neutral, bgcolor=C, text_size=size.tiny)
+        table.cell(d, 1, r, statusText, text_color=statusCol, bgcolor=C, text_size=size.tiny)
+        table.cell(d, 2, r, "Source", text_color=th_neutral, bgcolor=C, text_size=size.tiny)
+        table.cell(d, 3, r, srcText, text_color=hasFP ? th_bull : th_neutral, bgcolor=C, text_size=size.tiny)
+        r += 1
+        color gzCol = color.from_gradient(gradZ, -3, 3, th_bear, th_bull)
+        table.cell(d, 0, r, "Gradient", text_color=th_neutral, bgcolor=C, text_size=size.tiny)
+        table.cell(d, 1, r, str.tostring(gradZ, "#.##") + "σ " + f_bar(math.abs(gradZ), 4.0, 8), text_color=gzCol, bgcolor=C, text_size=size.tiny)
+        table.cell(d, 2, r, "Flow", text_color=th_neutral, bgcolor=C, text_size=size.tiny)
+        color fCol = flowStr > 66 ? th_bull : flowStr > 33 ? th_frame : th_bear
+        table.cell(d, 3, r, str.tostring(flowStr, "#") + "%", text_color=fCol, bgcolor=C, text_size=size.tiny)
+        r += 1
+        float balance = UpInfo - DownInfo
+        color balCol = balance > 0 ? th_bull : th_bear
+        table.cell(d, 0, r, "Balance", text_color=th_neutral, bgcolor=C, text_size=size.tiny)
+        table.cell(d, 1, r, (balance > 0 ? "↑ " : "↓ ") + str.tostring(math.abs(balance), "#.#"), text_color=balCol, bgcolor=C, text_size=size.tiny)
+        table.cell(d, 2, r, "Vol Z", text_color=th_neutral, bgcolor=C, text_size=size.tiny)
+        table.cell(d, 3, r, str.tostring(volZ, "#.##"), text_color=isHighVol ? th_hot : th_neutral, bgcolor=C, text_size=size.tiny)
+        r += 1
+        table.cell(d, 0, r, "VoVix", text_color=th_neutral, bgcolor=C, text_size=size.tiny)
+        table.cell(d, 1, r, str.tostring(vovix, "#.##"), text_color=vovix > 1 ? th_hot : th_neutral, bgcolor=C, text_size=size.tiny)
+        table.cell(d, 2, r, "Adj Th", text_color=th_neutral, bgcolor=C, text_size=size.tiny)
+        table.cell(d, 3, r, str.tostring(adjExTh, "#.##") + "σ", text_color=th_neutral, bgcolor=C, text_size=size.tiny)
+        r += 1
+        table.cell(d, 0, r, "─── Delta Physics ───", text_color=th_bear, bgcolor=color.new(th_bg, 40), text_size=size.tiny, text_halign=text.align_center)
+        table.merge_cells(d, 0, r, 3, r)
+        r += 1
+        color dCol = wpkDelta > 0 ? th_bull : wpkDelta < 0 ? th_bear : th_neutral
+        table.cell(d, 0, r, "Delta", text_color=th_neutral, bgcolor=C, text_size=size.tiny)
+        table.cell(d, 1, r, str.tostring(wpkDelta, "#.#"), text_color=dCol, bgcolor=C, text_size=size.tiny)
+        table.cell(d, 2, r, "Ratio", text_color=th_neutral, bgcolor=C, text_size=size.tiny)
+        table.cell(d, 3, r, str.tostring(wpkRatio, "#.##") + "x", text_color=wpkRatio > 1.5 ? th_bull : th_neutral, bgcolor=C, text_size=size.tiny)
+        r += 1
+        if i_rcmEnable
+            table.cell(d, 0, r, "─── RCM Brain ───", text_color=th_frame, bgcolor=color.new(th_bg, 40), text_size=size.tiny, text_halign=text.align_center)
+            table.merge_cells(d, 0, r, 3, r)
+            r += 1
+            table.cell(d, 0, r, "State", text_color=th_neutral, bgcolor=C, text_size=size.tiny)
+            table.cell(d, 1, r, rcm.state_text(rcmSt), text_color=rcmCol, bgcolor=C, text_size=size.tiny)
+            table.cell(d, 2, r, "Regime", text_color=th_neutral, bgcolor=C, text_size=size.tiny)
+            table.cell(d, 3, r, rcm.get_regime(rcmSt), text_color=rcmCol, bgcolor=C, text_size=size.tiny)
+            r += 1
+            table.cell(d, 0, r, "Integ", text_color=th_neutral, bgcolor=C, text_size=size.tiny)
+            table.cell(d, 1, r, rcm.integrity_text(rcmSt) + " " + f_bar(rcmSt.integrity, 1.0, 6), text_color=rcm.integrity_color(rcmSt, th_bull, th_bear), bgcolor=C, text_size=size.tiny)
+            table.cell(d, 2, r, "Perms", text_color=th_neutral, bgcolor=C, text_size=size.tiny)
+            string pTxt = perms.preferLong > 0.3 ? "Longs pref" : perms.preferShort > 0.3 ? "Shorts pref" : "Both sides"
+            table.cell(d, 3, r, pTxt, text_color=perms.preferLong > 0.3 ? th_bull : perms.preferShort > 0.3 ? th_bear : th_neutral, bgcolor=C, text_size=size.tiny)
+            r += 1
+        if r < tRows
+            table.cell(d, 0, r, "⟡ Dskyz (DAFE) Trading Systems ⟡", text_color=color.new(th_frame, 40), bgcolor=color.new(th_bg, 0), text_size=size.tiny, text_halign=text.align_center)
+            table.merge_cells(d, 0, r, 3, r)
+    else if i_dashSize == "Compact"
+        int r = 0
+        table.cell(d, 0, r, "⟡ IAG", text_color=th_frame, bgcolor=color.new(th_frame, 75), text_size=size.tiny)
+        table.merge_cells(d, 0, r, 1, r)
+        r += 1
+        table.cell(d, 0, r, "Status", text_color=th_neutral, bgcolor=C, text_size=size.tiny)
+        table.cell(d, 1, r, statusText, text_color=statusCol, bgcolor=C, text_size=size.tiny)
+        r += 1
+        color gzC = color.from_gradient(gradZ, -3, 3, th_bear, th_bull)
+        table.cell(d, 0, r, "Grad Z", text_color=th_neutral, bgcolor=C, text_size=size.tiny)
+        table.cell(d, 1, r, str.tostring(gradZ, "#.##") + "σ", text_color=gzC, bgcolor=C, text_size=size.small)
+        r += 1
+        table.cell(d, 0, r, "Flow", text_color=th_neutral, bgcolor=C, text_size=size.tiny)
+        table.cell(d, 1, r, str.tostring(flowStr, "#") + "%", text_color=flowStr > 66 ? th_bull : th_neutral, bgcolor=C, text_size=size.tiny)
+        r += 1
+        table.cell(d, 0, r, "Vol Z", text_color=th_neutral, bgcolor=C, text_size=size.tiny)
+        table.cell(d, 1, r, str.tostring(volZ, "#.##"), text_color=isHighVol ? th_hot : th_neutral, bgcolor=C, text_size=size.tiny)
+        r += 1
+        if i_rcmEnable
+            table.cell(d, 0, r, "RCM", text_color=th_neutral, bgcolor=C, text_size=size.tiny)
+            table.cell(d, 1, r, rcm.state_text(rcmSt), text_color=rcmCol, bgcolor=C, text_size=size.tiny)
+            r += 1
+        table.cell(d, 0, r, statusText, text_color=statusCol, bgcolor=color.new(th_bg, 0), text_size=size.tiny)
+        table.merge_cells(d, 0, r, 1, r)
+        r += 1
+        table.cell(d, 0, r, "⟡ DAFE ⟡", text_color=color.new(th_frame, 50), bgcolor=color.new(th_bg, 0), text_size=size.tiny)
+        table.merge_cells(d, 0, r, 1, r)
+    else  
+        color gzC = color.from_gradient(gradZ, -3, 3, th_bear, th_bull)
+        table.cell(d, 0, 0, "⟡ IAG " + str.tostring(gradZ, "#.##") + "σ", text_color=gzC, bgcolor=color.new(th_bg, 30), text_size=size.small)
+        table.cell(d, 0, 1, statusText, text_color=statusCol, bgcolor=color.new(th_bg, 30), text_size=size.tiny)
+        table.cell(d, 0, 2, "Flow: " + str.tostring(flowStr, "#") + "% | " + srcText, text_color=th_neutral, bgcolor=color.new(th_bg, 30), text_size=size.tiny)
+        if i_rcmEnable
+            table.cell(d, 0, 3, "RCM: " + rcm.state_text(rcmSt), text_color=rcmCol, bgcolor=color.new(th_bg, 30), text_size=size.tiny)
+// ═══════════════════════════════════════════════════════════════════════════════
+// WATERMARK
+// ═══════════════════════════════════════════════════════════════════════════════
+var table wm = table.new(position.bottom_right, 1, 1, bgcolor=color.new(th_bg, 80), border_color=color.new(th_frame, 50), border_width=1)
+if barstate.islast
+    table.cell(wm, 0, 0, "⟡ Dskyz (DAFE) Trading Systems ⟡", text_color=color.new(th_frame, 40), text_size=size.normal)
+// ═══════════════════════════════════════════════════════════════════════════════
+// ALERTS
+// ═══════════════════════════════════════════════════════════════════════════════
+alertcondition(bullSig, title="IAG: Extreme Bull", message="IAG: Extreme bullish information asymmetry")
+alertcondition(bearSig, title="IAG: Extreme Bear", message="IAG: Extreme bearish information asymmetry")
+alertcondition(isHighVol and not isHighVol[1], title="IAG: Vol Spike", message="IAG: Information volatility spike")
+if bullSig
+    alert("⟡ IAG BULL T" + str.tostring(sigTier) + " | " + syminfo.ticker + " | Grad: " + str.tostring(gradZ, "#.##") + "σ | Flow: " + str.tostring(flowStr, "#") + "% | " + srcText + (i_rcmEnable ? " | RCM: " + rcm.state_text(rcmSt) : ""), alert.freq_once_per_bar_close)
+if bearSig
+    alert("⟡ IAG BEAR T" + str.tostring(sigTier) + " | " + syminfo.ticker + " | Grad: " + str.tostring(gradZ, "#.##") + "σ | Flow: " + str.tostring(flowStr, "#") + "% | " + srcText + (i_rcmEnable ? " | RCM: " + rcm.state_text(rcmSt) : ""), alert.freq_once_per_bar_close)

@@ -22,6 +22,7 @@ graph TD
         Ring["InclusionAI Ring-2.6-1T<br>(Deep Reasoning / Trillion-Scale MoE)"]:::reasoning
         Hy3["Tencent Hy3-preview<br>(Balanced Reasoning / MoE + MTP)"]:::reasoning
         Elephant["Elephant Alpha<br>(High-Speed Utility / 100B Text)"]:::execution
+        BigPickle["OpenCode Big Pickle / GLM-4.6<br>(Free Coding Agent / 355B MoE)"]:::execution
     end
 ```
 
@@ -38,6 +39,7 @@ The following table outlines the core technical specifications, context capabili
 | **`tencent/hy3-preview`** | Tencent | April 2026 | MoE (Mixture-of-Experts) | 295B / 21B | 256K (262,144) | Multi-Token Prediction (3.8B MTP layer), selectable reasoning modes. |
 | **`nvidia/nemotron-3-super-120b-a12b`** | NVIDIA | March 2026 | LatentMoE (Transformer-Mamba-2) | 120B / 12B | 1M tokens | Mamba-2 state space, MTP layers, NVFP4 training, reasoning trace flag. |
 | **`inclusionai/ring-2.6-1t`** | InclusionAI (Ant Group) | May 2026 | MoE (Mixture-of-Experts) | 1T / 63B | 262K (expandable) | Adjustable Reasoning Effort (`high`/`xhigh`), explicit `<think>` traces. |
+| **`opencode/big-pickle`** (GLM-4.6) | Zhipu AI via OpenCode Zen | Dec 2025 | MoE (Mixture-of-Experts) | 355B / 32B | 200K (practical: 50-70K) | Group Query Attention, SwiGLU, bilingual EN/ZH tokenizer (150K vocab). Free tier. |
 
 ---
 
@@ -57,6 +59,12 @@ Standardized benchmarks verify the cognitive depth, coding prowess, and agent-in
 *   **Hy3-preview:** Showcases exceptional agentic capabilities, scoring **74.4% on SWE-bench Verified** (a massive jump from Hy2's 53%) and **70.2% on WideSearch**.
 *   **Ring-2.6-1T:** Outperforms industry giants on **PinchBench with a score of 87.60** (surpassing GPT-5.4 High and Gemini-3.1-Pro High). It also scores **63.82 on ClawEval** and **95.32 on TAU2-Bench (Telecom)**.
 *   **Owl-Alpha:** Community telemetry shows a tool call error rate of **3.40%** and structured output error rate of **3.95%** at a throughput of ~13 tok/s, proving reliable for basic automated pipelines.
+
+### 6. Big Pickle (opencode/big-pickle)
+*   **MMLU-Pro:** **84.3** — strong general knowledge.
+*   **SWE-bench Verified:** **73.8** — competitive with Claude Sonnet 4.5 (72.1).
+*   **LiveCodeBench V6:** **82.8** — above average live coding ability.
+*   **HLE (with tools):** **42.8** — weaker on hard multi-step problems.
 
 ---
 
@@ -105,6 +113,24 @@ Standardized benchmarks verify the cognitive depth, coding prowess, and agent-in
     *   Advanced logical problem solving (math, logic puzzles, algorithm design).
     *   Long-horizon planning and decision-making where correctness is critical.
 
+### 6. opencode/big-pickle (GLM-4.6)
+*   **Design Philosophy:** A free, community-driven coding agent model optimized for practical software engineering. Hosted by OpenCode Zen as an experimental offering — usage data is fed back to improve the model.
+*   **Performance Profile:** Strong on code analysis, planning, and documentation generation. Fast response times for a free model. However, the claimed 200K context window degrades in practice around 50-70K tokens, and it struggles with files exceeding 400-500 lines. Tends toward verbosity and occasionally ignores task constraints.
+*   **Best Use Cases:**
+    *   Codebase analysis and implementation planning.
+    *   Documentation generation and code review.
+    *   Rapid prototyping and lightweight coding tasks within moderate-sized files.
+*   **Limitations:**
+    *   Context reliability breaks down past 50-70K tokens.
+    *   Weak on math reasoning and multi-step agentic tasks.
+    *   Can execute destructive commands if not restrained (use `tirith_enabled` or command approval).
+    *   Bilingual tokenizer biases toward English/Chinese — may perform differently on other languages.
+
+> [!WARNING]
+> **Privacy Advisory:** Both Elephant Alpha and Owl Alpha are stealth models on OpenRouter. The upstream providers log prompts and completions for optimization. **Do not feed sensitive credentials, private IP, or proprietary documents into these models.**
+> 
+> **Data Usage:** Big Pickle's free tier submits your prompts and outputs for model training. Do not share sensitive or proprietary code while using the free tier.
+
 ---
 
 ## Architectural and Operational Trade-offs
@@ -126,6 +152,9 @@ Choosing the right model depends heavily on the bottlenecks of your specific app
                   │
                   │       [Elephant-Alpha] (100B, High Speed)
                   │
+                  │
+                  │       [Big Pickle] (355B MoE, Free Coding Agent)
+                  │
 ──────────────────┼──────────────────────────────────────────────────►
                   │                                  HIGH THROUGHPUT
                   │                                  (Tokens/Second)
@@ -134,3 +163,4 @@ Choosing the right model depends heavily on the bottlenecks of your specific app
 1. **For Pure Speed & Utility:** Choose **Elephant-Alpha** (if privacy allows) or **Nemotron-3-Super-120B** (configured with reasoning mode off).
 2. **For High-Fidelity Complex Workflows:** Choose **Ring-2.6-1T** (high reasoning effort) or **Hy3-preview** (high thinking mode).
 3. **For Long-Context Repository Ingestion:** Choose **Nemotron-3-Super-120B** (which offers a 1M token context window and native open-weights efficiency) or **Owl-Alpha**.
+4. **For Free Coding & Prototyping:** Choose **Big Pickle** for codebase analysis, planning, and documentation within moderate-sized projects — but switch to a paid model if context exceeds ~50K tokens or files exceed ~400 lines.

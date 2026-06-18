@@ -3,4 +3,4 @@ zero_lag_hull_moving_average(length, smoothness, closing_price) =>
     zero_lag_hma = ta.wma(2 * ta.wma(hull_moving_average, smoothness / 2) - ta.wma(hull_moving_average, smoothness), math.round(math.sqrt(smoothness)))
     zero_lag_hma
 
-zero_lag_hma = zero_lag_hull_moving_average(length, smoothness
+zero_lag_hma = zero_lag_hull_moving_average(length, smoothness,close)

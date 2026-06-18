@@ -2,11 +2,45 @@
 #SingleInstance Force
 
 ; ==============================================================================
-; PRODUCTIVITY HOTKEYS & HOTSTRINGS SCRIPT (20 Inputs)
+; PRODUCTIVITY HOTKEYS & Hotstrings SCRIPT (20 Inputs)
 ; Designed for AutoHotkey v2
 ; ==============================================================================
 
-TraySetIcon "shell32.dll", 44 ; Set system tray icon to a star/favorite icon
+TraySetIcon "shell32.dll", 49 ; Set system tray icon to a star/favorite icon
+
+; ==============================================================================
+; HELPER UTILITY FUNCTIONS
+; ==============================================================================
+
+; #= Windowskey
+; ! = Alt
+; ^ = Ctrl
+; + = Shift]D
+
+
+
+GetSelectedText() {
+    clipSaved := ClipboardAll()
+    A_Clipboard := ""
+    Send "^c"
+
+    if ClipWait(0.5) {
+        selectedText := A_Clipboard
+        A_Clipboard := clipSaved
+        return selectedText
+    }
+
+    A_Clipboard := clipSaved
+    return ""
+}
+
+ReplaceSelectedText(newText) {
+    clipSaved := ClipboardAll()
+    A_Clipboard := newText
+    Send "^v"
+    Sleep 100
+    A_Clipboard := clipSaved
+}
 
 ; ------------------------------------------------------------------------------
 ; CATEGORY 1: WINDOW MANAGEMENT & CONTROL
@@ -35,19 +69,13 @@ TraySetIcon "shell32.dll", 44 ; Set system tray icon to a star/favorite icon
     }
 }
 
-; 3. Toggle Window Transparency (Win + Alt + T)
-; Toggles transparency (opacity of 200/255) for the active window.
+; 3. Title Case Selected Text (Win + Alt + T)
+; Rewrites the highlighted text as Title Case.
 #!t:: {
-    activeWin := "A"
-    trans := WinGetTransparent(activeWin)
-    if (trans = "") {
-        WinSetTransparent 200, activeWin
-        ToolTip "Transparency Enabled (80% Opacity)"
-    } else {
-        WinSetTransparent "Off", activeWin
-        ToolTip "Transparency Disabled"
+    text := GetSelectedText()
+    if (text != "") {
+        ReplaceSelectedText(StrTitle(text))
     }
-    SetTimer () => ToolTip(), -1500
 }
 
 ; 4. Minimize Active Window (Win + Alt + M)
@@ -55,6 +83,8 @@ TraySetIcon "shell32.dll", 44 ; Set system tray icon to a star/favorite icon
 #!m:: {
     if WinExist("A") {
         WinMinimize "A"
+        ToolTip "Window Minimized", 5,5,1
+        SetTimer () => ToolTip(), -5000 ; Hide tooltip after 1.5 seconds
     }
 }
 
@@ -89,25 +119,40 @@ TraySetIcon "shell32.dll", 44 ; Set system tray icon to a star/favorite icon
 
 ; 8. Email Template Expansion (Type "]email" to expand)
 ; Feel free to change "your.email@domain.com" to your actual email address.
-::]email::your.email@domain.com
+::]l::lumpy@primativedna.com
 
-; 9. Clean Paste as Plain Text (Win + Ctrl + Shift + V)
-; Pastes clipboard content stripped of any formatting.
-#^+v:: {
-    clipSaved := A_Clipboard
-    A_Clipboard := A_Clipboard ; Strip formatting
-    Send "^v"
-    Sleep 100
-    A_Clipboard := clipSaved
+; 8. Email Template Expansion (Type "]email" to expand)
+; Feel free to change "your.email@domain.com" to your actual email address.
+::]a::alex@psillyfunguy.org
+
+; 8. Email Template Expansion (Type "]email" to expand)
+; Feel free to change "your.email@domain.com" to your actual email address.
+::]i::x@psillyfunguy.org
+
+; 8. Email Template Expansion (Type "]email" to expand)
+; Feel free to change "your.email@domain.com" to your actual email address.
+::]e::eiros@primativedna.com
+
+
+; 10. UPPERCASE Selected Text (Win + U)
+; Converts any highlighted text to UPPERCASE.
+#l:: {
+    text := GetSelectedText()
+    if (text != "") {
+        clipSaved := ClipboardAll()
+        A_Clipboard := StrLower(text)
+        Send "^v"
+        Sleep 100
+        A_Clipboard := clipSaved
+    }
 }
-
 ; 10. UPPERCASE Selected Text (Win + U)
 ; Converts any highlighted text to UPPERCASE.
 #u:: {
     text := GetSelectedText()
     if (text != "") {
         clipSaved := ClipboardAll()
-        A_Clipboard := StrUpper(text)
+        A_Clipboard := StrTitle(text)
         Send "^v"
         Sleep 100
         A_Clipboard := clipSaved
@@ -118,42 +163,15 @@ TraySetIcon "shell32.dll", 44 ; Set system tray icon to a star/favorite icon
 ; CATEGORY 3: SYSTEM UTILITIES & CONTROLS
 ; ------------------------------------------------------------------------------
 
-; 11. Empty Recycle Bin (Win + Shift + Delete)
-; Empties the Windows Recycle Bin without showing the confirmation dialog.
-#+Del:: {
-    try {
-        FileRecycleEmpty
-        ToolTip "Recycle Bin Emptied"
-    } catch {
-        ToolTip "Recycle Bin is already empty"
-    }
-    SetTimer () => ToolTip(), -1500
-}
 
-; 12. Lock PC & Turn Off Screens (Win + Shift + L)
-; Locks the PC and immediately puts all screens to sleep.
-#+l:: {
-    DllCall("LockWorkStation")
-    Sleep 1000
-    SendMessage 0x0112, 0xF170, 2,, "Program Manager" ; WM_SYSCOMMAND, SC_MONITORPOWER, POWER_OFF
-}
+
 
 ; 13 & 14. Volume Control with Mouse Wheel (Shift + WheelUp / WheelDown)
 ; Quickly raise or lower system volume by holding Shift and scrolling the mouse wheel.
-+WheelUp:: Send "{Volume_Up}"
-+WheelDown:: Send "{Volume_Down}"
+<^XButton1:: Send "{Delete}"
+<^XButton2:: Send "{Backspace}"
 
-; 15. CapsLock to Backspace Remap (CapsLock)
-; Remaps CapsLock to work as Backspace (prevents accidental capital lockups).
-; To toggle actual CapsLock, press Shift + CapsLock.
-+CapsLock:: {
-    state := GetKeyState("CapsLock", "T")
-    if state
-        SetCapsLockState "AlwaysOff"
-    else
-        SetCapsLockState "AlwaysOn"
-}
-CapsLock:: Send "{Backspace}"
+
 
 ; ------------------------------------------------------------------------------
 ; CATEGORY 4: HIGHLIGHT & WEB SEARCH SHORTCUTS
@@ -175,13 +193,6 @@ CapsLock:: Send "{Backspace}"
     }
 }
 
-; 18. Search Highlighted Text on Wikipedia (Win + W)
-#w:: {
-    text := GetSelectedText()
-    if (text != "") {
-        Run "https://en.wikipedia.org/wiki/Special:Search?search=" . EncodeInput(text)
-    }
-}
 
 ; ------------------------------------------------------------------------------
 ; CATEGORY 5: QUICK APPLICATION LAUNCHERS
@@ -191,25 +202,12 @@ CapsLock:: Send "{Backspace}"
 #n:: Run "notepad.exe"
 
 ; 20. Launch PowerShell (Win + P)
-#p:: Run "powershell.exe"
+#p:: Run "pwsh.exe"
 
 ; ==============================================================================
 ; HELPER UTILITY FUNCTIONS
 ; ==============================================================================
 
-; Copies highlighted text to clipboard and returns it without breaking clipboard history
-GetSelectedText() {
-    clipSaved := ClipboardAll()
-    A_Clipboard := ""
-    Send "^c"
-    if !ClipWait(0.5) {
-        A_Clipboard := clipSaved
-        return ""
-    }
-    text := A_Clipboard
-    A_Clipboard := clipSaved
-    return text
-}
 
 ; Encodes URL inputs (replacing spaces with %20)
 EncodeInput(str) {
