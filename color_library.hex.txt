@@ -1,0 +1,117 @@
+// ============================================================
+// PineScript Color Library — 85 Colors
+// TradingView constants: color.rgb(R, G, B)
+// Copy-paste into PineScript as needed.
+// Naming: c + category abbreviation + number
+// ============================================================
+// === REDS (crd) ===
+crd1 = color.rgb(160, 34, 64)    // #a02240 deep rose
+crd2 = color.rgb(178, 4, 34)     // #b20422 crimson
+crd3 = color.rgb(139, 0, 0)      // #8b0000 dark red
+crd4 = color.rgb(180, 50, 50)    // #b43332 brick
+crd5 = color.rgb(120, 25, 35)    // #781923 oxblood
+crd6 = color.rgb(200, 60, 60)    // #c83c3c salmon red
+crd7 = color.rgb(150, 40, 55)    // #962837 wine
+crd8 = color.rgb(100, 20, 30)    // #64141e mahogany
+
+// === ORANGES (cor) ===
+cor1 = color.rgb(200, 90, 25)    // #c85a19 burnt orange
+cor2 = color.rgb(185, 80, 15)    // #b9500f rust
+cor3 = color.rgb(210, 110, 30)   // #d26e1e amber
+cor4 = color.rgb(170, 70, 20)    // #aa4614 copper
+cor5 = color.rgb(195, 95, 35)    // #c35f23 terracotta
+cor6 = color.rgb(160, 65, 18)    // #a04112 burnt sienna
+
+// === BROWNS (cbrw) ===
+cbrw1 = color.rgb(120, 70, 35)   // #784623 espresso
+cbrw2 = color.rgb(140, 90, 50)   // #8c5a32 coffee
+cbrw3 = color.rgb(100, 60, 30)   // #643c1e dark chocolate
+cbrw4 = color.rgb(150, 100, 60)  // #96643c caramel
+cbrw5 = color.rgb(90, 55, 28)    // #5a371c walnut
+cbrw6 = color.rgb(130, 85, 45)   // #82552d mocha
+cbrw7 = color.rgb(110, 75, 42)   // #6e4b2a leather
+
+// === YELLOWS (cye) — kept small as requested ===
+cye1 = color.rgb(180, 150, 40)   // #b49628 mustard
+cye2 = color.rgb(165, 135, 35)   // #a58723 ochre
+cye3 = color.rgb(195, 170, 55)   // #c3aa37 gold
+cye4 = color.rgb(150, 130, 30)   // #96821e olive gold
+
+// === GREENS (cgr) — darker & muted ===
+cgr1 = color.rgb(40, 90, 45)     // #285a2d forest
+cgr2 = color.rgb(55, 110, 55)    // #376e37 evergreen
+cgr3 = color.rgb(35, 80, 50)     // #235032 pine
+cgr4 = color.rgb(70, 120, 60)    // #46783c moss
+cgr5 = color.rgb(45, 100, 65)    // #2d6441 emerald
+cgr6 = color.rgb(60, 105, 45)    // #3c692d ivy
+cgr7 = color.rgb(50, 95, 55)     // #325f37 hunter
+
+// === GREEN-BLUES / SEAFOAM (cgb) ===
+cgb1 = color.rgb(50, 130, 110)   // #32826e teal
+cgb2 = color.rgb(70, 150, 130)   // #469682 sea green
+cgb3 = color.rgb(40, 110, 100)   // #286e64 dark teal
+cgb4 = color.rgb(85, 165, 145)   // #55a591 seafoam
+cgb5 = color.rgb(55, 140, 125)   // #378c7d muted teal
+cgb6 = color.rgb(75, 155, 130)   // #4b9b82 jade
+cgb7 = color.rgb(45, 120, 115)   // #2d7873 deep seafoam
+
+// === LIGHT BLUES (clb) ===
+clb1 = color.rgb(80, 150, 195)   // #5096c3 sky
+clb2 = color.rgb(100, 170, 210)  // #64aad2 baby blue
+clb3 = color.rgb(70, 140, 185)   // #468cb9 powder
+clb4 = color.rgb(90, 160, 200)   // #5aa0c8 cerulean
+clb5 = color.rgb(110, 175, 215)  // #6ea7d7 cornflower
+clb6 = color.rgb(65, 130, 175)    // #4182af steel
+
+// === BLUES (cbl) ===
+cbl1 = color.rgb(55, 95, 175)    // #375faf royal
+cbl2 = color.rgb(40, 75, 155)    // #284b9b ocean
+cbl3 = color.rgb(65, 105, 185)   // #4169b9 azure
+cbl4 = color.rgb(50, 85, 165)    // #3255a5 cobalt
+cbl5 = color.rgb(70, 115, 195)   // #4673c3 sapphire
+cbl6 = color.rgb(45, 70, 140)    // #2d468c indigo blue
+cbl7 = color.rgb(60, 100, 180)   // #3c64b4 denim
+cbl8 = color.rgb(75, 125, 200)   // #4b7dc8 periwinkle
+
+// === DARK BLUES (cdb) ===
+cdb1 = color.rgb(25, 35, 95)     // #19235f midnight
+cdb2 = color.rgb(30, 45, 110)    // #1e2d6e navy
+cdb3 = color.rgb(40, 55, 130)    // #283782 deep blue
+cdb4 = color.rgb(35, 50, 120)    // #233278 Prussian
+cdb5 = color.rgb(20, 30, 85)     // #141e55 ink
+
+// === BLURPLES / VIOLETS (cbp) ===
+cbp1 = color.rgb(80, 60, 155)    // #503c9b purple
+cbp2 = color.rgb(100, 75, 175)   // #644bbf violet
+cbp3 = color.rgb(90, 65, 165)    // #5a41a5 royal purple
+cbp4 = color.rgb(75, 55, 140)    // #4b378c plum
+cbp5 = color.rgb(110, 85, 185)   // #6e55b9 lavender
+cbp6 = color.rgb(85, 60, 150)    // #553c96 iris
+cbp7 = color.rgb(95, 70, 168)    // #5f46a8 orchid
+cbp8 = color.rgb(70, 50, 130)    // #463282 dark violet
+
+// === PURPLES (cpr) ===
+cpr1 = color.rgb(105, 50, 130)   // #693282 grape
+cpr2 = color.rgb(120, 60, 145)   // #783c91 aubergine
+cpr3 = color.rgb(95, 45, 120)    // #5f2d78 royal plum
+cpr4 = color.rgb(110, 55, 138)   // #6e378a mauve
+cpr5 = color.rgb(130, 70, 155)   // #82469b lilac
+cpr6 = color.rgb(85, 40, 110)    // #55286e dark plum
+
+// === PINKS / MUDDY PINKS (cpn) — muted & dusty ===
+cpn1 = color.rgb(155, 85, 105)   // #9b5569 dusty rose
+cpn2 = color.rgb(140, 75, 100)   // #8c4b64 mauve pink
+cpn3 = color.rgb(165, 95, 115)   // #a55f73 blush
+cpn4 = color.rgb(135, 70, 95)    // #87465f old rose
+cpn5 = color.rgb(150, 88, 110)   // #96586e rosewood
+cpn6 = color.rgb(145, 78, 108)   // #914e6c faded mulberry
+
+// === PASTELS / WASHED (cpa) — upper-left of picker ===
+cpa1 = color.rgb(175, 180, 195)  // #afb4c3 silver blue
+cpa2 = color.rgb(185, 185, 200)  // #b9b9c8 pearl
+cpa3 = color.rgb(165, 170, 180)  // #a5aab4 fog
+cpa4 = color.rgb(180, 175, 190)  // #b4afbe lilac grey
+cpa5 = color.rgb(170, 180, 185)  // #aab4b9 mist
+cpa6 = color.rgb(190, 185, 195)  // #bec3c7 lavender mist
+cpa7 = color.rgb(160, 168, 175)  // #a0a8af ash
+cpa8 = color.rgb(175, 170, 180)  //#b4b2aa cream grey

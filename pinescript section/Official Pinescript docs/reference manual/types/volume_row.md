@@ -1,7 +1,0 @@
-# volume_row
-
-A keyword that explicitly declares the type of a variable or parameter as `volume_row`. All `footprint.*()` functions that retrieve row data from a [footprint](https://www.tradingview.com/pine-script-reference/v6/#type_footprint) object return an ID of the `volume_row` type. Scripts can use IDs of this type with the built-in `volume_row.*()` functions to retrieve information about a requested footprint row, including the row's price levels, categorized volume, volume delta, and imbalances.
-
-See also
-
-[footprint](https://www.tradingview.com/pine-script-reference/v6/#type_footprint) [volume_row.up_price()](https://www.tradingview.com/pine-script-reference/v6/#fun_volume_row.up_price) [volume_row.down_price()](https://www.tradingview.com/pine-script-reference/v6/#fun_volume_row.down_price) [volume_row.total_volume()](https://www.tradingview.com/pine-script-reference/v6/#fun_volume_row.total_volume) [volume_row.buy_volume()](https://www.tradingview.com/pine-script-reference/v6/#fun_volume_row.buy_volume) [volume_row.sell_volume()](https://www.tradingview.com/pine-script-reference/v6/#fun_volume_row.sell_volume) [volume_row.delta()](https://www.tradingview.com/pine-script-reference/v6/#fun_volume_row.delta) [volume_row.has_buy_imbalance()](https://www.tradingview.com/pine-script-reference/v6/#fun_volume_row.has_buy_imbalance) [volume_row.has_sell_imbalance()](https://www.tradingview.com/pine-script-reference/v6/#fun_volume_row.has_sell_imbalance)
